@@ -48,7 +48,7 @@ namespace RealtimeBodyTracking
                     ? neck != null ? Vector3.Distance(start.position, neck.position) * 2f : .2f
                     : Vector3.Distance(start.position, end.position);
                 samples.Sort();
-                var measured = samples.Count > 0 ? samples[Mathf.FloorToInt((samples.Count - 1) * .8f)] : length * .12f;
+                var measured = samples.Count > 0 ? samples[Mathf.FloorToInt((samples.Count - 1) * .95f)] : length * .12f;
                 radii[bone] = sphere
                     ? Mathf.Clamp(measured, length * .35f, length * 1.2f)
                     : Mathf.Clamp(measured, length * .06f, length * .32f);
@@ -91,7 +91,11 @@ namespace RealtimeBodyTracking
                 var mesh = renderer.sharedMesh;
                 if (mesh == null || mesh.boneWeights.Length != mesh.vertexCount) continue;
                 var torsoIndices = new List<int>();
-                foreach (var torsoBone in new[] { HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest })
+                foreach (var torsoBone in new[]
+                         {
+                             HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest,
+                             HumanBodyBones.LeftShoulder, HumanBodyBones.RightShoulder,
+                         })
                 {
                     var transform = animator.GetBoneTransform(torsoBone);
                     if (transform != null)
@@ -106,7 +110,7 @@ namespace RealtimeBodyTracking
                 {
                     var weight = 0f;
                     foreach (var boneIndex in torsoIndices) weight += GetWeight(weights[index], boneIndex);
-                    if (weight < .25f) continue;
+                    if (weight < .1f) continue;
                     var offset = renderer.transform.TransformPoint(vertices[index]) - center;
                     widths.Add(Mathf.Abs(Vector3.Dot(offset, lateral)));
                     depths.Add(Mathf.Abs(Vector3.Dot(offset, forward)));
@@ -114,8 +118,8 @@ namespace RealtimeBodyTracking
             }
             widths.Sort();
             depths.Sort();
-            if (widths.Count > 0) torsoHalfWidth = widths[Mathf.FloorToInt((widths.Count - 1) * .85f)];
-            if (depths.Count > 0) torsoHalfDepth = depths[Mathf.FloorToInt((depths.Count - 1) * .85f)];
+            if (widths.Count > 0) torsoHalfWidth = widths[Mathf.FloorToInt((widths.Count - 1) * .98f)];
+            if (depths.Count > 0) torsoHalfDepth = depths[Mathf.FloorToInt((depths.Count - 1) * .98f)];
         }
 
         private static Transform GetEndpoint(Animator animator, HumanBodyBones bone)

@@ -336,18 +336,23 @@ MonoBehaviour:
   rotationDeadZoneDegrees: 3
   avatarMirror: 1
   enableHipsPosition: 1
-  hipsPositionScale: 1
+  hipsPositionScale: 0.25
+  enableFaceZoom: 1
+  faceZoomSmoothTime: 0.18
+  minimumFaceCameraDistance: 0.28
+  maximumFaceCameraDistance: 8
+  faceSizeDeadZoneRatio: 0.025
   bodyDepthFromShoulderWidth: 1.2
-  maxHipsSpeed: 1.5
+  maxHipsSpeed: 0.8
   screenHorizontalRange: 1.2
   screenVerticalRange: 0.8
   maxDepthOffset: 1.5
   horizontalPositionDeadZone: 0.02
   verticalPositionDeadZone: 0.025
   depthPositionDeadZone: 0.06
-  positionMeasurementSmoothing: 4
-  positionFollowSpeed: 4
-  positionMinConfidence: 0.1
+  positionMeasurementSmoothing: 6
+  positionFollowSpeed: 6
+  positionMinConfidence: 0.6
   bodyLeanDeadZone: 1
   maxBodyLean: 25
   bodyLeanSmoothing: 5
@@ -357,31 +362,31 @@ MonoBehaviour:
   bodyTurnDeadZone: 25
   avatarFacingOffsetDegrees: 180
   bodyTurnMinConfidence: 0.85
-  bodyCollisionRadiusScale: 0.85
+  bodyCollisionRadiusScale: 1
   wristMinConfidence: 0.5
   maxWristSpeed: 2.5
   maxElbowSpeed: 3
+  handHorizontalGain: 0.75
   armAcquireFrames: 2
-  armPointDeadZoneScale: 0.1
+  armPointDeadZoneScale: 0.03
+  armPositionSmoothingCutoff: 2
+  armMotionResponsiveness: 0.25
+  armRotationSmoothingSpeed: 14
   wristHoldTime: 0.15
   maxForearmToUpperArmRatio: 1.8
   armRelaxSpeed: 1.2
   armRecoverSpeed: 4
   handContactDistanceRatio: 0.45
+  handForwardOffsetShoulderWidths: 0.02
+  handDepthSmoothing: 6
   enableHead: 1
   enableArms: 1
   enableLegs: 1
   legMinConfidence: 0.75
   headMinConfidence: 0.1
-  headRollMinConfidence: 0.6
-  maxHeadYaw: 75
-  maxHeadPitch: 45
-  maxHeadRoll: 40
-  headYawGain: 4.8
-  headPitchGain: 3
-  headRollGain: 1.4
-  maxHeadRollSpeed: 75
   neckRotationWeight: 0.65
+  headRotationOffsetEuler: {x: 0, y: 0, z: 0}
+  headRotationSmoothing: 14
   enableRollCorrection: 1
   enableAnatomyLimits: 1
   trackingTimeout: 2
@@ -418,7 +423,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a506dc462ab25ff4e88424058ec60515, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  port: 39541
+  port: 39542
   logMalformedPackets: 0
   latestReceivedFrame: -1
   latestTracking: 0

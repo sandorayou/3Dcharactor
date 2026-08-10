@@ -153,8 +153,29 @@ namespace RealtimeBodyTracking
             var hasRight = TryGetVisibleImage(pose, "right_shoulder", minConfidence, out var rightShoulder);
             if (!hasLeft && !hasRight)
             {
-                body = default;
-                return false;
+                if (!TryGetVisibleImage(pose, "left_eye", minConfidence, out var leftEye) ||
+                    !TryGetVisibleImage(pose, "right_eye", minConfidence, out var rightEye))
+                {
+                    body = default;
+                    return false;
+                }
+
+                leftEye = MapImagePoint(leftEye, mirror);
+                rightEye = MapImagePoint(rightEye, mirror);
+
+                var eyeCenter = (leftEye + rightEye) * 0.5f;
+
+                // 顔だけの場合はサイズ計算をApplyHipsへ渡さない
+                body = new ScreenBodyPose(
+                    eyeCenter,
+                    eyeCenter,
+                    0f,
+                    0f,
+                    2,
+                    Mathf.Sign(rightEye.x - leftEye.x)
+                );
+
+                return true;
             }
             if (hasLeft) leftShoulder = MapImagePoint(leftShoulder, mirror);
             if (hasRight) rightShoulder = MapImagePoint(rightShoulder, mirror);
