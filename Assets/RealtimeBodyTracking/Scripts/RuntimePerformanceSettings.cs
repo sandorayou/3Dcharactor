@@ -5,8 +5,8 @@ namespace RealtimeBodyTracking
     public static class RuntimePerformanceSettings
     {
         private const int TargetFrameRate = 60;
-        private const int MaximumWidth = 2560;
-        private const int MaximumHeight = 1440;
+        private const int MaximumWidth = 1920;
+        private const int MaximumHeight = 1080;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Apply()
