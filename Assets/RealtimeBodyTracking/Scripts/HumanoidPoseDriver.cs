@@ -214,10 +214,18 @@ namespace RealtimeBodyTracking
         private ArmPose rightConstrainedArm;
         private bool hasLeftConstrainedArm;
         private bool hasRightConstrainedArm;
-        private Quaternion filteredLeftHandRotation = Quaternion.identity;
-        private Quaternion filteredRightHandRotation = Quaternion.identity;
+        private Vector3 filteredLeftHandDirection;
+        private Vector3 filteredRightHandDirection;
+        private Vector3 filteredLeftPalmNormal;
+        private Vector3 filteredRightPalmNormal;
         private bool leftHandOrientationInitialized;
         private bool rightHandOrientationInitialized;
+        private int leftHandOrientationReacquireFrames;
+        private int rightHandOrientationReacquireFrames;
+        private int leftPalmMissingFrames;
+        private int rightPalmMissingFrames;
+        private long leftPalmLastProcessedFrame = long.MinValue;
+        private long rightPalmLastProcessedFrame = long.MinValue;
         private float lastLeftFingerTrackingTime = float.NegativeInfinity;
         private float lastRightFingerTrackingTime = float.NegativeInfinity;
         private Vector3 leftRestHandForwardLocal;
@@ -448,11 +456,15 @@ namespace RealtimeBodyTracking
             if (!solver.TrySolve(bone, direction, upHint, rootRotationDelta,
                     enableRollCorrection || forceRollCorrection, out var target)) return; // Missing optional bones are skipped.
             if (Mathf.Abs(screenRoll) > .01f) target = Quaternion.AngleAxis(screenRoll, Vector3.forward) * target;
-            if (enableAnatomyLimits && solver.TryClampHand(bone, target, rootRotationDelta, out var constrainedHand))
+            var trackedHandOrientation = forceRollCorrection &&
+                                         (bone == HumanBodyBones.LeftHand || bone == HumanBodyBones.RightHand);
+            if (enableAnatomyLimits && !trackedHandOrientation &&
+                solver.TryClampHand(bone, target, rootRotationDelta, out var constrainedHand))
             {
                 target = constrainedHand;
             }
-            else if (enableAnatomyLimits && !IsIkArmBone(bone) && solver.TryGetRestRotation(bone, out var rest))
+            else if (enableAnatomyLimits && !trackedHandOrientation && !IsIkArmBone(bone) &&
+                     solver.TryGetRestRotation(bone, out var rest))
             {
                 var maxSwing = AnatomyLimits.GetMaxSwingDegrees(bone);
                 if (Quaternion.Angle(rootRotationDelta * rest, target) > maxSwing + .1f)
@@ -732,14 +744,13 @@ namespace RealtimeBodyTracking
             }
 
             var facingOffset = Quaternion.AngleAxis(avatarFacingOffsetDegrees, Vector3.up);
-            var hasOrientation = TryGetAbsoluteHandRotation(
-                pose, left, facingOffset, out var handRotation);
-            var palmNormal = hasOrientation ? GetHandPalmNormal(left, handRotation) : Vector3.zero;
+            var hasOrientation = TryGetHandOrientation(
+                pose, left, facingOffset, out var handDirection, out var palmNormal);
             ApplyTwoBoneArm(
                 upperBone, lowerBone, handBone, solvedArm, upperBody.Forward,
                 facingOffset, hasOrientation ? palmNormal : Vector3.zero);
             if (hasOrientation)
-                ApplyAbsoluteHandRotation(handBone, handRotation);
+                ApplyWorldDirection(handBone, handDirection, palmNormal, 0f, true);
         }
 
         private static ArmPose SolveTrackerArm(
@@ -806,6 +817,15 @@ namespace RealtimeBodyTracking
                 pose, left, hasWristImage, wristImage, hasRawWrist ? rawWrist.z : shoulder.z,
                 hasRawWrist, shoulder.z, shoulderWidth,
                 out wristImage, out handDepthZ);
+            var palmVisible = pose.TryGetImage($"{SourceSide(left)}_hand_palm", .35f, out _);
+            var palmMissingFrames = left ? leftPalmMissingFrames : rightPalmMissingFrames;
+            var palmLastProcessedFrame = left ? leftPalmLastProcessedFrame : rightPalmLastProcessedFrame;
+            if (pose.frame != palmLastProcessedFrame)
+            {
+                palmMissingFrames = palmVisible ? 0 : palmMissingFrames + 1;
+                if (left) leftPalmLastProcessedFrame = pose.frame; else rightPalmLastProcessedFrame = pose.frame;
+            }
+            if (left) leftPalmMissingFrames = palmMissingFrames; else rightPalmMissingFrames = palmMissingFrames;
             var elbow = Vector3.zero;
             var wrist = Vector3.zero;
             var elbowImageInView = hasElbowImage && IsInsideExtendedArmImage(elbowImage, .04f);
@@ -830,10 +850,19 @@ namespace RealtimeBodyTracking
                 if (!TryMapArmImagePoint(
                         pose, left, shoulder, upperBody, wristImage, handDepthZ, out wrist))
                     wrist = new Vector3(rawWrist.x, rawWrist.y, handDepthZ);
-                StabilizeStationaryWristTarget(pose, left, wristImage, ref wrist);
             }
             var elbowFilter = left ? leftElbowFilter : rightElbowFilter;
             var wristFilter = left ? leftWristFilter : rightWristFilter;
+            if (palmMissingFrames >= 5)
+            {
+                hasWrist = false;
+                if (palmMissingFrames == 5)
+                {
+                    wristFilter.Reset();
+                    ResetHandOrientationFilter(left);
+                    if (left) hasLeftConstrainedArm = false; else hasRightConstrainedArm = false;
+                }
+            }
             // When the palm is occluded but the elbow is still visible, keep the last
             // accepted wrist endpoint. Inferring a new hand from the elbow alone made the
             // hand jump across the torso even though there was no hand measurement.
@@ -942,26 +971,14 @@ namespace RealtimeBodyTracking
                 upperDirection = arm.Elbow - arm.Shoulder;
                 lowerDirection = arm.Wrist - arm.Elbow;
             }
-            var handRotation = Quaternion.identity;
-            var holdHandOrientation = IsWristWithinDeadZone(left);
-            var handTransformForHold = targetAnimator.GetBoneTransform(handBone);
-            var heldHandRotation = handTransformForHold != null
-                ? handTransformForHold.rotation
-                : Quaternion.identity;
-            var hasHandOrientation = hasStableWrist && !holdHandOrientation && TryGetAbsoluteHandRotation(
-                pose, left, facingOffset, out handRotation);
-            var palmNormal = hasHandOrientation ? GetHandPalmNormal(left, handRotation) : Vector3.zero;
+            var handDirection = Vector3.zero;
+            var palmNormal = Vector3.zero;
+            var hasHandOrientation = hasStableWrist && TryGetHandOrientation(
+                pose, left, facingOffset, out handDirection, out palmNormal);
             ApplyTwoBoneArm(upperBone, lowerBone, handBone, solvedArm, appliedUpperDepthAxis, facingOffset,
                 hasHandOrientation ? palmNormal : Vector3.zero);
             if (hasHandOrientation)
-                ApplyAbsoluteHandRotation(handBone, handRotation);
-            else if (holdHandOrientation)
-            {
-                // Keep the complete hand transform while its observed wrist remains
-                // inside the 10% screen-space dead zone.
-                if (handTransformForHold != null)
-                    handTransformForHold.rotation = heldHandRotation;
-            }
+                ApplyWorldDirection(handBone, handDirection, palmNormal, 0f, true);
             else if (holdWristFromVisibleElbow)
             {
                 // Preserve the last hand rotation until palm landmarks return.
@@ -1105,7 +1122,7 @@ namespace RealtimeBodyTracking
         }
 
         private bool TryGetPalmAlignedWristTarget(PosePacket pose, bool left, Vector3 shoulder, UpperBodyPose body,
-            float handDepthZ, HumanBodyBones handBone, out Vector3 wristTarget)
+            float handDepthZ, HumanBodyBones handBone, Vector2 torsoRadii, out Vector3 wristTarget)
         {
             var side = SourceSide(left);
             if (!pose.TryGetImage($"{side}_hand_palm", .35f, out var palmImage) ||
@@ -1133,6 +1150,29 @@ namespace RealtimeBodyTracking
             var avatarPalmOffset = Quaternion.Inverse(facingOffset) * (palmCenter - hand.position);
             if (avatarPalmOffset.sqrMagnitude < .000001f)
                 avatarPalmOffset = palmDirection.normalized * Vector3.Distance(hand.position, palmCenter);
+
+            var chest = targetAnimator.GetBoneTransform(HumanBodyBones.Chest);
+            var avatarShoulder = targetAnimator.GetBoneTransform(
+                left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
+            if (chest != null && avatarShoulder != null)
+            {
+                var chestCenter = shoulder + Quaternion.Inverse(facingOffset) *
+                    (chest.position - avatarShoulder.position);
+                var front = Quaternion.Inverse(facingOffset) * targetAnimator.transform.forward;
+                if (front.sqrMagnitude < .000001f) front = Vector3.forward;
+                else front.Normalize();
+                var rel = palmTarget - chestCenter;
+                var chestHeight = Mathf.Max(Vector3.Distance(
+                    chest.position,
+                    targetAnimator.GetBoneTransform(HumanBodyBones.Hips)?.position ?? chest.position), .001f);
+                if (Mathf.Abs(rel.x) <= torsoRadii.x && Mathf.Abs(rel.y) <= chestHeight * .55f)
+                {
+                    var frontSurface = Mathf.Max(torsoRadii.y, .001f);
+                    var signedDepth = Vector3.Dot(rel, front);
+                    if (signedDepth < frontSurface)
+                        palmTarget += front * (frontSurface - signedDepth);
+                }
+            }
             wristTarget = palmTarget - avatarPalmOffset;
             return true;
         }
@@ -1151,8 +1191,8 @@ namespace RealtimeBodyTracking
             return true;
         }
 
-        private bool TryGetAbsoluteHandRotation(PosePacket pose, bool left, Quaternion facingOffset,
-            out Quaternion rotation)
+        private bool TryGetHandOrientation(PosePacket pose, bool left, Quaternion facingOffset,
+            out Vector3 handDirection, out Vector3 palmNormal)
         {
             var side = SourceSide(left);
             if (!PoseInputMapper.TryGet(pose, $"{side}_hand_wrist", InputCoordinatesNeedMirror, .35f, out var worldWrist) ||
@@ -1160,7 +1200,8 @@ namespace RealtimeBodyTracking
                 !PoseInputMapper.TryGet(pose, $"{side}_hand_middle_mcp", InputCoordinatesNeedMirror, .35f, out var worldMiddle) ||
                 !PoseInputMapper.TryGet(pose, $"{side}_hand_pinky_mcp", InputCoordinatesNeedMirror, .35f, out var worldPinky))
             {
-                rotation = default;
+                handDirection = default;
+                palmNormal = default;
                 return false;
             }
             // Build the complete hand orientation in one coordinate system.  Previously the
@@ -1172,45 +1213,19 @@ namespace RealtimeBodyTracking
                     worldIndex - worldPinky,
                     out var sourceForward, out _, out var sourceNormal))
             {
-                rotation = default;
+                handDirection = default;
+                palmNormal = default;
                 return false;
             }
-            sourceForward = facingOffset * sourceForward;
-            sourceNormal = facingOffset * sourceNormal;
-            var sourceRotation = Quaternion.LookRotation(sourceForward, sourceNormal);
-            var forwardLocal = left ? leftRestHandForwardLocal : rightRestHandForwardLocal;
-            var acrossLocal = left ? leftRestHandAcrossLocal : rightRestHandAcrossLocal;
-            if (!(left ? leftRestHandBasisInitialized : rightRestHandBasisInitialized) ||
-                !TryBuildHandBasis(forwardLocal, acrossLocal, out var avatarForward, out _, out var avatarNormal))
-            {
-                rotation = default;
-                return false;
-            }
-            var axisCorrection = Quaternion.Inverse(Quaternion.LookRotation(avatarForward, avatarNormal));
-            rotation = sourceRotation * axisCorrection;
-            FilterHandOrientation(left, ref rotation);
-            var palmNormal = GetHandPalmNormal(left, rotation);
+            handDirection = (facingOffset * sourceForward).normalized;
+            palmNormal = (facingOffset * sourceNormal).normalized;
+            FilterHandOrientation(left, ref handDirection, ref palmNormal);
             var cameraDot = trackingCamera != null
                 ? Vector3.Dot(palmNormal, -trackingCamera.transform.forward)
                 : 0f;
-            var state = $"source=hand_world_absolute, palmCameraDot={cameraDot:F2}, rotation={rotation.eulerAngles:F1}";
+            var state = $"source=hand_world_basis, palmCameraDot={cameraDot:F2}, direction={handDirection:F3}, normal={palmNormal:F3}";
             if (left) leftHandOrientationState = state; else rightHandOrientationState = state;
             return true;
-        }
-
-        private Vector3 GetHandPalmNormal(bool left, Quaternion rotation)
-        {
-            var forwardLocal = left ? leftRestHandForwardLocal : rightRestHandForwardLocal;
-            var acrossLocal = left ? leftRestHandAcrossLocal : rightRestHandAcrossLocal;
-            return (rotation * Vector3.Cross(acrossLocal, forwardLocal)).normalized;
-        }
-
-        private void ApplyAbsoluteHandRotation(HumanBodyBones bone, Quaternion rotation)
-        {
-            var transform = targetAnimator.GetBoneTransform(bone);
-            if (transform == null) return;
-            transform.rotation = rotation;
-            appliedBones++;
         }
 
         private void ApplyFingers(PosePacket pose, bool left)
@@ -1382,39 +1397,60 @@ namespace RealtimeBodyTracking
             return true;
         }
 
-        private void FilterHandOrientation(bool left, ref Quaternion rotation)
+        private void FilterHandOrientation(bool left, ref Vector3 direction, ref Vector3 normal)
         {
             var initialized = left ? leftHandOrientationInitialized : rightHandOrientationInitialized;
-            var filtered = left ? filteredLeftHandRotation : filteredRightHandRotation;
+            var filteredDirection = left ? filteredLeftHandDirection : filteredRightHandDirection;
+            var filteredNormal = left ? filteredLeftPalmNormal : filteredRightPalmNormal;
+            var reacquireFrames = left ? leftHandOrientationReacquireFrames : rightHandOrientationReacquireFrames;
             if (!initialized)
             {
-                filtered = rotation;
+                filteredDirection = direction;
+                filteredNormal = normal;
                 initialized = true;
+                reacquireFrames = 0;
             }
             else
             {
-                // q and -q are the same rotation. Match only their representation before
-                // Slerp; never reverse the tracked hand axes based on the previous frame.
-                if (Quaternion.Dot(filtered, rotation) < 0f)
+                var contraryBasis = Vector3.Dot(filteredDirection, direction) < -.5f ||
+                                    Vector3.Dot(filteredNormal, normal) < -.5f;
+                reacquireFrames = contraryBasis ? reacquireFrames + 1 : 0;
+                if (reacquireFrames >= 3)
                 {
-                    rotation.x = -rotation.x;
-                    rotation.y = -rotation.y;
-                    rotation.z = -rotation.z;
-                    rotation.w = -rotation.w;
+                    filteredDirection = direction;
+                    filteredNormal = normal;
+                    reacquireFrames = 0;
                 }
-                var t = 1f - Mathf.Exp(-handOrientationSmoothing * Time.deltaTime);
-                filtered = Quaternion.Slerp(filtered, rotation, t);
+                else
+                {
+                    if (Vector3.Dot(filteredDirection, direction) < 0f)
+                    {
+                        direction = -direction;
+                        normal = -normal;
+                    }
+                    if (Vector3.Dot(filteredNormal, normal) < 0f)
+                        normal = -normal;
+                    var t = 1f - Mathf.Exp(-handOrientationSmoothing * Time.deltaTime);
+                    filteredDirection = Vector3.Slerp(filteredDirection, direction, t).normalized;
+                    filteredNormal = Vector3.Slerp(filteredNormal, normal, t);
+                    filteredNormal = Vector3.ProjectOnPlane(filteredNormal, filteredDirection).normalized;
+                }
             }
-            rotation = filtered;
+            direction = filteredDirection;
+            normal = filteredNormal;
             if (left)
             {
-                filteredLeftHandRotation = filtered;
+                filteredLeftHandDirection = filteredDirection;
+                filteredLeftPalmNormal = filteredNormal;
                 leftHandOrientationInitialized = initialized;
+                leftHandOrientationReacquireFrames = reacquireFrames;
             }
             else
             {
-                filteredRightHandRotation = filtered;
+                filteredRightHandDirection = filteredDirection;
+                filteredRightPalmNormal = filteredNormal;
                 rightHandOrientationInitialized = initialized;
+                rightHandOrientationReacquireFrames = reacquireFrames;
             }
         }
 
@@ -1423,10 +1459,12 @@ namespace RealtimeBodyTracking
             if (left)
             {
                 leftHandOrientationInitialized = false;
+                leftHandOrientationReacquireFrames = 0;
             }
             else
             {
                 rightHandOrientationInitialized = false;
+                rightHandOrientationReacquireFrames = 0;
             }
         }
 
@@ -1516,67 +1554,6 @@ namespace RealtimeBodyTracking
                              worldShoulderWidth * handForwardOffsetShoulderWidths;
                 var depthState = $"source={(hasPoseDepth ? "pose" : "plane")}, projectionScale=missing";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
-            }
-            if (hasShoulders && hasDetectedWrist)
-            {
-                // Hand scale is a useful depth cue in open space, but becomes biased when
-                // the hand overlaps the torso and MediaPipe's world-palm size contracts.
-                // In that region the intended pose is at the body surface, so keep depth
-                // near the shoulder/chest plane and let avatar collision supply the exact
-                // mesh-surface offset.
-                var minShoulderX = Mathf.Min(leftShoulder.x, rightShoulder.x);
-                var maxShoulderX = Mathf.Max(leftShoulder.x, rightShoulder.x);
-                var shoulderY = (leftShoulder.y + rightShoulder.y) * .5f;
-                var horizontalDistance = detectedWrist.x < minShoulderX
-                    ? minShoulderX - detectedWrist.x
-                    : detectedWrist.x > maxShoulderX ? detectedWrist.x - maxShoulderX : 0f;
-                var horizontalWeight = 1f - Mathf.SmoothStep(
-                    0f, 1f, horizontalDistance / Mathf.Max(shoulderWidth * .4f, .001f));
-                var verticalWeight = Mathf.SmoothStep(
-                    0f, 1f, Mathf.InverseLerp(
-                        shoulderY - shoulderWidth * .35f,
-                        shoulderY + shoulderWidth * .15f,
-                        detectedWrist.y));
-                var torsoOverlapWeight = horizontalWeight * verticalWeight;
-                if (torsoOverlapWeight > .001f)
-                {
-                    var maxContactDepth = worldShoulderWidth * .22f;
-                    var relativeDepth = handDepthZ - shoulderDepthZ;
-                    var contactDepth = Mathf.Clamp(relativeDepth, -maxContactDepth, maxContactDepth);
-                    handDepthZ = shoulderDepthZ + Mathf.Lerp(relativeDepth, contactDepth, torsoOverlapWeight);
-                    if (torsoOverlapWeight >= .5f)
-                        depthTracker.Constrain(maxContactDepth);
-                    var contactState = $", torsoOverlap={torsoOverlapWeight:F2}, contactDepth={relativeDepth:F3}->{handDepthZ - shoulderDepthZ:F3}";
-                    if (left) leftHandDepthInputState += contactState; else rightHandDepthInputState += contactState;
-                }
-
-                // While the wrist is over the torso, use the calibrated pose-tracker Z
-                // directly: about -0.44 is against the chest and about -0.38 is an
-                // extended arm. The test uses mapped pose coordinates so "below the
-                // shoulders" is wrist Y <= the mean shoulder Y.
-                if (PoseInputMapper.TryGet(pose, "left_shoulder", InputCoordinatesNeedMirror, wristMinConfidence, out var mappedLeftShoulder) &&
-                    PoseInputMapper.TryGet(pose, "right_shoulder", InputCoordinatesNeedMirror, wristMinConfidence, out var mappedRightShoulder) &&
-                    PoseInputMapper.TryGet(pose, $"{side}_wrist", InputCoordinatesNeedMirror, wristMinConfidence, out var mappedWrist) &&
-                    pose.TryGet($"{side}_wrist", wristMinConfidence, out var trackerWrist))
-                {
-                    var minShoulderPoseX = Mathf.Min(mappedLeftShoulder.x, mappedRightShoulder.x);
-                    var maxShoulderPoseX = Mathf.Max(mappedLeftShoulder.x, mappedRightShoulder.x);
-                    var meanShoulderPoseY = (mappedLeftShoulder.y + mappedRightShoulder.y) * .5f;
-                    var wristOverTorso = mappedWrist.x >= minShoulderPoseX &&
-                                         mappedWrist.x <= maxShoulderPoseX &&
-                                         mappedWrist.y <= meanShoulderPoseY;
-                    if (wristOverTorso)
-                    {
-                        var extension = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(
-                            torsoChestWristTrackerZ, torsoExtendedWristTrackerZ, trackerWrist.z));
-                        var chestDepth = worldShoulderWidth * torsoChestDepthShoulderWidths;
-                        var extendedDepth = worldShoulderWidth * maxHandDepthShoulderWidths;
-                        handDepthZ = shoulderDepthZ + Mathf.Lerp(chestDepth, extendedDepth, extension);
-                        depthTracker.Constrain(maxHandDepthShoulderWidths * worldShoulderWidth);
-                        var calibratedState = $", torsoTrackerZ={trackerWrist.z:F3}, extension={extension:F2}, calibratedDepth={handDepthZ - shoulderDepthZ:F3}";
-                        if (left) leftHandDepthInputState += calibratedState; else rightHandDepthInputState += calibratedState;
-                    }
-                }
             }
             var state = $"detectorPoints={accepted}/4, association={associationDistance:F3}, maxCluster={maxClusterDistance:F3}, limit={clusterLimit:F3}, valid={valid}";
             if (left) leftHandEvidenceState = state; else rightHandEvidenceState = state;
@@ -2635,6 +2612,10 @@ namespace RealtimeBodyTracking
             rightWristFilter.Reset();
             leftHandDepthTracker.Reset();
             rightHandDepthTracker.Reset();
+            leftPalmMissingFrames = 0;
+            rightPalmMissingFrames = 0;
+            leftPalmLastProcessedFrame = long.MinValue;
+            rightPalmLastProcessedFrame = long.MinValue;
             leftResolvedWristInitialized = false;
             rightResolvedWristInitialized = false;
             leftWristWithinDeadZone = false;
