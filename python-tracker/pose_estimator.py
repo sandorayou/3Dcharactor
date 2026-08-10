@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,7 +9,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from protocol import LANDMARKS, MEDIAPIPE_INDEX, PosePacket, PosePoint
+from protocol import FaceBlendshape, HeadRotation, LANDMARKS, MEDIAPIPE_INDEX, PosePacket, PosePoint
 from settings import TrackerSettings
 
 
@@ -22,6 +23,8 @@ class PoseEstimator:
             )
         if not settings.hand_model_path.is_file():
             raise FileNotFoundError(f"Hand model not found: {settings.hand_model_path}")
+        if not settings.face_model_path.is_file():
+            raise FileNotFoundError(f"Face model not found: {settings.face_model_path}")
         options = mp.tasks.vision.PoseLandmarkerOptions(
             base_options=mp.tasks.BaseOptions(model_asset_path=str(settings.model_path)),
             running_mode=mp.tasks.vision.RunningMode.VIDEO,
@@ -38,6 +41,14 @@ class PoseEstimator:
             min_tracking_confidence=.35,
         )
         self._hand_landmarker = mp.tasks.vision.HandLandmarker.create_from_options(hand_options)
+        face_options = mp.tasks.vision.FaceLandmarkerOptions(
+            base_options=mp.tasks.BaseOptions(model_asset_path=str(settings.face_model_path)),
+            running_mode=mp.tasks.vision.RunningMode.VIDEO,
+            num_faces=1,
+            output_face_blendshapes=True,
+            output_facial_transformation_matrixes=True,
+        )
+        self._face_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(face_options)
         self._size = settings.inference_size
         self.inference_ms = 0.0
         self.inference_fps = 0.0
@@ -45,10 +56,16 @@ class PoseEstimator:
         self._fps_count = 0
         self.last_normalized_landmarks = None
         self.last_hand_landmarks: list[list[SimpleNamespace]] = []
+        self.last_hand_assignments: list[dict] = []
+        self._hand_positions: dict[str, tuple[float, float]] = {}
+        self._hand_velocities: dict[str, tuple[float, float]] = {}
+        self._hand_last_seen_frame: dict[str, int] = {}
+        self._tracking_mirror = settings.tracking_mirror
 
     def close(self) -> None:
         self._landmarker.close()
         self._hand_landmarker.close()
+        self._face_landmarker.close()
 
     def estimate(self, frame: np.ndarray, timestamp_ms: int, frame_number: int) -> PosePacket:
         resized, scale, pad_left, pad_top = self._letterbox(frame)
@@ -57,6 +74,7 @@ class PoseEstimator:
         media_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = self._landmarker.detect_for_video(media_image, timestamp_ms)
         hand_result = self._hand_landmarker.detect_for_video(media_image, timestamp_ms)
+        face_result = self._face_landmarker.detect_for_video(media_image, timestamp_ms)
         self.inference_ms = (time.perf_counter() - started) * 1000.0
         self._fps_count += 1
         elapsed = time.perf_counter() - self._fps_started
@@ -91,20 +109,30 @@ class PoseEstimator:
                     image_x, image_y, normalized.z,
                 ))
             handed_hands = []
-            for hand_index, handedness in enumerate(hand_result.handedness):
-                if not handedness:
-                    continue
-                category = handedness[0]
-                label = (category.category_name or category.display_name or "").lower()
-                if label in ("left", "right"):
-                    handed_hands.append((float(category.score), label, hand_index))
-            assigned = set()
-            for score, side, hand_index in sorted(handed_hands, reverse=True):
-                if side in assigned:
-                    continue
-                assigned.add(side)
+            for hand_index, hand in enumerate(hand_result.hand_landmarks):
+                handedness = hand_result.handedness[hand_index] if hand_index < len(hand_result.handedness) else []
+                category = handedness[0] if handedness else None
+                label = ((category.category_name or category.display_name or "").lower()
+                         if category is not None else "")
+                score = float(category.score) if category is not None else .5
+                handed_hands.append((score, label if label in ("left", "right") else "", hand_index, hand[0].x, hand[0].y))
+            self.last_hand_assignments = []
+            pose_wrists = {}
+            if result.pose_landmarks:
+                for side, landmark_index in (("left", 15), ("right", 16)):
+                    landmark = result.pose_landmarks[0][landmark_index]
+                    if landmark.visibility >= .2:
+                        pose_wrists[side] = (landmark.x, landmark.y)
+            assignments = self._assign_hand_sides(handed_hands, pose_wrists, frame_number)
+            for score, label, hand_index, wrist_x, wrist_y, side, reason in assignments:
+                self.last_hand_assignments.append({
+                    "detector_index": hand_index, "raw_label": label, "side": side,
+                    "reason": reason, "score": score, "wrist_x": wrist_x, "wrist_y": wrist_y,
+                })
                 hand = hand_result.hand_landmarks[hand_index]
                 hand_world = hand_result.hand_world_landmarks[hand_index]
+                pose_wrist = world[MEDIAPIPE_INDEX[f"{side}_wrist"]]
+                hand_origin = hand_world[0]
                 hand_names = (
                     "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb",
                     "index_mcp", "index_pip", "index_dip", "index",
@@ -114,27 +142,157 @@ class PoseEstimator:
                 )
                 for index, suffix in enumerate(hand_names):
                     image_point = self.last_hand_landmarks[hand_index][index]
-                    world_point = hand_world[index]
+                    local_point = hand_world[index]
                     points.append(PosePoint(
-                        f"{side}_hand_{suffix}", world_point.x, world_point.y, world_point.z, score,
+                        f"{side}_hand_{suffix}",
+                        pose_wrist.x + local_point.x - hand_origin.x,
+                        pose_wrist.y + local_point.y - hand_origin.y,
+                        pose_wrist.z + local_point.z - hand_origin.z,
+                        score,
                         image_point.x, image_point.y, hand[index].z,
                     ))
                 palm_indices = (5, 9, 17)
                 palm_image_x = sum(self.last_hand_landmarks[hand_index][index].x for index in palm_indices) / len(palm_indices)
                 palm_image_y = sum(self.last_hand_landmarks[hand_index][index].y for index in palm_indices) / len(palm_indices)
-                palm_world_x = sum(hand_world[index].x for index in palm_indices) / len(palm_indices)
-                palm_world_y = sum(hand_world[index].y for index in palm_indices) / len(palm_indices)
-                palm_world_z = sum(hand_world[index].z for index in palm_indices) / len(palm_indices)
+                # The pose wrist remains the positional endpoint. Hand-world points
+                # are translated into that absolute basis only so Unity can derive
+                # stable wrist-relative axes for palm rotation.
+                palm_world_x = pose_wrist.x + sum(hand_world[index].x - hand_origin.x for index in palm_indices) / len(palm_indices)
+                palm_world_y = pose_wrist.y + sum(hand_world[index].y - hand_origin.y for index in palm_indices) / len(palm_indices)
+                palm_world_z = pose_wrist.z + sum(hand_world[index].z - hand_origin.z for index in palm_indices) / len(palm_indices)
                 palm_image_z = sum(hand[index].z for index in palm_indices) / len(palm_indices)
                 points.append(PosePoint(
                     f"{side}_hand_palm", palm_world_x, palm_world_y, palm_world_z, score,
                     palm_image_x, palm_image_y, palm_image_z,
                 ))
+        head_rotation = None
+        if face_result.facial_transformation_matrixes:
+            head_rotation = self._head_rotation(face_result.facial_transformation_matrixes[0])
+        face_blendshapes = []
+        if face_result.face_blendshapes:
+            tracked_shapes = {
+                "eyeBlinkLeft", "eyeBlinkRight", "jawOpen",
+                "mouthSmileLeft", "mouthSmileRight",
+            }
+            face_blendshapes = [
+                FaceBlendshape(category.category_name, float(category.score))
+                for category in face_result.face_blendshapes[0]
+                if category.category_name in tracked_shapes
+            ]
         return PosePacket(
-            version=2, frame=frame_number, timestamp_ms=timestamp_ms,
+            version=4, frame=frame_number, timestamp_ms=timestamp_ms,
             source_width=frame.shape[1], source_height=frame.shape[0],
-            tracking=bool(points), points=points,
+            tracking=bool(points), head_rotation=head_rotation,
+            face_blendshapes=face_blendshapes, points=points,
         )
+
+    @staticmethod
+    def _head_rotation(transformation: np.ndarray) -> HeadRotation:
+        rotation = np.asarray(transformation, dtype=np.float64)[:3, :3]
+        # Remove any scale before converting MediaPipe camera axes to Unity axes.
+        u, _, vh = np.linalg.svd(rotation)
+        rotation = u @ vh
+        axes = np.diag((1.0, -1.0, -1.0))
+        rotation = axes @ rotation @ axes
+
+        trace = float(np.trace(rotation))
+        if trace > 0.0:
+            scale = np.sqrt(trace + 1.0) * 2.0
+            w = .25 * scale
+            x = (rotation[2, 1] - rotation[1, 2]) / scale
+            y = (rotation[0, 2] - rotation[2, 0]) / scale
+            z = (rotation[1, 0] - rotation[0, 1]) / scale
+        else:
+            index = int(np.argmax(np.diag(rotation)))
+            if index == 0:
+                scale = np.sqrt(1.0 + rotation[0, 0] - rotation[1, 1] - rotation[2, 2]) * 2.0
+                x = .25 * scale
+                y = (rotation[0, 1] + rotation[1, 0]) / scale
+                z = (rotation[0, 2] + rotation[2, 0]) / scale
+                w = (rotation[2, 1] - rotation[1, 2]) / scale
+            elif index == 1:
+                scale = np.sqrt(1.0 + rotation[1, 1] - rotation[0, 0] - rotation[2, 2]) * 2.0
+                x = (rotation[0, 1] + rotation[1, 0]) / scale
+                y = .25 * scale
+                z = (rotation[1, 2] + rotation[2, 1]) / scale
+                w = (rotation[0, 2] - rotation[2, 0]) / scale
+            else:
+                scale = np.sqrt(1.0 + rotation[2, 2] - rotation[0, 0] - rotation[1, 1]) * 2.0
+                x = (rotation[0, 2] + rotation[2, 0]) / scale
+                y = (rotation[1, 2] + rotation[2, 1]) / scale
+                z = .25 * scale
+                w = (rotation[1, 0] - rotation[0, 1]) / scale
+        norm = np.sqrt(x * x + y * y + z * z + w * w)
+        return HeadRotation(x / norm, y / norm, z / norm, w / norm)
+
+    def _assign_hand_sides(
+        self,
+        hands: list[tuple[float, str, int, float, float]],
+        pose_wrists: dict[str, tuple[float, float]],
+        frame_number: int,
+    ) -> list[tuple[float, str, int, float, float, str, str]]:
+        if not hands:
+            return []
+
+        ordered = sorted(hands, reverse=True)[:2]
+        best_cost = float("inf")
+        best_sides: tuple[str, ...] = ()
+        for sides in itertools.permutations(("left", "right"), len(ordered)):
+            cost = 0.0
+            for hand, side in zip(ordered, sides):
+                score, label, _, wrist_x, wrist_y = hand
+                age = frame_number - self._hand_last_seen_frame.get(side, frame_number)
+                if side in self._hand_positions and age <= 10:
+                    old_x, old_y = self._hand_positions[side]
+                    velocity_x, velocity_y = self._hand_velocities.get(side, (0.0, 0.0))
+                    prediction_frames = min(max(age, 1), 3)
+                    predicted_x = old_x + velocity_x * prediction_frames
+                    predicted_y = old_y + velocity_y * prediction_frames
+                    cost += 5.0 * ((wrist_x - predicted_x) ** 2 + (wrist_y - predicted_y) ** 2)
+                else:
+                    cost += .12
+
+                # Handedness is useful evidence, not an identity switch. Both hands are
+                # frequently labelled the same way while they overlap at the body center.
+                if score >= .7 and label in ("left", "right") and label != side:
+                    cost += .10 * score
+                if side in pose_wrists:
+                    pose_x, pose_y = pose_wrists[side]
+                    cost += .35 * ((wrist_x - pose_x) ** 2 + (wrist_y - pose_y) ** 2)
+
+                image_left_side = "right" if self._tracking_mirror else "left"
+                screen_side = image_left_side if wrist_x > .5 else (
+                    "left" if image_left_side == "right" else "right"
+                )
+                if screen_side != side:
+                    cost += .015
+            if cost < best_cost:
+                best_cost = cost
+                best_sides = sides
+
+        result = []
+        for hand, side in zip(ordered, best_sides):
+            score, label, hand_index, wrist_x, wrist_y = hand
+            age = max(frame_number - self._hand_last_seen_frame.get(side, frame_number), 1)
+            previous = self._hand_positions.get(side)
+            if previous is not None and age <= 10:
+                measured_velocity = (
+                    (wrist_x - previous[0]) / age,
+                    (wrist_y - previous[1]) / age,
+                )
+                old_velocity = self._hand_velocities.get(side, (0.0, 0.0))
+                self._hand_velocities[side] = (
+                    old_velocity[0] * .45 + measured_velocity[0] * .55,
+                    old_velocity[1] * .45 + measured_velocity[1] * .55,
+                )
+                reason = "motion_track"
+            else:
+                self._hand_velocities[side] = (0.0, 0.0)
+                reason = "reacquired"
+            self._hand_positions[side] = (wrist_x, wrist_y)
+            self._hand_last_seen_frame[side] = frame_number
+            result.append((*hand, side, reason))
+        return result
 
     def _letterbox(self, frame: np.ndarray) -> tuple[np.ndarray, float, int, int]:
         height, width = frame.shape[:2]
