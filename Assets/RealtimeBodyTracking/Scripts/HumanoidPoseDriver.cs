@@ -66,7 +66,6 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0.5f, 3f)] private float maxForearmToUpperArmRatio = 1.8f;
         [SerializeField, Range(.1f, 5f)] private float armRelaxSpeed = 1.2f;
         [SerializeField, Range(.1f, 10f)] private float armRecoverSpeed = 4f;
-        [SerializeField, Range(.1f, 20f)] private float elbowFallbackBlendSpeed = 6f;
         [SerializeField, Range(.1f, 1f)] private float handContactDistanceRatio = .45f;
         [SerializeField, Range(.1f, 2f)] private float handDepthGain = 1f;
         [SerializeField, Range(.8f, 3f)] private float handNeutralProjectionRatio = 1.15f;
@@ -119,8 +118,6 @@ namespace RealtimeBodyTracking
         [SerializeField, Tooltip("Live state")] private int bodyShoulderMode;
         [SerializeField, Tooltip("Live state")] private float leftArmRelaxWeight;
         [SerializeField, Tooltip("Live state")] private float rightArmRelaxWeight;
-        [SerializeField, Tooltip("Live state")] private float leftLowElbowWeight;
-        [SerializeField, Tooltip("Live state")] private float rightLowElbowWeight;
         [SerializeField, Tooltip("Live state")] private string leftArmFilterState;
         [SerializeField, Tooltip("Live state")] private string rightArmFilterState;
         [SerializeField, Tooltip("Live state")] private string leftArmRollState;
@@ -914,131 +911,21 @@ namespace RealtimeBodyTracking
                 // one palm-length in front of the chest. The measured hand radius already
                 // represents the mesh thickness needed to prevent penetration.
                 var torsoRadii = collisionGeometry.GetTorsoRadii(sourceShoulderWidth * .5f, sourceShoulderWidth * .29f);
-                var headRadius = collisionGeometry.GetRadius(HumanBodyBones.Head, sourceShoulderWidth * .34f);
-                var bodyDown = upperBody.Torso.sqrMagnitude > .000001f ? -upperBody.Torso.normalized : Vector3.down;
-                // Keep the tracked wrist as the positional target. Palm landmarks are
-                // still used for hand rotation, but must not replace the 3D wrist with
-                // a separately unprojected screen-space point.
                 var targetWrist = wrist;
-                var lockWristToChestSurface = IsWristOverTorso(pose, left);
-                filterState += $", chestSurfaceLock={lockWristToChestSurface}";
-                var wristElevation = Vector3.Dot(targetWrist - shoulder, -bodyDown) / Mathf.Max(upperLength, .0001f);
+                if (TryGetPalmAlignedWristTarget(
+                        pose, left, shoulder, upperBody, handDepthZ, handBone, torsoRadii,
+                        out var palmAlignedWrist))
+                    targetWrist = palmAlignedWrist;
                 var observedElbowWeight = useObservedElbow
                     ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.45f, .85f, elbowConfidence)) * elbowImageWeight
                     : 0f;
-                // With palm-only tracking, keep the elbow in a forward/downward
-                // fallback pose regardless of whether the palm is just above or below
-                // the shoulder. A reliably observed elbow remains authoritative.
-                var targetLowElbowWeight = 1f - observedElbowWeight;
-                var lowElbowWeight = left ? leftLowElbowWeight : rightLowElbowWeight;
-                var elbowBlendT = 1f - Mathf.Exp(-elbowFallbackBlendSpeed * Time.deltaTime);
-                lowElbowWeight = targetLowElbowWeight > lowElbowWeight
-                    ? targetLowElbowWeight
-                    : Mathf.Lerp(lowElbowWeight, targetLowElbowWeight, elbowBlendT);
-                if (left) leftLowElbowWeight = lowElbowWeight; else rightLowElbowWeight = lowElbowWeight;
-                var palmElbowHint = InferElbow(shoulder, targetWrist, upperBody, left, upperLength, lowerLength);
-                // MediaPipe often keeps a useful 2D elbow position after its world point has
-                // crossed the camera edge and failed the normal arm acceptance checks. Use that
-                // screen direction as the IK pole hint so a palm near the face does not force the
-                // avatar elbow sideways/upward while the performer's elbow is clearly below it.
-                if (hasRawElbow && hasElbowImage)
-                {
-                    var boundedElbowImage = new Vector3(
-                        Mathf.Clamp(elbowImage.x, -.15f, 1.15f),
-                        Mathf.Clamp(elbowImage.y, -.15f, 1.15f),
-                        elbowImage.z);
-                    if (TryMapArmImagePoint(
-                            pose, left, shoulder, upperBody, boundedElbowImage, rawElbow.z,
-                            out var screenElbowHint))
-                        palmElbowHint = screenElbowHint;
-                }
-                var elbowHint = Vector3.Lerp(palmElbowHint, elbow, observedElbowWeight);
-                filterState += $", observedWeight={observedElbowWeight:F2}, palmElbow={observedElbowWeight < .01f}, " +
-                               $"lowFallback={lowElbowWeight:F2}, wristElevation={wristElevation:F2}";
+                var reliableElbow = useObservedElbow && observedElbowWeight >= .5f;
+                var elbowHint = reliableElbow ? elbow : Vector3.zero;
+                filterState += $", observedWeight={observedElbowWeight:F2}, fallback={!reliableElbow}";
                 if (left) leftArmFilterState = filterState; else rightArmFilterState = filterState;
-                var hasOtherArm = left ? hasRightConstrainedArm : hasLeftConstrainedArm;
-                var otherArm = left ? rightConstrainedArm : leftConstrainedArm;
-                var hasPreviousArm = left ? hasLeftConstrainedArm : hasRightConstrainedArm;
-                var previousArm = left ? leftConstrainedArm : rightConstrainedArm;
-                var projectionDepthAxis = trackingCamera != null ? Quaternion.Inverse(facingOffset) * trackingCamera.transform.forward : upperBody.Forward;
-                appliedUpperDepthAxis = projectionDepthAxis;
-                const float upperArmDepthGain = 2.5f;
-                var projectionDepth = Vector3.Dot(targetWrist - shoulder, projectionDepthAxis) *
-                                      (upperLength / Mathf.Max(upperLength + lowerLength, .001f)) *
-                                      upperArmDepthGain;
-                if (trackingCamera != null &&
-                    pose.TryGetImage(SourceSide(left) + "_shoulder", wristMinConfidence, out var sourceShoulderImage) &&
-                    pose.TryGetImage("left_shoulder", wristMinConfidence, out var sourceLeftShoulderImage) &&
-                    pose.TryGetImage("right_shoulder", wristMinConfidence, out var sourceRightShoulderImage))
-                {
-                    var sourceImageShoulderWidth = Vector2.Distance(sourceLeftShoulderImage, sourceRightShoulderImage);
-                    var avatarLeftUpper = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-                    var avatarRightUpper = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-                    if (sourceImageShoulderWidth > .03f && avatarLeftUpper != null && avatarRightUpper != null)
-                    {
-                        // Only let an elbow drive upper-arm depth when it survived the same
-                        // continuity/anatomy checks used by the IK solve. A merely detected
-                        // elbow can be rejected above while still looking fully extended in
-                        // screen space; selecting it here then clamps foreshortening to 1 and
-                        // locks projectionDepth at zero even though the tracked hand moves in Z.
-                        var useElbow = useObservedElbow && observedElbowWeight > .01f;
-                        var useWrist = !useElbow && hasStableWrist && hasWristImage;
-                        if (useElbow || useWrist)
-                        {
-                            var armPointImage = useElbow ? elbowImage : wristImage;
-                            var armPointWorld = useElbow ? rawElbow : targetWrist;
-                            var sourceArmRatio = Vector2.Distance(sourceShoulderImage, armPointImage) / sourceImageShoulderWidth;
-                            var sourceWorldArmRatio = Vector3.Distance(shoulder, armPointWorld) /
-                                                      Mathf.Max(upperBody.Lateral.magnitude, .001f);
-                            // Depth has already been reconstructed from hand scale plus bounded
-                            // MediaPipe Z in ResolveArmDepth. Preserve that signed measurement.
-                            // Reconstructing it again from the 2D/world length ratio frequently
-                            // saturated at foreshortening=1 and replaced real motion with zero.
-                            var trackedDepth = Vector3.Dot(armPointWorld - shoulder, projectionDepthAxis);
-                            projectionDepth = useWrist
-                                ? trackedDepth * (upperLength / Mathf.Max(upperLength + lowerLength, .001f)) * upperArmDepthGain
-                                : trackedDepth * upperArmDepthGain;
-                            filterState += $", upperProjection[src={(useElbow ? "elbow" : "wrist")}, screenRatio={sourceArmRatio:F2}, " +
-                                           $"worldRatio={sourceWorldArmRatio:F2}, " +
-                                           $"trackedDepth={trackedDepth:F3}, depth={projectionDepth:F3}]";
-                        }
-                    }
-                }
-                // The elbow is a hinge joint. Do not let amplified upper-arm depth
-                // place the elbow farther forward than the wrist, which would make
-                // the forearm fold backwards relative to the upper arm.
-                var wristProjectionDepth = Vector3.Dot(targetWrist - shoulder, projectionDepthAxis);
-                if (Mathf.Abs(wristProjectionDepth) > .001f)
-                {
-                    var forwardSign = Mathf.Sign(wristProjectionDepth);
-                    projectionDepth = forwardSign * Mathf.Clamp(
-                        projectionDepth * forwardSign,
-                        0f,
-                        Mathf.Abs(wristProjectionDepth) * .9f);
-                }
-                else
-                {
-                    projectionDepth = 0f;
-                }
-                ArmPose arm;
-                ArmSolveDiagnostics solveDiagnostics;
-                if (useObservedElbow)
-                {
-                    // A stable observed elbow defines the two physical segments
-                    // directly: shoulder -> elbow and elbow -> wrist.
-                    arm = new ArmPose(shoulder, elbow, targetWrist);
-                    solveDiagnostics = new ArmSolveDiagnostics(false, 0, 0f, 0f);
-                }
-                else
-                {
-                    arm = UpperBodyPoseSolver.SolveArm(
-                        shoulder, targetWrist, elbowHint, upperBody, left, lowElbowWeight, upperLength, lowerLength,
-                        projectionDepthAxis, projectionDepth,
-                        bodyCollisionRadiusScale, torsoRadii.x, torsoRadii.y, headRadius,
-                        upperRadius, lowerRadius, handRadius,
-                        lockWristToChestSurface,
-                        hasPreviousArm, previousArm, hasOtherArm, otherArm, out solveDiagnostics);
-                }
+                var arm = UpperBodyPoseSolver.SolveArm(
+                    shoulder, targetWrist, elbowHint, upperBody, left, reliableElbow,
+                    upperLength, lowerLength, out var solveDiagnostics);
                 filterState += $", solve={solveDiagnostics}";
                 if (left) leftArmFilterState = filterState; else rightArmFilterState = filterState;
                 solvedArm = arm;
@@ -2742,8 +2629,6 @@ namespace RealtimeBodyTracking
             handContactTracking = false;
             leftArmRelaxWeight = 1f;
             rightArmRelaxWeight = 1f;
-            leftLowElbowWeight = 0f;
-            rightLowElbowWeight = 0f;
             leftElbowFilter.Reset();
             rightElbowFilter.Reset();
             leftWristFilter.Reset();
