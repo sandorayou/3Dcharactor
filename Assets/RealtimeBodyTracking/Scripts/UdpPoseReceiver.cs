@@ -125,7 +125,7 @@ namespace RealtimeBodyTracking
                         $"{{\"received_at\":\"{receivedLocal:yyyy-MM-dd'T'HH:mm:ss.fffK}\"," +
                         $"\"received_utc\":\"{receivedUtc:yyyy-MM-dd'T'HH:mm:ss.fff'Z'}\",\"packet\":{json}}}");
                     var packet = JsonUtility.FromJson<PosePacket>(json);
-                    if (packet == null || packet.version < 1 || packet.version > 2 || packet.frame < 0) throw new FormatException();
+                    if (packet == null || packet.version < 1 || packet.version > 4 || packet.frame < 0) throw new FormatException();
                     lock (sync)
                     {
                         if (packet.frame <= latestFrame)

@@ -5,7 +5,7 @@ Windows向けの、MediaPipe Pose LandmarkerからUnity Humanoid/VRMへ低遅延
 ## Python tracker
 
 1. `python-tracker` で `python -m pip install -r requirements.txt` を実行します。
-2. MediaPipeの **Pose Landmarker Lite** と専用 **Hand Landmarker（片手21点）** のtaskファイルが、それぞれ `python-tracker/models/pose_landmarker_lite.task` と `python-tracker/models/hand_landmarker.task` にあることを確認します。
+2. MediaPipeの **Pose Landmarker Lite**、**Hand Landmarker（片手21点）**、**Face Landmarker** のtaskファイルが `python-tracker/models/` にあることを確認します。
 3. `python app.py` を実行します。動画は `python app.py --source C:\\path\\to\\video.mp4`、プレビューなしは `python app.py --no-preview` です。
 
 主なオプションは `--inference-size 256|320`、`--inference-fps 20`、`--host 127.0.0.1`、`--port 39540`、`--tracking-mirror` です。プレビュー反転とトラッキング反転は分離されています。
