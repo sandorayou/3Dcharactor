@@ -131,8 +131,6 @@ class PoseEstimator:
                 })
                 hand = hand_result.hand_landmarks[hand_index]
                 hand_world = hand_result.hand_world_landmarks[hand_index]
-                pose_wrist = world[MEDIAPIPE_INDEX[f"{side}_wrist"]]
-                hand_origin = hand_world[0]
                 hand_names = (
                     "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb",
                     "index_mcp", "index_pip", "index_dip", "index",
@@ -142,24 +140,17 @@ class PoseEstimator:
                 )
                 for index, suffix in enumerate(hand_names):
                     image_point = self.last_hand_landmarks[hand_index][index]
-                    local_point = hand_world[index]
+                    world_point = hand_world[index]
                     points.append(PosePoint(
-                        f"{side}_hand_{suffix}",
-                        pose_wrist.x + local_point.x - hand_origin.x,
-                        pose_wrist.y + local_point.y - hand_origin.y,
-                        pose_wrist.z + local_point.z - hand_origin.z,
-                        score,
+                        f"{side}_hand_{suffix}", world_point.x, world_point.y, world_point.z, score,
                         image_point.x, image_point.y, hand[index].z,
                     ))
                 palm_indices = (5, 9, 17)
                 palm_image_x = sum(self.last_hand_landmarks[hand_index][index].x for index in palm_indices) / len(palm_indices)
                 palm_image_y = sum(self.last_hand_landmarks[hand_index][index].y for index in palm_indices) / len(palm_indices)
-                # The pose wrist remains the positional endpoint. Hand-world points
-                # are translated into that absolute basis only so Unity can derive
-                # stable wrist-relative axes for palm rotation.
-                palm_world_x = pose_wrist.x + sum(hand_world[index].x - hand_origin.x for index in palm_indices) / len(palm_indices)
-                palm_world_y = pose_wrist.y + sum(hand_world[index].y - hand_origin.y for index in palm_indices) / len(palm_indices)
-                palm_world_z = pose_wrist.z + sum(hand_world[index].z - hand_origin.z for index in palm_indices) / len(palm_indices)
+                palm_world_x = sum(hand_world[index].x for index in palm_indices) / len(palm_indices)
+                palm_world_y = sum(hand_world[index].y for index in palm_indices) / len(palm_indices)
+                palm_world_z = sum(hand_world[index].z for index in palm_indices) / len(palm_indices)
                 palm_image_z = sum(hand[index].z for index in palm_indices) / len(palm_indices)
                 points.append(PosePoint(
                     f"{side}_hand_palm", palm_world_x, palm_world_y, palm_world_z, score,
