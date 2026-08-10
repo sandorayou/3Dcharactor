@@ -60,7 +60,6 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(1, 5)] private int armAcquireFrames = 2;
         [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .03f;
         [SerializeField, Range(.5f, 5f)] private float armPositionSmoothingCutoff = 2f;
-        [SerializeField, Range(.25f, 5f)] private float handPositionSmoothingCutoff = 1.25f;
         [SerializeField, Range(0f, 2f)] private float armMotionResponsiveness = .25f;
         [SerializeField, Range(1f, 60f)] private float armRotationSmoothingSpeed = 14f;
         [SerializeField, Min(0f)] private float wristHoldTime = .15f;
@@ -701,7 +700,7 @@ namespace RealtimeBodyTracking
             var hasStableWrist = wristFilter.TryGetStable(
                 trackedWrist, hasWrist, avatarShoulderWidth, maxWristSpeed,
                 wristHoldTime, armAcquireFrames, armPointDeadZoneScale,
-                handPositionSmoothingCutoff, armMotionResponsiveness,
+                armPositionSmoothingCutoff, armMotionResponsiveness,
                 pose.frame, Time.unscaledTime, out trackedWrist);
             var hasStableElbow = elbowFilter.TryGetStable(
                 trackedElbow, hasElbow, avatarShoulderWidth, maxElbowSpeed,
@@ -879,7 +878,7 @@ namespace RealtimeBodyTracking
             if (hasWrist && handConfidence < .65f && wristFilter.TryGetLastStable(out var previousPalm))
                 wrist = Vector3.Lerp(previousPalm, wrist, Mathf.InverseLerp(.35f, .65f, handConfidence));
             var hasStableWrist = wristFilter.TryGetStable(wrist, hasWrist, shoulderWidth, maxWristSpeed,
-                wristHoldTime, armAcquireFrames, armPointDeadZoneScale, handPositionSmoothingCutoff,
+                wristHoldTime, armAcquireFrames, armPointDeadZoneScale, armPositionSmoothingCutoff,
                 armMotionResponsiveness, pose.frame, Time.unscaledTime, out wrist);
             // A raised arm is strongly foreshortened in screen space: its visible forearm can
             // appear much longer than its upper arm. Keep a confident visible elbow instead of
