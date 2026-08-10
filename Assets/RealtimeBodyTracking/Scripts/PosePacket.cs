@@ -21,6 +21,24 @@ namespace RealtimeBodyTracking
     }
 
     [Serializable]
+    public sealed class PoseRotation
+    {
+        public float x;
+        public float y;
+        public float z;
+        public float w;
+
+        public Quaternion Rotation => new Quaternion(x, y, z, w);
+    }
+
+    [Serializable]
+    public sealed class FaceBlendshape
+    {
+        public string name;
+        public float score;
+    }
+
+    [Serializable]
     public sealed class PosePacket
     {
         public int version;
@@ -29,7 +47,31 @@ namespace RealtimeBodyTracking
         public int source_width;
         public int source_height;
         public bool tracking;
+        public PoseRotation head_rotation;
+        public List<FaceBlendshape> face_blendshapes;
         public List<PosePoint> points;
+
+        public float GetFaceBlendshape(string name)
+        {
+            if (version >= 4 && face_blendshapes != null)
+            {
+                foreach (var blendshape in face_blendshapes)
+                    if (blendshape.name == name)
+                        return Mathf.Clamp01(blendshape.score);
+            }
+            return 0f;
+        }
+
+        public bool TryGetHeadRotation(out Quaternion rotation)
+        {
+            if (version >= 3 && head_rotation != null)
+            {
+                rotation = head_rotation.Rotation.normalized;
+                return true;
+            }
+            rotation = Quaternion.identity;
+            return false;
+        }
 
         public bool TryGet(string landmark, out Vector3 position)
         {

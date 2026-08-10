@@ -19,8 +19,18 @@
 *.userprefs
 
 python-tracker/.venv/
+python-tracker/.venv-export/
 python-tracker/__pycache__/
 python-tracker/**/*.pyc
+**/__pycache__/
+**/*.pyc
+python-tracker/debug/
+python-tracker/README.zip
+python-tracker/models/*.onnx
+python-tracker/models/pose_landmarker_full.task
+
+/debug/
+/work/
 
 .DS_Store
 Thumbs.db
