@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -49,6 +50,10 @@ class PoseEstimator:
             output_facial_transformation_matrixes=True,
         )
         self._face_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(face_options)
+        self._inference_executor = ThreadPoolExecutor(
+            max_workers=3,
+            thread_name_prefix="mediapipe",
+        )
         self._size = settings.inference_size
         self.inference_ms = 0.0
         self.inference_fps = 0.0
@@ -63,6 +68,7 @@ class PoseEstimator:
         self._tracking_mirror = settings.tracking_mirror
 
     def close(self) -> None:
+        self._inference_executor.shutdown(wait=True, cancel_futures=True)
         self._landmarker.close()
         self._hand_landmarker.close()
         self._face_landmarker.close()
@@ -72,9 +78,18 @@ class PoseEstimator:
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         started = time.perf_counter()
         media_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        result = self._landmarker.detect_for_video(media_image, timestamp_ms)
-        hand_result = self._hand_landmarker.detect_for_video(media_image, timestamp_ms)
-        face_result = self._face_landmarker.detect_for_video(media_image, timestamp_ms)
+        pose_future = self._inference_executor.submit(
+            self._landmarker.detect_for_video, media_image, timestamp_ms
+        )
+        hand_future = self._inference_executor.submit(
+            self._hand_landmarker.detect_for_video, media_image, timestamp_ms
+        )
+        face_future = self._inference_executor.submit(
+            self._face_landmarker.detect_for_video, media_image, timestamp_ms
+        )
+        result = pose_future.result()
+        hand_result = hand_future.result()
+        face_result = face_future.result()
         self.inference_ms = (time.perf_counter() - started) * 1000.0
         self._fps_count += 1
         elapsed = time.perf_counter() - self._fps_started
