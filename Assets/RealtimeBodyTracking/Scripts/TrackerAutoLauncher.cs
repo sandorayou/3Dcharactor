@@ -48,8 +48,8 @@ namespace RealtimeBodyTracking
         private void RestartOwnedTracker(string reason)
         {
             StopOwnedTracker();
-            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var trackerDirectory = Path.Combine(projectRoot, "python-tracker");
+            var applicationRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            var trackerDirectory = Path.Combine(applicationRoot, "python-tracker");
             var appPath = Path.Combine(trackerDirectory, "app.py");
 
             if (!File.Exists(appPath))
@@ -60,7 +60,7 @@ namespace RealtimeBodyTracking
                 return;
             }
 
-            var python = ResolvePythonExecutable(projectRoot);
+            var python = ResolvePythonExecutable(applicationRoot);
             try
             {
                 ownedTracker = Process.Start(new ProcessStartInfo
