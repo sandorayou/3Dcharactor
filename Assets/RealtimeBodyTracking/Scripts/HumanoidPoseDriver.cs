@@ -486,7 +486,10 @@ namespace RealtimeBodyTracking
                         Vector3.Dot(predictedPalmDirection, direction) < 0f)
                         target = Quaternion.FromToRotation(predictedPalmDirection, direction) * target;
                 }
-                transform.rotation = smoother.Smooth(bone, transform.rotation, target, smoothingSpeed, rotationDeadZoneDegrees, Time.deltaTime);
+                var rotationSpeed = trackedHandOrientation ? handOrientationSmoothing : smoothingSpeed;
+                var deadZone = trackedHandOrientation ? 0f : rotationDeadZoneDegrees;
+                transform.rotation = smoother.Smooth(
+                    bone, transform.rotation, target, rotationSpeed, deadZone, Time.deltaTime);
                 if ((bone == HumanBodyBones.LeftHand || bone == HumanBodyBones.RightHand) &&
                     TryGetAvatarPalmCenter(bone == HumanBodyBones.LeftHand, out var correctedPalmCenter))
                 {
