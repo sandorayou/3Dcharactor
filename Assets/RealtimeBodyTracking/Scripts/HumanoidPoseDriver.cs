@@ -456,11 +456,15 @@ namespace RealtimeBodyTracking
             if (!solver.TrySolve(bone, direction, upHint, rootRotationDelta,
                     enableRollCorrection || forceRollCorrection, out var target)) return; // Missing optional bones are skipped.
             if (Mathf.Abs(screenRoll) > .01f) target = Quaternion.AngleAxis(screenRoll, Vector3.forward) * target;
-            if (enableAnatomyLimits && solver.TryClampHand(bone, target, rootRotationDelta, out var constrainedHand))
+            var trackedHandOrientation = forceRollCorrection &&
+                                         (bone == HumanBodyBones.LeftHand || bone == HumanBodyBones.RightHand);
+            if (enableAnatomyLimits && !trackedHandOrientation &&
+                solver.TryClampHand(bone, target, rootRotationDelta, out var constrainedHand))
             {
                 target = constrainedHand;
             }
-            else if (enableAnatomyLimits && !IsIkArmBone(bone) && solver.TryGetRestRotation(bone, out var rest))
+            else if (enableAnatomyLimits && !trackedHandOrientation && !IsIkArmBone(bone) &&
+                     solver.TryGetRestRotation(bone, out var rest))
             {
                 var maxSwing = AnatomyLimits.GetMaxSwingDegrees(bone);
                 if (Quaternion.Angle(rootRotationDelta * rest, target) > maxSwing + .1f)
