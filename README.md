@@ -9,6 +9,7 @@ Windows向けの、MediaPipe Pose LandmarkerからUnity Humanoid/VRMへ低遅延
 3. `python app.py` を実行します。動画は `python app.py --source C:\\path\\to\\video.mp4`、プレビューなしは `python app.py --no-preview` です。
 
 主なオプションは `--inference-size 256|320`、`--inference-fps 20`、`--host 127.0.0.1`、`--port 39540`、`--tracking-mirror` です。プレビュー反転とトラッキング反転は分離されています。
+<img width="642" height="452" alt="image" src="https://github.com/user-attachments/assets/0617cb6b-342b-4e90-b455-50ca8e8b0491" />
 
 ## Unity setup
 
