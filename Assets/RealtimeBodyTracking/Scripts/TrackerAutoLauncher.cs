@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Diagnostics;
 using System.IO;
@@ -10,63 +11,38 @@ namespace RealtimeBodyTracking
     [RequireComponent(typeof(UdpPoseReceiver))]
     public sealed class TrackerAutoLauncher : MonoBehaviour
     {
-        [SerializeField, Min(.5f)] private float startupGraceSeconds = 30f;
-        [SerializeField, Min(.5f)] private float heartbeatSeconds = 1f;
-        [SerializeField, Range(1, 10)] private int missedHeartbeatsBeforeRestart = 10;
+        [SerializeField, Tooltip("Enable only when Unity should start the live camera tracker process.")]
+        private bool autoLaunchLiveTracker = true;
         [SerializeField, Tooltip("Live state")] private string launcherState = "waiting";
         [SerializeField, Tooltip("Live state")] private long observedFrame = -1;
         [SerializeField, Tooltip("Live state")] private string lastFailure;
 
         private UdpPoseReceiver receiver;
         private Process ownedTracker;
-        private int missedHeartbeats;
-        private bool shuttingDown;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
             var receiver = FindObjectOfType<UdpPoseReceiver>();
             if (receiver != null && receiver.GetComponent<TrackerAutoLauncher>() == null)
+            {
                 receiver.gameObject.AddComponent<TrackerAutoLauncher>();
+                Debug.Log("[TrackerAutoLauncher] Automatically installed onto UdpPoseReceiver GameObject.");
+            }
         }
 
         private IEnumerator Start()
         {
             receiver = GetComponent<UdpPoseReceiver>();
+            if (!autoLaunchLiveTracker)
+            {
+                launcherState = "replay_or_external_tracker";
+                yield break;
+            }
             observedFrame = receiver.LatestReceivedFrame;
-            launcherState = "probing_external_tracker";
-            yield return new WaitForSecondsRealtime(1.5f);
-            var startupFrame = receiver.LatestReceivedFrame;
-            if (startupFrame <= observedFrame) RestartOwnedTracker("Unity play mode started without UDP");
-            else
-            {
-                observedFrame = startupFrame;
-                launcherState = "external_tracker_receiving";
-            }
-            launcherState = "startup_grace";
-            yield return new WaitForSecondsRealtime(startupGraceSeconds);
-
-            while (!shuttingDown)
-            {
-                var currentFrame = receiver.LatestReceivedFrame;
-                if (currentFrame > observedFrame)
-                {
-                    observedFrame = currentFrame;
-                    missedHeartbeats = 0;
-                    launcherState = ownedTracker != null && !ownedTracker.HasExited ? "owned_tracker_receiving" : "external_tracker_receiving";
-                }
-                else
-                {
-                    missedHeartbeats++;
-                    launcherState = $"no_udp_{missedHeartbeats}/{missedHeartbeatsBeforeRestart}";
-                    if (missedHeartbeats >= missedHeartbeatsBeforeRestart)
-                    {
-                        RestartOwnedTracker("UDP frame did not advance");
-                        missedHeartbeats = 0;
-                    }
-                }
-                yield return new WaitForSecondsRealtime(heartbeatSeconds);
-            }
+            yield return null;
+            yield return new WaitForSecondsRealtime(0.75f);
+            RestartOwnedTracker("Unity play mode started");
         }
 
         private void RestartOwnedTracker(string reason)
@@ -75,11 +51,12 @@ namespace RealtimeBodyTracking
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var trackerDirectory = Path.Combine(projectRoot, "python-tracker");
             var appPath = Path.Combine(trackerDirectory, "app.py");
+
             if (!File.Exists(appPath))
             {
                 launcherState = "failed";
                 lastFailure = $"Tracker script was not found: {appPath}";
-                Debug.LogError($"Tracker auto-start failed: {lastFailure}", this);
+                Debug.LogError($"[TrackerAutoLauncher] Auto-start failed: {lastFailure}", this);
                 return;
             }
 
@@ -89,22 +66,21 @@ namespace RealtimeBodyTracking
                 ownedTracker = Process.Start(new ProcessStartInfo
                 {
                     FileName = python,
-                    Arguments = $"\"{appPath}\" --source 0 --host 127.0.0.1 --port 39541",
+                    Arguments = $"\"{appPath}\" --source 0 --host 127.0.0.1 --port {receiver.Port}",
                     WorkingDirectory = trackerDirectory,
-                    UseShellExecute = false,
+                    UseShellExecute = true,
                     CreateNoWindow = false,
-                    WindowStyle = ProcessWindowStyle.Normal,
                 });
                 launcherState = "tracker_started_waiting_for_udp";
                 lastFailure = string.Empty;
-                Debug.Log($"Tracker auto-start: process started because {reason}. python={python}", this);
+                Debug.Log($"[TrackerAutoLauncher] Process started ({reason}). python={python}", this);
             }
-            catch (System.Exception exception)
+            catch (Exception exception)
             {
                 ownedTracker = null;
                 launcherState = "failed";
                 lastFailure = exception.Message;
-                Debug.LogError($"Tracker auto-start failed ({reason}): {exception.Message}", this);
+                Debug.LogError($"[TrackerAutoLauncher] Auto-start failed ({reason}): {exception.Message}", this);
             }
         }
 
@@ -121,11 +97,13 @@ namespace RealtimeBodyTracking
             if (ownedTracker == null) return;
             try
             {
+                if (!ownedTracker.HasExited && ownedTracker.CloseMainWindow())
+                    ownedTracker.WaitForExit(1500);
                 if (!ownedTracker.HasExited) ownedTracker.Kill();
             }
-            catch (System.Exception exception)
+            catch (Exception exception)
             {
-                Debug.LogWarning($"Tracker auto-stop warning: {exception.Message}", this);
+                Debug.LogWarning($"[TrackerAutoLauncher] Stop warning: {exception.Message}", this);
             }
             finally
             {
@@ -136,7 +114,11 @@ namespace RealtimeBodyTracking
 
         private void OnDestroy()
         {
-            shuttingDown = true;
+            StopOwnedTracker();
+        }
+
+        private void OnApplicationQuit()
+        {
             StopOwnedTracker();
         }
     }
