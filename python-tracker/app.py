@@ -22,7 +22,6 @@ def parse_args() -> TrackerSettings:
     parser.add_argument("--source", default="0", help="Camera index or video path")
     parser.add_argument("--model", default="models/pose_landmarker_lite.task")
     parser.add_argument("--hand-model", default="models/hand_landmarker.task")
-    parser.add_argument("--face-model", default="models/face_landmarker.task")
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--inference-size", type=int, choices=(256, 320), default=256)
@@ -38,7 +37,6 @@ def parse_args() -> TrackerSettings:
         source=args.source,
         model_path=Path(args.model),
         hand_model_path=Path(args.hand_model),
-        face_model_path=Path(args.face_model),
         width=args.width,
         height=args.height,
         inference_size=args.inference_size,

@@ -14,7 +14,6 @@ class TrackerSettings:
     inference_fps: float = 20.0
     model_path: Path = Path("models/pose_landmarker_lite.task")
     hand_model_path: Path = Path("models/hand_landmarker.task")
-    face_model_path: Path = Path("models/face_landmarker.task")
     udp_host: str = "127.0.0.1"
     udp_port: int = 39541
     preview: bool = True

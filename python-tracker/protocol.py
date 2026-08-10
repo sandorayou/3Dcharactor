@@ -34,20 +34,6 @@ class PosePoint:
 
 
 @dataclass(slots=True)
-class HeadRotation:
-    x: float
-    y: float
-    z: float
-    w: float
-
-
-@dataclass(slots=True)
-class FaceBlendshape:
-    name: str
-    score: float
-
-
-@dataclass(slots=True)
 class PosePacket:
     version: int
     frame: int
@@ -55,8 +41,6 @@ class PosePacket:
     source_width: int
     source_height: int
     tracking: bool
-    head_rotation: HeadRotation | None
-    face_blendshapes: list[FaceBlendshape]
     points: list[PosePoint]
 
     def to_bytes(self) -> bytes:

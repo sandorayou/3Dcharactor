@@ -36,7 +36,6 @@ namespace RealtimeBodyTracking
             Vector3 projectionDepthAxis, float projectionDepth, float collisionRadiusScale,
             float torsoRadiusX, float torsoRadiusZ, float headRadius,
             float upperRadius, float lowerRadius, float handRadius,
-            bool lockWristToChestSurface,
             bool hasPreviousArm, ArmPose previousArm, bool hasOtherArm, ArmPose otherArm,
             out ArmSolveDiagnostics diagnostics)
         {
@@ -50,9 +49,8 @@ namespace RealtimeBodyTracking
 
             for (var iteration = 0; iteration < 3; iteration++)
             {
-                if (!lockWristToChestSurface)
-                    wrist = ProjectPointOutsideBody(wrist, body, left, collisionRadiusScale,
-                        torsoRadiusX, torsoRadiusZ, headRadius, handRadius);
+                wrist = ProjectPointOutsideBody(wrist, body, left, collisionRadiusScale,
+                    torsoRadiusX, torsoRadiusZ, headRadius, handRadius);
                 var toWrist = wrist - shoulder;
                 direction = toWrist.sqrMagnitude > .000001f ? toWrist.normalized : Vector3.down;
                 distance = Mathf.Clamp(toWrist.magnitude, minReach, upperLength + lowerLength - .001f);
@@ -122,13 +120,21 @@ namespace RealtimeBodyTracking
             // Ensure elbow stays outside torso/head body boundaries
             armPose = RetreatToBodyBoundary(armPose, body, left, collisionRadiusScale,
                 torsoRadiusX, torsoRadiusZ, headRadius, upperRadius, lowerRadius, handRadius,
-                upperLength, lowerLength, minimumElbowDrop, lockWristToChestSurface);
+                upperLength, lowerLength, minimumElbowDrop);
             var finalDepth = float.IsNaN(projectionDepth) ? wristZOffset * .55f : projectionDepth;
             var finalDepthAxis = float.IsNaN(projectionDepth) ? body.Forward : projectionDepthAxis;
             armPose = ApplyElbowDepth(armPose, finalDepthAxis, finalDepth, upperLength);
 
             diagnostics = new ArmSolveDiagnostics(false, 0, 0f, 0f);
             return armPose;
+        }
+
+        public static Vector3 ProjectHandOutsideBody(Vector3 hand, UpperBodyPose body, bool left,
+            float collisionRadiusScale, float torsoRadiusX, float torsoRadiusZ,
+            float headRadius, float handRadius)
+        {
+            return ProjectPointOutsideBody(hand, body, left, collisionRadiusScale,
+                torsoRadiusX, torsoRadiusZ, headRadius, handRadius);
         }
 
         private static float ElbowFlexionDirectionScore(
@@ -166,7 +172,7 @@ namespace RealtimeBodyTracking
 
         private static ArmPose RetreatToBodyBoundary(ArmPose arm, UpperBodyPose body, bool left, float scale,
             float torsoRadiusX, float torsoRadiusZ, float headRadius, float upperRadius, float lowerRadius, float handRadius,
-            float upperLength, float lowerLength, float minimumElbowDrop, bool lockWristToChestSurface)
+            float upperLength, float lowerLength, float minimumElbowDrop)
         {
             var elbow = arm.Elbow;
             var wrist = arm.Wrist;
@@ -177,17 +183,13 @@ namespace RealtimeBodyTracking
                     var samplePoint = Vector3.Lerp(arm.Shoulder, elbow, sample / 20f);
                     PushSampleOutsideBody(ref samplePoint, ref elbow, body, left, scale, torsoRadiusX, torsoRadiusZ, headRadius, upperRadius);
                 }
-                if (!lockWristToChestSurface)
+                for (var sample = 5; sample <= 20; sample++)
                 {
-                    for (var sample = 5; sample <= 20; sample++)
-                    {
-                        var samplePoint = Vector3.Lerp(elbow, wrist, sample / 20f);
-                        PushSampleOutsideBody(ref samplePoint, ref wrist, body, left, scale, torsoRadiusX, torsoRadiusZ, headRadius, lowerRadius);
-                    }
+                    var samplePoint = Vector3.Lerp(elbow, wrist, sample / 20f);
+                    PushSampleOutsideBody(ref samplePoint, ref wrist, body, left, scale, torsoRadiusX, torsoRadiusZ, headRadius, lowerRadius);
                 }
                 elbow = ProjectPointOutsideBody(elbow, body, left, scale, torsoRadiusX, torsoRadiusZ, headRadius, upperRadius);
-                if (!lockWristToChestSurface)
-                    wrist = ProjectPointOutsideBody(wrist, body, left, scale, torsoRadiusX, torsoRadiusZ, headRadius, handRadius);
+                wrist = ProjectPointOutsideBody(wrist, body, left, scale, torsoRadiusX, torsoRadiusZ, headRadius, handRadius);
                 var bodyDown = body.Torso.sqrMagnitude > .000001f ? -body.Torso.normalized : Vector3.down;
                 var upperDirection = ClampToMinimumDrop(elbow - arm.Shoulder, bodyDown, upperLength, minimumElbowDrop);
                 elbow = arm.Shoulder + upperDirection;
@@ -239,12 +241,14 @@ namespace RealtimeBodyTracking
             var effRz = (rz + pointRadius) * Mathf.Clamp01(scale);
             if (effRx < .001f || effRz < .001f) return;
             var ellipseVal = (localX * localX) / (effRx * effRx) + (localZ * localZ) / (effRz * effRz);
-            if (ellipseVal < 1f && ellipseVal > .00001f)
+            if (ellipseVal < 1f)
             {
-                var norm = 1f / Mathf.Sqrt(ellipseVal);
-                var newX = localX * norm;
-                var newZ = localZ * norm;
-                point += body.Lateral.normalized * (newX - localX) + body.Forward * (newZ - localZ);
+                // Preserve the tracked screen-space hand position and move it to the
+                // front surface of the torso. A radial push moved chest-crossing hands
+                // sideways, and a point exactly on the torso axis was not moved at all.
+                var normalizedX = Mathf.Clamp(localX / effRx, -1f, 1f);
+                var surfaceZ = effRz * Mathf.Sqrt(Mathf.Max(1f - normalizedX * normalizedX, 0f));
+                point += body.Forward * (surfaceZ - localZ);
             }
         }
 
