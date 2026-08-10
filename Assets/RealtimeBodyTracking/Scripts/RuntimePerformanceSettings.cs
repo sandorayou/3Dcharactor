@@ -15,7 +15,7 @@ namespace RealtimeBodyTracking
 #if UNITY_STANDALONE && !UNITY_EDITOR
             QualitySettings.SetQualityLevel(StandaloneQualityLevel, true);
 #endif
-            QualitySettings.vSyncCount = 1;
+            QualitySettings.vSyncCount = 0;
             Application.targetFrameRate = TargetFrameRate;
 
             if (Screen.width > MaximumWidth || Screen.height > MaximumHeight)
