@@ -9,7 +9,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from protocol import FaceBlendshape, HeadRotation, LANDMARKS, MEDIAPIPE_INDEX, PosePacket, PosePoint
+from protocol import LANDMARKS, MEDIAPIPE_INDEX, PosePacket, PosePoint
 from settings import TrackerSettings
 
 
@@ -23,8 +23,6 @@ class PoseEstimator:
             )
         if not settings.hand_model_path.is_file():
             raise FileNotFoundError(f"Hand model not found: {settings.hand_model_path}")
-        if not settings.face_model_path.is_file():
-            raise FileNotFoundError(f"Face model not found: {settings.face_model_path}")
         options = mp.tasks.vision.PoseLandmarkerOptions(
             base_options=mp.tasks.BaseOptions(model_asset_path=str(settings.model_path)),
             running_mode=mp.tasks.vision.RunningMode.VIDEO,
@@ -41,14 +39,6 @@ class PoseEstimator:
             min_tracking_confidence=.35,
         )
         self._hand_landmarker = mp.tasks.vision.HandLandmarker.create_from_options(hand_options)
-        face_options = mp.tasks.vision.FaceLandmarkerOptions(
-            base_options=mp.tasks.BaseOptions(model_asset_path=str(settings.face_model_path)),
-            running_mode=mp.tasks.vision.RunningMode.VIDEO,
-            num_faces=1,
-            output_face_blendshapes=True,
-            output_facial_transformation_matrixes=True,
-        )
-        self._face_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(face_options)
         self._size = settings.inference_size
         self.inference_ms = 0.0
         self.inference_fps = 0.0
@@ -65,7 +55,6 @@ class PoseEstimator:
     def close(self) -> None:
         self._landmarker.close()
         self._hand_landmarker.close()
-        self._face_landmarker.close()
 
     def estimate(self, frame: np.ndarray, timestamp_ms: int, frame_number: int) -> PosePacket:
         resized, scale, pad_left, pad_top = self._letterbox(frame)
@@ -74,7 +63,6 @@ class PoseEstimator:
         media_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = self._landmarker.detect_for_video(media_image, timestamp_ms)
         hand_result = self._hand_landmarker.detect_for_video(media_image, timestamp_ms)
-        face_result = self._face_landmarker.detect_for_video(media_image, timestamp_ms)
         self.inference_ms = (time.perf_counter() - started) * 1000.0
         self._fps_count += 1
         elapsed = time.perf_counter() - self._fps_started
@@ -131,8 +119,6 @@ class PoseEstimator:
                 })
                 hand = hand_result.hand_landmarks[hand_index]
                 hand_world = hand_result.hand_world_landmarks[hand_index]
-                pose_wrist = world[MEDIAPIPE_INDEX[f"{side}_wrist"]]
-                hand_origin = hand_world[0]
                 hand_names = (
                     "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb",
                     "index_mcp", "index_pip", "index_dip", "index",
@@ -142,88 +128,27 @@ class PoseEstimator:
                 )
                 for index, suffix in enumerate(hand_names):
                     image_point = self.last_hand_landmarks[hand_index][index]
-                    local_point = hand_world[index]
+                    world_point = hand_world[index]
                     points.append(PosePoint(
-                        f"{side}_hand_{suffix}",
-                        pose_wrist.x + local_point.x - hand_origin.x,
-                        pose_wrist.y + local_point.y - hand_origin.y,
-                        pose_wrist.z + local_point.z - hand_origin.z,
-                        score,
+                        f"{side}_hand_{suffix}", world_point.x, world_point.y, world_point.z, score,
                         image_point.x, image_point.y, hand[index].z,
                     ))
                 palm_indices = (5, 9, 17)
                 palm_image_x = sum(self.last_hand_landmarks[hand_index][index].x for index in palm_indices) / len(palm_indices)
                 palm_image_y = sum(self.last_hand_landmarks[hand_index][index].y for index in palm_indices) / len(palm_indices)
-                # The pose wrist remains the positional endpoint. Hand-world points
-                # are translated into that absolute basis only so Unity can derive
-                # stable wrist-relative axes for palm rotation.
-                palm_world_x = pose_wrist.x + sum(hand_world[index].x - hand_origin.x for index in palm_indices) / len(palm_indices)
-                palm_world_y = pose_wrist.y + sum(hand_world[index].y - hand_origin.y for index in palm_indices) / len(palm_indices)
-                palm_world_z = pose_wrist.z + sum(hand_world[index].z - hand_origin.z for index in palm_indices) / len(palm_indices)
+                palm_world_x = sum(hand_world[index].x for index in palm_indices) / len(palm_indices)
+                palm_world_y = sum(hand_world[index].y for index in palm_indices) / len(palm_indices)
+                palm_world_z = sum(hand_world[index].z for index in palm_indices) / len(palm_indices)
                 palm_image_z = sum(hand[index].z for index in palm_indices) / len(palm_indices)
                 points.append(PosePoint(
                     f"{side}_hand_palm", palm_world_x, palm_world_y, palm_world_z, score,
                     palm_image_x, palm_image_y, palm_image_z,
                 ))
-        head_rotation = None
-        if face_result.facial_transformation_matrixes:
-            head_rotation = self._head_rotation(face_result.facial_transformation_matrixes[0])
-        face_blendshapes = []
-        if face_result.face_blendshapes:
-            tracked_shapes = {
-                "eyeBlinkLeft", "eyeBlinkRight", "jawOpen",
-                "mouthSmileLeft", "mouthSmileRight",
-            }
-            face_blendshapes = [
-                FaceBlendshape(category.category_name, float(category.score))
-                for category in face_result.face_blendshapes[0]
-                if category.category_name in tracked_shapes
-            ]
         return PosePacket(
-            version=4, frame=frame_number, timestamp_ms=timestamp_ms,
+            version=2, frame=frame_number, timestamp_ms=timestamp_ms,
             source_width=frame.shape[1], source_height=frame.shape[0],
-            tracking=bool(points), head_rotation=head_rotation,
-            face_blendshapes=face_blendshapes, points=points,
+            tracking=bool(points), points=points,
         )
-
-    @staticmethod
-    def _head_rotation(transformation: np.ndarray) -> HeadRotation:
-        rotation = np.asarray(transformation, dtype=np.float64)[:3, :3]
-        # Remove any scale before converting MediaPipe camera axes to Unity axes.
-        u, _, vh = np.linalg.svd(rotation)
-        rotation = u @ vh
-        axes = np.diag((1.0, -1.0, -1.0))
-        rotation = axes @ rotation @ axes
-
-        trace = float(np.trace(rotation))
-        if trace > 0.0:
-            scale = np.sqrt(trace + 1.0) * 2.0
-            w = .25 * scale
-            x = (rotation[2, 1] - rotation[1, 2]) / scale
-            y = (rotation[0, 2] - rotation[2, 0]) / scale
-            z = (rotation[1, 0] - rotation[0, 1]) / scale
-        else:
-            index = int(np.argmax(np.diag(rotation)))
-            if index == 0:
-                scale = np.sqrt(1.0 + rotation[0, 0] - rotation[1, 1] - rotation[2, 2]) * 2.0
-                x = .25 * scale
-                y = (rotation[0, 1] + rotation[1, 0]) / scale
-                z = (rotation[0, 2] + rotation[2, 0]) / scale
-                w = (rotation[2, 1] - rotation[1, 2]) / scale
-            elif index == 1:
-                scale = np.sqrt(1.0 + rotation[1, 1] - rotation[0, 0] - rotation[2, 2]) * 2.0
-                x = (rotation[0, 1] + rotation[1, 0]) / scale
-                y = .25 * scale
-                z = (rotation[1, 2] + rotation[2, 1]) / scale
-                w = (rotation[0, 2] - rotation[2, 0]) / scale
-            else:
-                scale = np.sqrt(1.0 + rotation[2, 2] - rotation[0, 0] - rotation[1, 1]) * 2.0
-                x = (rotation[0, 2] + rotation[2, 0]) / scale
-                y = (rotation[1, 2] + rotation[2, 1]) / scale
-                z = .25 * scale
-                w = (rotation[1, 0] - rotation[0, 1]) / scale
-        norm = np.sqrt(x * x + y * y + z * z + w * w)
-        return HeadRotation(x / norm, y / norm, z / norm, w / norm)
 
     def _assign_hand_sides(
         self,
