@@ -57,6 +57,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Min(0f)] private float maxWristSpeed = 2.5f;
         [SerializeField, Min(0f)] private float maxElbowSpeed = 3f;
         [SerializeField, Range(.25f, 1.5f)] private float handHorizontalGain = .75f;
+        [SerializeField, Range(.5f, 2f)] private float armVerticalGain = 1.5f;
         [SerializeField, Range(1, 5)] private int armAcquireFrames = 2;
         [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .03f;
         [SerializeField, Range(.5f, 5f)] private float armPositionSmoothingCutoff = 2f;
@@ -1848,7 +1849,7 @@ namespace RealtimeBodyTracking
             // hand drives the facing avatar, so applying avatarMirror here would invert motion twice.
             var dx = sourcePoint.x - sourceShoulder.x;
             var dy = sourcePoint.y - sourceShoulder.y;
-            var offset = new Vector2(dx * handHorizontalGain, dy) * viewportScale;
+            var offset = new Vector2(dx * handHorizontalGain, dy * armVerticalGain) * viewportScale;
             targetViewport = new Vector3(
                 shoulderViewport.x + offset.x,
                 shoulderViewport.y + offset.y,
