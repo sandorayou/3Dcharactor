@@ -950,7 +950,10 @@ namespace RealtimeBodyTracking
                 var observedElbowWeight = useObservedElbow
                     ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.45f, .85f, elbowConfidence)) * elbowImageWeight
                     : 0f;
-                var reliableElbow = useObservedElbow && observedElbowWeight >= .5f;
+                // An overhead arm commonly puts the elbow close to the image edge. Requiring
+                // .5 discarded that valid upward elbow and made the fallback pole bend the
+                // avatar's upper arm downward, pulling the hand into the head.
+                var reliableElbow = useObservedElbow && observedElbowWeight >= .2f;
                 var elbowHint = reliableElbow ? elbow : Vector3.zero;
                 filterState += $", observedWeight={observedElbowWeight:F2}, fallback={!reliableElbow}";
                 if (left) leftArmFilterState = filterState; else rightArmFilterState = filterState;
