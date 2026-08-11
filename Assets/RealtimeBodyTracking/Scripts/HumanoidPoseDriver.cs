@@ -1637,6 +1637,8 @@ namespace RealtimeBodyTracking
         {
             private readonly float[] referenceWorldLengths = new float[4];
             private int calibrationFrames;
+            private bool hasLastGoodScale;
+            private float lastGoodScale;
 
             public bool TryMeasure(PosePacket pose, string side, float minConfidence,
                 out float scale, out float openness, out string state)
@@ -1649,6 +1651,7 @@ namespace RealtimeBodyTracking
                     ("wrist", "pinky_mcp"),
                 };
                 var samples = new System.Collections.Generic.List<float>(4);
+                var angleRejected = 0;
                 for (var index = 0; index < segments.Length; index++)
                 {
                     var aName = $"{side}_hand_{segments[index].Item1}";
@@ -1660,7 +1663,8 @@ namespace RealtimeBodyTracking
 
                     var imageLength = Vector2.Distance(
                         new Vector2(imageA.x, imageA.y), new Vector2(imageB.x, imageB.y));
-                    var worldLength = Vector3.Distance(worldA, worldB);
+                    var worldVector = worldB - worldA;
+                    var worldLength = worldVector.magnitude;
                     if (imageLength < .0001f || worldLength < .001f) continue;
 
                     if (calibrationFrames < 15)
@@ -1669,28 +1673,57 @@ namespace RealtimeBodyTracking
                             ? worldLength
                             : Mathf.Lerp(referenceWorldLengths[index], worldLength, .15f);
                     }
-                    if (referenceWorldLengths[index] > .001f)
-                        samples.Add(imageLength / referenceWorldLengths[index]);
+                    if (referenceWorldLengths[index] <= .001f) continue;
+
+                    // Compensate the fixed physical palm length for its current projection
+                    // into the camera XY plane. Current world length itself is never used as
+                    // a size cue after calibration; only its direction supplies the angle.
+                    var direction = worldVector / worldLength;
+                    var projectionFactor = Mathf.Sqrt(
+                        direction.x * direction.x + direction.y * direction.y);
+                    // Nearly edge-on segments amplify tiny landmark errors into enormous
+                    // depth changes, so hold the last trustworthy scale instead.
+                    if (projectionFactor < .35f)
+                    {
+                        angleRejected++;
+                        continue;
+                    }
+                    var projectedReferenceLength = referenceWorldLengths[index] * projectionFactor;
+                    if (projectedReferenceLength < .0001f) continue;
+                    var sample = imageLength / projectedReferenceLength;
+                    if (!float.IsNaN(sample) && !float.IsInfinity(sample) && sample > .0001f)
+                        samples.Add(sample);
                 }
 
-                if (samples.Count < 3)
-                {
-                    scale = 0f;
-                    openness = 0f;
-                    state = "rigidPalm=missing";
-                    return false;
-                }
-
-                if (calibrationFrames < 15) calibrationFrames++;
-                scale = Median(samples);
+                if (calibrationFrames < 15 && samples.Count > 0) calibrationFrames++;
                 openness = MeasureHandOpenness(pose, side, minConfidence);
-                state = $"rigidPalm={scale:F2}, calibration={calibrationFrames}/15";
-                return true;
+                if (samples.Count >= 2)
+                {
+                    scale = Median(samples);
+                    lastGoodScale = scale;
+                    hasLastGoodScale = true;
+                    state = $"angleCorrected={scale:F2}, samples={samples.Count}, " +
+                            $"angleRejected={angleRejected}, calibration={calibrationFrames}/15";
+                    return true;
+                }
+
+                if (hasLastGoodScale)
+                {
+                    scale = lastGoodScale;
+                    state = $"angleHold={scale:F2}, samples={samples.Count}, angleRejected={angleRejected}";
+                    return true;
+                }
+
+                scale = 0f;
+                state = $"angleMissing, samples={samples.Count}, angleRejected={angleRejected}";
+                return false;
             }
 
             public void Reset()
             {
                 calibrationFrames = 0;
+                hasLastGoodScale = false;
+                lastGoodScale = 0f;
                 for (var index = 0; index < referenceWorldLengths.Length; index++)
                     referenceWorldLengths[index] = 0f;
             }
