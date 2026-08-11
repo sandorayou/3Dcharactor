@@ -78,7 +78,6 @@ namespace RealtimeBodyTracking
         [SerializeField] private float torsoChestWristTrackerZ = -.44f;
         [SerializeField] private float torsoExtendedWristTrackerZ = -.38f;
         [SerializeField, Range(0f, .5f)] private float torsoChestDepthShoulderWidths = .22f;
-        [SerializeField, Range(0f, 120f)] private float maxUpperArmRollDegrees = 55f;
         [SerializeField, Range(0f, 100f)] private float maxForearmTwistDegrees = 85f;
         [SerializeField, Range(.5f, 30f)] private float handOrientationSmoothing = 8f;
         [SerializeField, Range(.5f, 30f)] private float fingerSmoothingSpeed = 9f;
@@ -1026,19 +1025,8 @@ namespace RealtimeBodyTracking
             var beforeDepth = Vector3.Dot(lower.position - upper.position, avatarForward);
             var beforeForearmDepth = Vector3.Dot(hand.position - lower.position, avatarForward);
 
-            // Direction alone leaves upper-arm roll underdetermined. Align its roll to the
-            // shoulder-elbow-wrist bend plane so the sleeve and elbow hinge do not twist when
-            // the arm passes overhead.
-            var upperRollHint = Vector3.Cross(upperDirection, lowerDirection);
-            if (upperRollHint.sqrMagnitude < .000001f)
-                upperRollHint = avatarForward;
-            else
-            {
-                upperRollHint.Normalize();
-                if (Vector3.Dot(upperRollHint, avatarForward) < 0f) upperRollHint = -upperRollHint;
-            }
-            var upperCorrection = ApplyCurrentBoneDirection(
-                upperBone, upper, lower, upperDirection.normalized, upperRollHint, true);
+            // Ensure 3D upper arm direction with Z-axis displacement directly drives upper arm bone rotation
+            var upperCorrection = ApplyCurrentBoneDirection(upperBone, upper, lower, upperDirection.normalized);
             var upperFailure = solver.LastFailure;
 
             var appliedDepth = Vector3.Dot(lower.position - upper.position, avatarForward);
@@ -2638,25 +2626,12 @@ namespace RealtimeBodyTracking
             ReturnBoneToRest(handBone);
         }
 
-        private float ApplyCurrentBoneDirection(HumanBodyBones bone, Transform boneTransform, Transform endpoint,
-            Vector3 desiredDirection, Vector3 upHint = default, bool useRollCorrection = false)
+        private float ApplyCurrentBoneDirection(HumanBodyBones bone, Transform boneTransform, Transform endpoint, Vector3 desiredDirection)
         {
             var currentDirection = endpoint.position - boneTransform.position;
-            if (currentDirection.sqrMagnitude < .000001f) return 0f;
-            Quaternion target;
-            if (useRollCorrection)
-            {
-                if (!solver.TrySolve(
-                        bone, desiredDirection, Vector3.zero, rootRotationDelta, false, out var directionTarget) ||
-                    !solver.TrySolve(
-                        bone, desiredDirection, upHint, rootRotationDelta, true, out var rollTarget)) return 0f;
-                // Full bend-plane roll can fix the elbow while visibly corkscrewing the
-                // shoulder mesh. Keep the positional direction and cap only axial roll.
-                target = Quaternion.RotateTowards(
-                    directionTarget, rollTarget, maxUpperArmRollDegrees);
-            }
-            else if (!solver.TrySolve(
-                         bone, desiredDirection, upHint, rootRotationDelta, false, out target)) return 0f;
+            if (currentDirection.sqrMagnitude < .000001f ||
+                !solver.TrySolve(bone, desiredDirection, Vector3.zero, rootRotationDelta, false, out var target))
+                return 0f;
             var correction = Quaternion.Angle(boneTransform.rotation, target);
             boneTransform.rotation = smoother.Smooth(
                 bone, boneTransform.rotation, target, armRotationSmoothingSpeed, 0f, Time.deltaTime);
