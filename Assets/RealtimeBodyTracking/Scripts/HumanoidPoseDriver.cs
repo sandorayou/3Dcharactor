@@ -279,10 +279,9 @@ namespace RealtimeBodyTracking
                 return;
             }
             wristMinConfidence = Mathf.Max(wristMinConfidence, .5f);
-            // A camera-facing punch needs almost the full arm length on the depth
-            // axis. Older serialized values capped it at less than one shoulder width.
+            // Pose wrist depth can use almost the full arm length on the camera-depth axis.
+            // Older serialized values capped it at less than one shoulder width.
             maxHandDepthShoulderWidths = Mathf.Max(maxHandDepthShoulderWidths, 1.35f);
-            handDepthGain = Mathf.Max(handDepthGain, 1.35f);
             if (trackingCamera != null) trackingCamera.nearClipPlane = Mathf.Min(trackingCamera.nearClipPlane, .03f);
             avatarRootOriginPosition = targetAnimator.transform.position;
             avatarRootOriginRotation = targetAnimator.transform.rotation;
