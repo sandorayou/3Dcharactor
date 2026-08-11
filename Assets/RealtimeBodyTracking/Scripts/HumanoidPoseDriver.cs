@@ -1025,8 +1025,19 @@ namespace RealtimeBodyTracking
             var beforeDepth = Vector3.Dot(lower.position - upper.position, avatarForward);
             var beforeForearmDepth = Vector3.Dot(hand.position - lower.position, avatarForward);
 
-            // Ensure 3D upper arm direction with Z-axis displacement directly drives upper arm bone rotation
-            var upperCorrection = ApplyCurrentBoneDirection(upperBone, upper, lower, upperDirection.normalized);
+            // Direction alone leaves upper-arm roll underdetermined. Align its roll to the
+            // shoulder-elbow-wrist bend plane so the sleeve and elbow hinge do not twist when
+            // the arm passes overhead.
+            var upperRollHint = Vector3.Cross(upperDirection, lowerDirection);
+            if (upperRollHint.sqrMagnitude < .000001f)
+                upperRollHint = avatarForward;
+            else
+            {
+                upperRollHint.Normalize();
+                if (Vector3.Dot(upperRollHint, avatarForward) < 0f) upperRollHint = -upperRollHint;
+            }
+            var upperCorrection = ApplyCurrentBoneDirection(
+                upperBone, upper, lower, upperDirection.normalized, upperRollHint, true);
             var upperFailure = solver.LastFailure;
 
             var appliedDepth = Vector3.Dot(lower.position - upper.position, avatarForward);
@@ -2626,11 +2637,12 @@ namespace RealtimeBodyTracking
             ReturnBoneToRest(handBone);
         }
 
-        private float ApplyCurrentBoneDirection(HumanBodyBones bone, Transform boneTransform, Transform endpoint, Vector3 desiredDirection)
+        private float ApplyCurrentBoneDirection(HumanBodyBones bone, Transform boneTransform, Transform endpoint,
+            Vector3 desiredDirection, Vector3 upHint = default, bool useRollCorrection = false)
         {
             var currentDirection = endpoint.position - boneTransform.position;
             if (currentDirection.sqrMagnitude < .000001f ||
-                !solver.TrySolve(bone, desiredDirection, Vector3.zero, rootRotationDelta, false, out var target))
+                !solver.TrySolve(bone, desiredDirection, upHint, rootRotationDelta, useRollCorrection, out var target))
                 return 0f;
             var correction = Quaternion.Angle(boneTransform.rotation, target);
             boneTransform.rotation = smoother.Smooth(
