@@ -1533,8 +1533,11 @@ namespace RealtimeBodyTracking
             var valid = associated && hasPalm;
             var depthTracker = left ? leftHandDepthTracker : rightHandDepthTracker;
             var projectionScale = 0f;
+            var handOpenness = 0f;
             var hasProjectionScale = valid &&
-                                     TryMeasureHandProjectionScale(pose, side, minHandConfidence, out projectionScale);
+                                     TryMeasureHandProjectionScale(
+                                         pose, side, minHandConfidence, out projectionScale, out handOpenness,
+                                         out var projectionState);
             var relativeScale = hasProjectionScale
                 ? projectionScale / Mathf.Max(shoulderWidth, .001f)
                 : 0f;
@@ -1546,6 +1549,7 @@ namespace RealtimeBodyTracking
                     maxHandDepthShoulderWidths, handDepthSmoothing,
                     armPointDeadZoneScale, Time.deltaTime, out var depthState);
                 handDepthZ += worldShoulderWidth * handForwardOffsetShoulderWidths;
+                depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}]";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
             else
@@ -1618,32 +1622,74 @@ namespace RealtimeBodyTracking
             return wrist.x >= minShoulderX && wrist.x <= maxShoulderX && wrist.y <= meanShoulderY;
         }
 
-        private static bool TryMeasureHandProjectionScale(PosePacket pose, string side, float minConfidence, out float scale)
+        private static bool TryMeasureHandProjectionScale(PosePacket pose, string side, float minConfidence,
+            out float scale, out float openness, out string state)
         {
-            var samples = new System.Collections.Generic.List<float>(8);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_middle_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_index_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_thumb_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_thumb_mcp", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_middle_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_middle_mcp", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            if (samples.Count < 2)
+            var palmSamples = new System.Collections.Generic.List<float>(8);
+            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_middle_mcp", minConfidence, palmSamples);
+            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
+            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_index_mcp", minConfidence, palmSamples);
+            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
+            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_thumb_mcp", minConfidence, palmSamples);
+            MeasureHandProjectionPair(pose, $"{side}_hand_thumb_mcp", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
+            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_middle_mcp", minConfidence, palmSamples);
+            MeasureHandProjectionPair(pose, $"{side}_hand_middle_mcp", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
+            if (palmSamples.Count < 2)
             {
                 scale = 0f;
+                openness = 0f;
+                state = "palm=missing";
                 return false;
             }
 
-            // Use the palm as a rigid depth cue.  Taking the largest pair selected whichever
-            // knuckle/finger happened to be closest to the camera, so a pointing gesture drove
-            // Z from the frontmost finger instead of from the hand as a whole.
+            var fingerSamples = new System.Collections.Generic.List<float>(20);
+            var opennessSamples = new System.Collections.Generic.List<float>(5);
+            foreach (var finger in new[] { "thumb", "index", "middle", "ring", "pinky" })
+            {
+                var joints = finger == "thumb"
+                    ? new[] { "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb" }
+                    : new[] { "wrist", $"{finger}_mcp", $"{finger}_pip", $"{finger}_dip", finger };
+                var chainLength = 0f;
+                var completeChain = true;
+                for (var index = 0; index < joints.Length - 1; index++)
+                {
+                    var from = $"{side}_hand_{joints[index]}";
+                    var to = $"{side}_hand_{joints[index + 1]}";
+                    MeasureHandProjectionPair(pose, from, to, minConfidence, fingerSamples);
+                    if (pose.TryGet(from, minConfidence, out var fromWorld) &&
+                        pose.TryGet(to, minConfidence, out var toWorld))
+                        chainLength += Vector3.Distance(fromWorld, toWorld);
+                    else
+                        completeChain = false;
+                }
+                var wristName = $"{side}_hand_wrist";
+                var tipName = $"{side}_hand_{finger}";
+                if (completeChain && chainLength > .005f &&
+                    pose.TryGet(wristName, minConfidence, out var wristWorld) &&
+                    pose.TryGet(tipName, minConfidence, out var tipWorld))
+                    opennessSamples.Add(Mathf.Clamp01(Vector3.Distance(wristWorld, tipWorld) / chainLength));
+            }
+
+            var palmScale = Median(palmSamples);
+            var fingerScale = fingerSamples.Count >= 4 ? Median(fingerSamples) : palmScale;
+            openness = opennessSamples.Count > 0 ? Median(opennessSamples) : .5f;
+            // A curl ratio of roughly .45 is a fist and .9 is an open hand.  Every projection
+            // sample is image length / the same segment's current world-space projected length,
+            // so bending a finger changes both sides of the ratio instead of changing depth.
+            openness = Mathf.InverseLerp(.45f, .9f, openness);
+            var fingerWeight = Mathf.Lerp(.25f, .55f, openness);
+            scale = Mathf.Lerp(palmScale, fingerScale, fingerWeight);
+            state = $"palm={palmScale:F2}, fingers={fingerScale:F2}, blend={fingerWeight:F2}";
+            return scale > .001f;
+        }
+
+        private static float Median(System.Collections.Generic.List<float> samples)
+        {
             samples.Sort();
             var middle = samples.Count / 2;
-            scale = samples.Count % 2 == 0
+            return samples.Count % 2 == 0
                 ? (samples[middle - 1] + samples[middle]) * .5f
                 : samples[middle];
-            return scale > .001f;
         }
 
         private static void MeasureHandProjectionPair(PosePacket pose, string from, string to, float minConfidence,
