@@ -1534,10 +1534,11 @@ namespace RealtimeBodyTracking
             var depthTracker = left ? leftHandDepthTracker : rightHandDepthTracker;
             var projectionScale = 0f;
             var handOpenness = 0f;
+            var projectionState = "not_measured";
             var hasProjectionScale = valid &&
                                      TryMeasureHandProjectionScale(
                                          pose, side, minHandConfidence, out projectionScale, out handOpenness,
-                                         out var projectionState);
+                                         out projectionState);
             var relativeScale = hasProjectionScale
                 ? projectionScale / Mathf.Max(shoulderWidth, .001f)
                 : 0f;
