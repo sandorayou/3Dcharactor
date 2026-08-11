@@ -2721,16 +2721,15 @@ namespace RealtimeBodyTracking
                 }
 
                 var rawProjectionScale = projectionScale;
-                var projectionRatio = projectionScale / Mathf.Max(lastProjectionScale, .0001f);
-                var projectionRejected = projectionRatio < .8f || projectionRatio > 1.25f;
-                if (projectionRejected)
+                if (lastProjectionScale > .0001f)
                 {
-                    projectionScale = lastProjectionScale;
+                    projectionScale = Mathf.Clamp(
+                        projectionScale, lastProjectionScale * .65f, lastProjectionScale * 1.5f);
                 }
-                else
-                {
-                    lastProjectionScale = projectionScale;
-                }
+                var projectionLimited = Mathf.Abs(projectionScale - rawProjectionScale) > .0001f;
+                // The bounded value becomes the next frame's reference, so sustained motion
+                // can recover in either direction instead of remaining locked at an old scale.
+                lastProjectionScale = projectionScale;
 
                 // projectionScale is hand projection / shoulder image width. Multiplying
                 // by the tracked shoulder width yields an absolute perspective ratio:
@@ -2751,7 +2750,7 @@ namespace RealtimeBodyTracking
                     stableDepth, filteredDepth, shoulderWidth * deadZoneScale);
                 state = $"source={(hasPoseDepth ? "scale+bounded_pose" : "scale")}, absoluteRatio={absoluteProjectionRatio:F2}, " +
                         $"neutralRatio={neutralProjectionRatio:F2}, scaleRatio={scaleRatio:F2}, pose={poseDepth:F3}->{constrainedPoseDepth:F3}, " +
-                        $"projection={rawProjectionScale:F2}->{projectionScale:F2}, rejected={projectionRejected}, " +
+                        $"projection={rawProjectionScale:F2}->{projectionScale:F2}, limited={projectionLimited}, " +
                         $"measured={measuredDepth:F3}, stable={stableDepth:F3}";
                 return stableDepth;
             }
