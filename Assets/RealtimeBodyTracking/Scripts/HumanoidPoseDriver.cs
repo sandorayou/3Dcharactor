@@ -1555,6 +1555,8 @@ namespace RealtimeBodyTracking
             }
             else
             {
+                if ((left ? leftPalmMissingFrames : rightPalmMissingFrames) >= 5)
+                    depthTracker.Reset();
                 handDepthZ = (hasPoseDepth ? wristDepthZ : shoulderDepthZ) +
                              worldShoulderWidth * handForwardOffsetShoulderWidths;
                 var depthState = $"source={(hasPoseDepth ? "pose" : "plane")}, projectionScale=missing";
@@ -1626,16 +1628,17 @@ namespace RealtimeBodyTracking
         private static bool TryMeasureHandProjectionScale(PosePacket pose, string side, float minConfidence,
             out float scale, out float openness, out string state)
         {
-            var palmSamples = new System.Collections.Generic.List<float>(8);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_middle_mcp", minConfidence, palmSamples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_index_mcp", minConfidence, palmSamples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_thumb_mcp", minConfidence, palmSamples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_thumb_mcp", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_middle_mcp", minConfidence, palmSamples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_middle_mcp", $"{side}_hand_pinky_mcp", minConfidence, palmSamples);
-            if (palmSamples.Count < 2)
+            var imagePoints = new System.Collections.Generic.List<Vector2>(5);
+            var worldPoints = new System.Collections.Generic.List<Vector2>(5);
+            foreach (var name in new[] { "wrist", "index_mcp", "middle_mcp", "ring_mcp", "pinky_mcp" })
+            {
+                var fullName = $"{side}_hand_{name}";
+                if (!pose.TryGetImage(fullName, minConfidence, out var image) ||
+                    !pose.TryGet(fullName, minConfidence, out var world)) continue;
+                imagePoints.Add(new Vector2(image.x, image.y));
+                worldPoints.Add(new Vector2(world.x, world.y));
+            }
+            if (imagePoints.Count < 4)
             {
                 scale = 0f;
                 openness = 0f;
@@ -1643,7 +1646,38 @@ namespace RealtimeBodyTracking
                 return false;
             }
 
-            var fingerSamples = new System.Collections.Generic.List<float>(20);
+            var imageCenter = Vector2.zero;
+            var worldCenter = Vector2.zero;
+            for (var index = 0; index < imagePoints.Count; index++)
+            {
+                imageCenter += imagePoints[index];
+                worldCenter += worldPoints[index];
+            }
+            imageCenter /= imagePoints.Count;
+            worldCenter /= worldPoints.Count;
+            var imageSpread = 0f;
+            var worldSpread = 0f;
+            for (var index = 0; index < imagePoints.Count; index++)
+            {
+                imageSpread += (imagePoints[index] - imageCenter).sqrMagnitude;
+                worldSpread += (worldPoints[index] - worldCenter).sqrMagnitude;
+            }
+            if (worldSpread < .000001f || imageSpread < .000001f)
+            {
+                scale = 0f;
+                openness = 0f;
+                state = "palm=degenerate";
+                return false;
+            }
+
+            scale = Mathf.Sqrt(imageSpread / worldSpread);
+            openness = MeasureHandOpenness(pose, side, minConfidence);
+            state = $"palmScale={scale:F2}, points={imagePoints.Count}";
+            return scale > .001f;
+        }
+
+        private static float MeasureHandOpenness(PosePacket pose, string side, float minConfidence)
+        {
             var opennessSamples = new System.Collections.Generic.List<float>(5);
             foreach (var finger in new[] { "thumb", "index", "middle", "ring", "pinky" })
             {
@@ -1656,7 +1690,6 @@ namespace RealtimeBodyTracking
                 {
                     var from = $"{side}_hand_{joints[index]}";
                     var to = $"{side}_hand_{joints[index + 1]}";
-                    MeasureHandProjectionPair(pose, from, to, minConfidence, fingerSamples);
                     if (pose.TryGet(from, minConfidence, out var fromWorld) &&
                         pose.TryGet(to, minConfidence, out var toWorld))
                         chainLength += Vector3.Distance(fromWorld, toWorld);
@@ -1670,18 +1703,8 @@ namespace RealtimeBodyTracking
                     pose.TryGet(tipName, minConfidence, out var tipWorld))
                     opennessSamples.Add(Mathf.Clamp01(Vector3.Distance(wristWorld, tipWorld) / chainLength));
             }
-
-            var palmScale = Median(palmSamples);
-            var fingerScale = fingerSamples.Count >= 4 ? Median(fingerSamples) : palmScale;
-            openness = opennessSamples.Count > 0 ? Median(opennessSamples) : .5f;
-            // A curl ratio of roughly .45 is a fist and .9 is an open hand.  Every projection
-            // sample is image length / the same segment's current world-space projected length,
-            // so bending a finger changes both sides of the ratio instead of changing depth.
-            openness = Mathf.InverseLerp(.45f, .9f, openness);
-            var fingerWeight = Mathf.Lerp(.25f, .55f, openness);
-            scale = Mathf.Lerp(palmScale, fingerScale, fingerWeight);
-            state = $"palm={palmScale:F2}, fingers={fingerScale:F2}, blend={fingerWeight:F2}";
-            return scale > .001f;
+            var rawOpenness = opennessSamples.Count > 0 ? Median(opennessSamples) : .675f;
+            return Mathf.InverseLerp(.45f, .9f, rawOpenness);
         }
 
         private static float Median(System.Collections.Generic.List<float> samples)
@@ -1691,23 +1714,6 @@ namespace RealtimeBodyTracking
             return samples.Count % 2 == 0
                 ? (samples[middle - 1] + samples[middle]) * .5f
                 : samples[middle];
-        }
-
-        private static void MeasureHandProjectionPair(PosePacket pose, string from, string to, float minConfidence,
-            System.Collections.Generic.List<float> samples)
-        {
-            if (!pose.TryGetImage(from, minConfidence, out var fromImage) ||
-                !pose.TryGetImage(to, minConfidence, out var toImage) ||
-                !pose.TryGet(from, minConfidence, out var fromWorld) ||
-                !pose.TryGet(to, minConfidence, out var toWorld)) return;
-            var worldDelta = toWorld - fromWorld;
-            // Perspective scale is image length divided by the component parallel to the
-            // camera image plane.  Dividing by full 3D length made an edge-on palm look
-            // artificially far away; as it crossed edge-on during a sideways wave the arm
-            // briefly moved forward/backward.
-            var projectedWorldLength = new Vector2(worldDelta.x, worldDelta.y).magnitude;
-            if (projectedWorldLength < .005f) return;
-            samples.Add(Vector2.Distance(fromImage, toImage) / projectedWorldLength);
         }
 
         private bool TryMapArmImagePoint(PosePacket pose, bool left, Vector3 shoulder, UpperBodyPose body, Vector3 imagePoint, float sourceZ, out Vector3 point)
@@ -2696,6 +2702,7 @@ namespace RealtimeBodyTracking
             private bool initialized;
             private float filteredDepth;
             private float stableDepth;
+            private float lastProjectionScale;
 
             public float Update(float projectionScale, float shoulderWidth, bool hasPoseDepth, float poseDepth,
                 float gain, float neutralProjectionRatio, float maxPoseCorrectionShoulderWidths,
@@ -2710,6 +2717,19 @@ namespace RealtimeBodyTracking
                     initialized = true;
                     filteredDepth = 0f;
                     stableDepth = 0f;
+                    lastProjectionScale = projectionScale;
+                }
+
+                var rawProjectionScale = projectionScale;
+                var projectionRatio = projectionScale / Mathf.Max(lastProjectionScale, .0001f);
+                var projectionRejected = projectionRatio < .8f || projectionRatio > 1.25f;
+                if (projectionRejected)
+                {
+                    projectionScale = lastProjectionScale;
+                }
+                else
+                {
+                    lastProjectionScale = projectionScale;
                 }
 
                 // projectionScale is hand projection / shoulder image width. Multiplying
@@ -2731,6 +2751,7 @@ namespace RealtimeBodyTracking
                     stableDepth, filteredDepth, shoulderWidth * deadZoneScale);
                 state = $"source={(hasPoseDepth ? "scale+bounded_pose" : "scale")}, absoluteRatio={absoluteProjectionRatio:F2}, " +
                         $"neutralRatio={neutralProjectionRatio:F2}, scaleRatio={scaleRatio:F2}, pose={poseDepth:F3}->{constrainedPoseDepth:F3}, " +
+                        $"projection={rawProjectionScale:F2}->{projectionScale:F2}, rejected={projectionRejected}, " +
                         $"measured={measuredDepth:F3}, stable={stableDepth:F3}";
                 return stableDepth;
             }
@@ -2740,6 +2761,7 @@ namespace RealtimeBodyTracking
                 initialized = false;
                 filteredDepth = 0f;
                 stableDepth = 0f;
+                lastProjectionScale = 0f;
             }
 
             public void Constrain(float maximumMagnitude)
