@@ -78,6 +78,7 @@ namespace RealtimeBodyTracking
         [SerializeField] private float torsoChestWristTrackerZ = -.44f;
         [SerializeField] private float torsoExtendedWristTrackerZ = -.38f;
         [SerializeField, Range(0f, .5f)] private float torsoChestDepthShoulderWidths = .22f;
+        [SerializeField, Range(0f, 120f)] private float maxUpperArmRollDegrees = 55f;
         [SerializeField, Range(0f, 100f)] private float maxForearmTwistDegrees = 85f;
         [SerializeField, Range(.5f, 30f)] private float handOrientationSmoothing = 8f;
         [SerializeField, Range(.5f, 30f)] private float fingerSmoothingSpeed = 9f;
@@ -2641,9 +2642,21 @@ namespace RealtimeBodyTracking
             Vector3 desiredDirection, Vector3 upHint = default, bool useRollCorrection = false)
         {
             var currentDirection = endpoint.position - boneTransform.position;
-            if (currentDirection.sqrMagnitude < .000001f ||
-                !solver.TrySolve(bone, desiredDirection, upHint, rootRotationDelta, useRollCorrection, out var target))
-                return 0f;
+            if (currentDirection.sqrMagnitude < .000001f) return 0f;
+            Quaternion target;
+            if (useRollCorrection)
+            {
+                if (!solver.TrySolve(
+                        bone, desiredDirection, Vector3.zero, rootRotationDelta, false, out var directionTarget) ||
+                    !solver.TrySolve(
+                        bone, desiredDirection, upHint, rootRotationDelta, true, out var rollTarget)) return 0f;
+                // Full bend-plane roll can fix the elbow while visibly corkscrewing the
+                // shoulder mesh. Keep the positional direction and cap only axial roll.
+                target = Quaternion.RotateTowards(
+                    directionTarget, rollTarget, maxUpperArmRollDegrees);
+            }
+            else if (!solver.TrySolve(
+                         bone, desiredDirection, upHint, rootRotationDelta, false, out target)) return 0f;
             var correction = Quaternion.Angle(boneTransform.rotation, target);
             boneTransform.rotation = smoother.Smooth(
                 bone, boneTransform.rotation, target, armRotationSmoothingSpeed, 0f, Time.deltaTime);
