@@ -73,9 +73,10 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, .3f)] private float maxPoseDepthCorrectionShoulderWidths = .1f;
         [SerializeField, Range(.25f, 1.5f)] private float maxHandDepthShoulderWidths = .85f;
         [SerializeField, Range(.5f, 30f)] private float handDepthSmoothing = 6f;
-        [SerializeField] private float torsoChestWristTrackerZ = -.44f;
-        [SerializeField] private float torsoExtendedWristTrackerZ = -.38f;
+        [SerializeField] private float torsoChestWristTrackerZ = -.39f;
+        [SerializeField] private float torsoExtendedWristTrackerZ = -.35f;
         [SerializeField, Range(0f, .5f)] private float torsoChestDepthShoulderWidths = .22f;
+        [SerializeField, Range(1f, 15f)] private float torsoChestMaxRelativeProjectionScale = 5.5f;
         [SerializeField, Range(0f, 100f)] private float maxForearmTwistDegrees = 85f;
         [SerializeField, Range(.5f, 30f)] private float handOrientationSmoothing = 8f;
         [SerializeField, Range(.5f, 30f)] private float fingerSmoothingSpeed = 9f;
@@ -1546,13 +1547,31 @@ namespace RealtimeBodyTracking
                 : 0f;
             if (hasProjectionScale)
             {
-                handDepthZ = shoulderDepthZ + depthTracker.Update(
+                var relativeHandDepth = depthTracker.Update(
                     relativeScale, worldShoulderWidth, hasPoseDepth, wristDepthZ - shoulderDepthZ,
                     handDepthGain, handNeutralProjectionRatio, maxPoseDepthCorrectionShoulderWidths,
                     maxHandDepthShoulderWidths, handDepthSmoothing,
                     armPointDeadZoneScale, Time.deltaTime, out var depthState);
+                var torsoCorrection = 0f;
+                if (IsWristOverTorso(pose, left) &&
+                    pose.TryGet($"{side}_wrist", wristMinConfidence, out var sourcePoseWrist))
+                {
+                    torsoCorrection = Mathf.InverseLerp(
+                        torsoExtendedWristTrackerZ, torsoChestWristTrackerZ, sourcePoseWrist.z);
+                    var projectionChestEvidence = Mathf.InverseLerp(
+                        torsoChestMaxRelativeProjectionScale,
+                        torsoChestMaxRelativeProjectionScale * .7f,
+                        relativeScale);
+                    torsoCorrection *= projectionChestEvidence;
+                    relativeHandDepth = Mathf.Lerp(
+                        relativeHandDepth,
+                        worldShoulderWidth * torsoChestDepthShoulderWidths,
+                        torsoCorrection);
+                }
+                handDepthZ = shoulderDepthZ + relativeHandDepth;
                 handDepthZ += worldShoulderWidth * handForwardOffsetShoulderWidths;
-                depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}]";
+                depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}], " +
+                              $"torsoCorrection={torsoCorrection:F2}, correctedDepth={relativeHandDepth:F3}";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
             else
