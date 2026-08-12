@@ -46,7 +46,7 @@ namespace RealtimeBodyTracking
                 if (observedPath > .001f)
                 {
                     var straightness = Vector3.Distance(shoulder, targetWrist) / observedPath;
-                    if (straightness > .965f) requestedDistance = maximumReach;
+                    if (straightness > .94f) requestedDistance = maximumReach;
                 }
             }
             var distance = Mathf.Clamp(requestedDistance, minReach, maximumReach);
