@@ -36,7 +36,20 @@ namespace RealtimeBodyTracking
             var minReach = Mathf.Abs(upperLength - lowerLength) + .0001f;
             var toWrist = wrist - shoulder;
             var direction = toWrist.sqrMagnitude > .000001f ? toWrist.normalized : Vector3.down;
-            var distance = Mathf.Clamp(toWrist.magnitude, minReach, upperLength + lowerLength - .001f);
+            var maximumReach = upperLength + lowerLength - .0001f;
+            var requestedDistance = toWrist.magnitude;
+            if (elbowObserved)
+            {
+                var observedUpper = Vector3.Distance(shoulder, elbowHint);
+                var observedLower = Vector3.Distance(elbowHint, targetWrist);
+                var observedPath = observedUpper + observedLower;
+                if (observedPath > .001f)
+                {
+                    var straightness = Vector3.Distance(shoulder, targetWrist) / observedPath;
+                    if (straightness > .9f) requestedDistance = maximumReach;
+                }
+            }
+            var distance = Mathf.Clamp(requestedDistance, minReach, maximumReach);
             wrist = shoulder + direction * distance;
             var along = (upperLength * upperLength - lowerLength * lowerLength + distance * distance) / (2f * distance);
             var bendRadius = Mathf.Sqrt(Mathf.Max(upperLength * upperLength - along * along, 0f));
