@@ -57,6 +57,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Min(0f)] private float maxWristSpeed = 2.5f;
         [SerializeField, Min(0f)] private float maxElbowSpeed = 3f;
         [SerializeField, Range(.25f, 1.5f)] private float handHorizontalGain = .75f;
+        [SerializeField, Range(.5f, 2f)] private float armVerticalGain = 1.5f;
         [SerializeField, Range(1, 5)] private int armAcquireFrames = 2;
         [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .03f;
         [SerializeField, Range(.5f, 5f)] private float armPositionSmoothingCutoff = 2f;
@@ -70,6 +71,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.1f, 2f)] private float handDepthGain = 1f;
         [SerializeField, Range(.8f, 3f)] private float handNeutralProjectionRatio = 1.15f;
         [SerializeField, Range(0f, .25f)] private float handForwardOffsetShoulderWidths = .02f;
+        [SerializeField, Range(0f, .1f)] private float handForwardOffsetMeters = .03f;
         [SerializeField, Range(0f, .3f)] private float maxPoseDepthCorrectionShoulderWidths = .1f;
         [SerializeField, Range(.25f, 1.5f)] private float maxHandDepthShoulderWidths = .85f;
         [SerializeField, Range(.5f, 30f)] private float handDepthSmoothing = 6f;
@@ -196,6 +198,8 @@ namespace RealtimeBodyTracking
         private readonly PointContinuityFilter rightWristFilter = new();
         private readonly HandDepthTracker leftHandDepthTracker = new();
         private readonly HandDepthTracker rightHandDepthTracker = new();
+        private readonly PalmProjectionTracker leftPalmProjectionTracker = new();
+        private readonly PalmProjectionTracker rightPalmProjectionTracker = new();
         private Vector2 lastLeftHandWristImage;
         private Vector2 lastRightHandWristImage;
         private Vector3 lastLeftResolvedWrist;
@@ -282,10 +286,9 @@ namespace RealtimeBodyTracking
                 return;
             }
             wristMinConfidence = Mathf.Max(wristMinConfidence, .5f);
-            // A camera-facing punch needs almost the full arm length on the depth
-            // axis. Older serialized values capped it at less than one shoulder width.
+            // Pose wrist depth can use almost the full arm length on the camera-depth axis.
+            // Older serialized values capped it at less than one shoulder width.
             maxHandDepthShoulderWidths = Mathf.Max(maxHandDepthShoulderWidths, 1.35f);
-            handDepthGain = Mathf.Max(handDepthGain, 1.35f);
             if (trackingCamera != null) trackingCamera.nearClipPlane = Mathf.Min(trackingCamera.nearClipPlane, .03f);
             avatarRootOriginPosition = targetAnimator.transform.position;
             avatarRootOriginRotation = targetAnimator.transform.rotation;
@@ -948,7 +951,10 @@ namespace RealtimeBodyTracking
                 var observedElbowWeight = useObservedElbow
                     ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.45f, .85f, elbowConfidence)) * elbowImageWeight
                     : 0f;
-                var reliableElbow = useObservedElbow && observedElbowWeight >= .5f;
+                // An overhead arm naturally puts the elbow close to the frame edge. The point
+                // has already passed the extended-image and anatomy checks, so edge feathering
+                // must not discard its bend direction and replace it with a downward pole.
+                var reliableElbow = useObservedElbow && elbowConfidence >= .35f;
                 var elbowHint = reliableElbow ? elbow : Vector3.zero;
                 filterState += $", observedWeight={observedElbowWeight:F2}, fallback={!reliableElbow}";
                 if (left) leftArmFilterState = filterState; else rightArmFilterState = filterState;
@@ -1533,8 +1539,13 @@ namespace RealtimeBodyTracking
             var valid = associated && hasPalm;
             var depthTracker = left ? leftHandDepthTracker : rightHandDepthTracker;
             var projectionScale = 0f;
+            var handOpenness = 0f;
+            var projectionState = "not_measured";
+            var palmProjectionTracker = left ? leftPalmProjectionTracker : rightPalmProjectionTracker;
             var hasProjectionScale = valid &&
-                                     TryMeasureHandProjectionScale(pose, side, minHandConfidence, out projectionScale);
+                                     palmProjectionTracker.TryMeasure(
+                                         pose, side, minHandConfidence, out projectionScale, out handOpenness,
+                                         out projectionState);
             var relativeScale = hasProjectionScale
                 ? projectionScale / Mathf.Max(shoulderWidth, .001f)
                 : 0f;
@@ -1546,12 +1557,16 @@ namespace RealtimeBodyTracking
                     maxHandDepthShoulderWidths, handDepthSmoothing,
                     armPointDeadZoneScale, Time.deltaTime, out var depthState);
                 handDepthZ += worldShoulderWidth * handForwardOffsetShoulderWidths;
+                handDepthZ += handForwardOffsetMeters;
+                depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}]";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
             else
             {
+                if ((left ? leftPalmMissingFrames : rightPalmMissingFrames) >= 5)
+                    depthTracker.Reset();
                 handDepthZ = (hasPoseDepth ? wristDepthZ : shoulderDepthZ) +
-                             worldShoulderWidth * handForwardOffsetShoulderWidths;
+                             worldShoulderWidth * handForwardOffsetShoulderWidths + handForwardOffsetMeters;
                 var depthState = $"source={(hasPoseDepth ? "pose" : "plane")}, projectionScale=missing";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
@@ -1618,49 +1633,140 @@ namespace RealtimeBodyTracking
             return wrist.x >= minShoulderX && wrist.x <= maxShoulderX && wrist.y <= meanShoulderY;
         }
 
-        private static bool TryMeasureHandProjectionScale(PosePacket pose, string side, float minConfidence, out float scale)
+        private sealed class PalmProjectionTracker
         {
-            var samples = new System.Collections.Generic.List<float>(8);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_middle_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_index_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_wrist", $"{side}_hand_thumb_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_thumb_mcp", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_index_mcp", $"{side}_hand_middle_mcp", minConfidence, samples);
-            MeasureHandProjectionPair(pose, $"{side}_hand_middle_mcp", $"{side}_hand_pinky_mcp", minConfidence, samples);
-            if (samples.Count < 2)
+            private readonly float[] referenceWorldLengths = new float[4];
+            private int calibrationFrames;
+            private bool hasLastGoodScale;
+            private float lastGoodScale;
+
+            public bool TryMeasure(PosePacket pose, string side, float minConfidence,
+                out float scale, out float openness, out string state)
             {
+                var segments = new[]
+                {
+                    ("wrist", "middle_mcp"),
+                    ("index_mcp", "pinky_mcp"),
+                    ("wrist", "index_mcp"),
+                    ("wrist", "pinky_mcp"),
+                };
+                var samples = new System.Collections.Generic.List<float>(4);
+                var angleRejected = 0;
+                for (var index = 0; index < segments.Length; index++)
+                {
+                    var aName = $"{side}_hand_{segments[index].Item1}";
+                    var bName = $"{side}_hand_{segments[index].Item2}";
+                    if (!pose.TryGetImage(aName, minConfidence, out var imageA) ||
+                        !pose.TryGetImage(bName, minConfidence, out var imageB) ||
+                        !pose.TryGet(aName, minConfidence, out var worldA) ||
+                        !pose.TryGet(bName, minConfidence, out var worldB)) continue;
+
+                    var imageLength = Vector2.Distance(
+                        new Vector2(imageA.x, imageA.y), new Vector2(imageB.x, imageB.y));
+                    var worldVector = worldB - worldA;
+                    var worldLength = worldVector.magnitude;
+                    if (imageLength < .0001f || worldLength < .001f) continue;
+
+                    if (calibrationFrames < 15)
+                    {
+                        referenceWorldLengths[index] = referenceWorldLengths[index] <= .001f
+                            ? worldLength
+                            : Mathf.Lerp(referenceWorldLengths[index], worldLength, .15f);
+                    }
+                    if (referenceWorldLengths[index] <= .001f) continue;
+
+                    // Compensate the fixed physical palm length for its current projection
+                    // into the camera XY plane. Current world length itself is never used as
+                    // a size cue after calibration; only its direction supplies the angle.
+                    var direction = worldVector / worldLength;
+                    var projectionFactor = Mathf.Sqrt(
+                        direction.x * direction.x + direction.y * direction.y);
+                    // Nearly edge-on segments amplify tiny landmark errors into enormous
+                    // depth changes, so hold the last trustworthy scale instead.
+                    if (projectionFactor < .35f)
+                    {
+                        angleRejected++;
+                        continue;
+                    }
+                    var projectedReferenceLength = referenceWorldLengths[index] * projectionFactor;
+                    if (projectedReferenceLength < .0001f) continue;
+                    var sample = imageLength / projectedReferenceLength;
+                    if (!float.IsNaN(sample) && !float.IsInfinity(sample) && sample > .0001f)
+                        samples.Add(sample);
+                }
+
+                if (calibrationFrames < 15 && samples.Count > 0) calibrationFrames++;
+                openness = MeasureHandOpenness(pose, side, minConfidence);
+                if (samples.Count >= 2)
+                {
+                    scale = Median(samples);
+                    lastGoodScale = scale;
+                    hasLastGoodScale = true;
+                    state = $"angleCorrected={scale:F2}, samples={samples.Count}, " +
+                            $"angleRejected={angleRejected}, calibration={calibrationFrames}/15";
+                    return true;
+                }
+
+                if (hasLastGoodScale)
+                {
+                    scale = lastGoodScale;
+                    state = $"angleHold={scale:F2}, samples={samples.Count}, angleRejected={angleRejected}";
+                    return true;
+                }
+
                 scale = 0f;
+                state = $"angleMissing, samples={samples.Count}, angleRejected={angleRejected}";
                 return false;
             }
 
-            // Use the palm as a rigid depth cue.  Taking the largest pair selected whichever
-            // knuckle/finger happened to be closest to the camera, so a pointing gesture drove
-            // Z from the frontmost finger instead of from the hand as a whole.
-            samples.Sort();
-            var middle = samples.Count / 2;
-            scale = samples.Count % 2 == 0
-                ? (samples[middle - 1] + samples[middle]) * .5f
-                : samples[middle];
-            return scale > .001f;
+            public void Reset()
+            {
+                calibrationFrames = 0;
+                hasLastGoodScale = false;
+                lastGoodScale = 0f;
+                for (var index = 0; index < referenceWorldLengths.Length; index++)
+                    referenceWorldLengths[index] = 0f;
+            }
         }
 
-        private static void MeasureHandProjectionPair(PosePacket pose, string from, string to, float minConfidence,
-            System.Collections.Generic.List<float> samples)
+        private static float MeasureHandOpenness(PosePacket pose, string side, float minConfidence)
         {
-            if (!pose.TryGetImage(from, minConfidence, out var fromImage) ||
-                !pose.TryGetImage(to, minConfidence, out var toImage) ||
-                !pose.TryGet(from, minConfidence, out var fromWorld) ||
-                !pose.TryGet(to, minConfidence, out var toWorld)) return;
-            var worldDelta = toWorld - fromWorld;
-            // Perspective scale is image length divided by the component parallel to the
-            // camera image plane.  Dividing by full 3D length made an edge-on palm look
-            // artificially far away; as it crossed edge-on during a sideways wave the arm
-            // briefly moved forward/backward.
-            var projectedWorldLength = new Vector2(worldDelta.x, worldDelta.y).magnitude;
-            if (projectedWorldLength < .005f) return;
-            samples.Add(Vector2.Distance(fromImage, toImage) / projectedWorldLength);
+            var opennessSamples = new System.Collections.Generic.List<float>(5);
+            foreach (var finger in new[] { "thumb", "index", "middle", "ring", "pinky" })
+            {
+                var joints = finger == "thumb"
+                    ? new[] { "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb" }
+                    : new[] { "wrist", $"{finger}_mcp", $"{finger}_pip", $"{finger}_dip", finger };
+                var chainLength = 0f;
+                var completeChain = true;
+                for (var index = 0; index < joints.Length - 1; index++)
+                {
+                    var from = $"{side}_hand_{joints[index]}";
+                    var to = $"{side}_hand_{joints[index + 1]}";
+                    if (pose.TryGet(from, minConfidence, out var fromWorld) &&
+                        pose.TryGet(to, minConfidence, out var toWorld))
+                        chainLength += Vector3.Distance(fromWorld, toWorld);
+                    else
+                        completeChain = false;
+                }
+                var wristName = $"{side}_hand_wrist";
+                var tipName = $"{side}_hand_{finger}";
+                if (completeChain && chainLength > .005f &&
+                    pose.TryGet(wristName, minConfidence, out var wristWorld) &&
+                    pose.TryGet(tipName, minConfidence, out var tipWorld))
+                    opennessSamples.Add(Mathf.Clamp01(Vector3.Distance(wristWorld, tipWorld) / chainLength));
+            }
+            var rawOpenness = opennessSamples.Count > 0 ? Median(opennessSamples) : .675f;
+            return Mathf.InverseLerp(.45f, .9f, rawOpenness);
+        }
+
+        private static float Median(System.Collections.Generic.List<float> samples)
+        {
+            samples.Sort();
+            var middle = samples.Count / 2;
+            return samples.Count % 2 == 0
+                ? (samples[middle - 1] + samples[middle]) * .5f
+                : samples[middle];
         }
 
         private bool TryMapArmImagePoint(PosePacket pose, bool left, Vector3 shoulder, UpperBodyPose body, Vector3 imagePoint, float sourceZ, out Vector3 point)
@@ -1776,7 +1882,7 @@ namespace RealtimeBodyTracking
             // hand drives the facing avatar, so applying avatarMirror here would invert motion twice.
             var dx = sourcePoint.x - sourceShoulder.x;
             var dy = sourcePoint.y - sourceShoulder.y;
-            var offset = new Vector2(dx * handHorizontalGain, dy) * viewportScale;
+            var offset = new Vector2(dx * handHorizontalGain, dy * armVerticalGain) * viewportScale;
             targetViewport = new Vector3(
                 shoulderViewport.x + offset.x,
                 shoulderViewport.y + offset.y,
@@ -2612,6 +2718,8 @@ namespace RealtimeBodyTracking
             rightWristFilter.Reset();
             leftHandDepthTracker.Reset();
             rightHandDepthTracker.Reset();
+            leftPalmProjectionTracker.Reset();
+            rightPalmProjectionTracker.Reset();
             leftPalmMissingFrames = 0;
             rightPalmMissingFrames = 0;
             leftPalmLastProcessedFrame = long.MinValue;
@@ -2649,6 +2757,7 @@ namespace RealtimeBodyTracking
             private bool initialized;
             private float filteredDepth;
             private float stableDepth;
+            private float lastProjectionScale;
 
             public float Update(float projectionScale, float shoulderWidth, bool hasPoseDepth, float poseDepth,
                 float gain, float neutralProjectionRatio, float maxPoseCorrectionShoulderWidths,
@@ -2663,11 +2772,20 @@ namespace RealtimeBodyTracking
                     initialized = true;
                     filteredDepth = 0f;
                     stableDepth = 0f;
+                    lastProjectionScale = projectionScale;
                 }
 
-                // projectionScale is hand projection / shoulder image width. Multiplying
-                // by the tracked shoulder width yields an absolute perspective ratio:
-                // 1 at the shoulder plane, >1 toward the camera, <1 behind it.
+                var rawProjectionScale = projectionScale;
+                if (lastProjectionScale > .0001f)
+                {
+                    projectionScale = Mathf.Clamp(
+                        projectionScale, lastProjectionScale * .65f, lastProjectionScale * 1.5f);
+                }
+                var projectionLimited = Mathf.Abs(projectionScale - rawProjectionScale) > .0001f;
+                lastProjectionScale = projectionScale;
+
+                // The 3D palm spread supplies the primary depth estimate. Pose wrist depth
+                // may refine it slightly but cannot pull it far from the hand-size estimate.
                 var absoluteProjectionRatio = projectionScale * shoulderWidth;
                 var scaleRatio = Mathf.Clamp(
                     absoluteProjectionRatio / Mathf.Max(neutralProjectionRatio, .01f), .25f, 8f);
@@ -2682,8 +2800,9 @@ namespace RealtimeBodyTracking
                     1f - Mathf.Exp(-smoothing * Mathf.Max(deltaTime, .001f)));
                 stableDepth = FollowDepthOutsideDeadZone(
                     stableDepth, filteredDepth, shoulderWidth * deadZoneScale);
-                state = $"source={(hasPoseDepth ? "scale+bounded_pose" : "scale")}, absoluteRatio={absoluteProjectionRatio:F2}, " +
+                state = $"source={(hasPoseDepth ? "scale3d+bounded_pose" : "scale3d")}, absoluteRatio={absoluteProjectionRatio:F2}, " +
                         $"neutralRatio={neutralProjectionRatio:F2}, scaleRatio={scaleRatio:F2}, pose={poseDepth:F3}->{constrainedPoseDepth:F3}, " +
+                        $"projection={rawProjectionScale:F2}->{projectionScale:F2}, limited={projectionLimited}, " +
                         $"measured={measuredDepth:F3}, stable={stableDepth:F3}";
                 return stableDepth;
             }
@@ -2693,6 +2812,7 @@ namespace RealtimeBodyTracking
                 initialized = false;
                 filteredDepth = 0f;
                 stableDepth = 0f;
+                lastProjectionScale = 0f;
             }
 
             public void Constrain(float maximumMagnitude)
