@@ -200,8 +200,6 @@ namespace RealtimeBodyTracking
         private readonly HandDepthTracker rightHandDepthTracker = new();
         private readonly PalmProjectionTracker leftPalmProjectionTracker = new();
         private readonly PalmProjectionTracker rightPalmProjectionTracker = new();
-        private readonly ArmDepthReconstructor leftArmDepthReconstructor = new();
-        private readonly ArmDepthReconstructor rightArmDepthReconstructor = new();
         private Vector2 lastLeftHandWristImage;
         private Vector2 lastRightHandWristImage;
         private Vector3 lastLeftResolvedWrist;
@@ -817,36 +815,11 @@ namespace RealtimeBodyTracking
             pose.TryGetConfidence(elbowName, out var elbowConfidence);
             var hasWristImage = pose.TryGetImage(wristName, wristMinConfidence, out var wristImage);
             var shoulderWidth = Mathf.Max(upperBody.Lateral.magnitude, .05f);
-            var upperTransformForDepth = targetAnimator.GetBoneTransform(
-                left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
-            var lowerTransformForDepth = targetAnimator.GetBoneTransform(
-                left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
-            var handTransformForDepth = targetAnimator.GetBoneTransform(
-                left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
-            var leftAvatarShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var rightAvatarShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-            var avatarUpperLength = upperTransformForDepth != null && lowerTransformForDepth != null
-                ? Vector3.Distance(upperTransformForDepth.position, lowerTransformForDepth.position)
-                : shoulderWidth * .78f;
-            var avatarLowerLength = lowerTransformForDepth != null && handTransformForDepth != null
-                ? Vector3.Distance(lowerTransformForDepth.position, handTransformForDepth.position)
-                : shoulderWidth * .72f;
-            var avatarShoulderWidth = leftAvatarShoulder != null && rightAvatarShoulder != null
-                ? Vector3.Distance(leftAvatarShoulder.position, rightAvatarShoulder.position)
-                : shoulderWidth;
             var handDepthZ = 0f;
             var hasHandEvidence = TryReadHandEvidence(
                 pose, left, hasWristImage, wristImage, hasRawWrist ? rawWrist.z : shoulder.z,
                 hasRawWrist, shoulder.z, shoulderWidth,
                 out wristImage, out handDepthZ);
-            var reconstructedElbowZ = hasRawElbow ? rawElbow.z : shoulder.z;
-            var reconstructedWristZ = handDepthZ;
-            var hasReconstructedDepth = hasRawElbow && hasRawWrist &&
-                (left ? leftArmDepthReconstructor : rightArmDepthReconstructor).TryReconstruct(
-                    pose, SourceSide(left), shoulder, rawElbow, rawWrist,
-                    avatarUpperLength, avatarLowerLength, avatarShoulderWidth, shoulderWidth,
-                    out reconstructedElbowZ, out reconstructedWristZ);
-            if (hasReconstructedDepth) handDepthZ = reconstructedWristZ;
             var palmVisible = pose.TryGetImage($"{SourceSide(left)}_hand_palm", .35f, out _);
             var palmMissingFrames = left ? leftPalmMissingFrames : rightPalmMissingFrames;
             var palmLastProcessedFrame = left ? leftPalmLastProcessedFrame : rightPalmLastProcessedFrame;
@@ -866,8 +839,7 @@ namespace RealtimeBodyTracking
                 // Put every arm target in the same calibrated avatar space. A pose-world
                 // elbow is only the depth hint; its image point supplies the stable X/Y.
                 if (!TryMapArmImagePoint(
-                        pose, left, shoulder, upperBody, elbowImage,
-                        hasReconstructedDepth ? reconstructedElbowZ : rawElbow.z, out elbow))
+                        pose, left, shoulder, upperBody, elbowImage, rawElbow.z, out elbow))
                     elbow = rawElbow;
             }
             var hasWrist = hasHandEvidence && hasRawWrist &&
@@ -1659,92 +1631,6 @@ namespace RealtimeBodyTracking
             var maxShoulderX = Mathf.Max(leftShoulder.x, rightShoulder.x);
             var meanShoulderY = (leftShoulder.y + rightShoulder.y) * .5f;
             return wrist.x >= minShoulderX && wrist.x <= maxShoulderX && wrist.y <= meanShoulderY;
-        }
-
-        private sealed class ArmDepthReconstructor
-        {
-            private bool initialized;
-            private float previousElbowDepth;
-            private float previousWristDepth;
-
-            public bool TryReconstruct(PosePacket pose, string side, Vector3 shoulder, Vector3 rawElbow,
-                Vector3 rawWrist, float upperLength, float lowerLength, float avatarShoulderWidth,
-                float sourceShoulderWidth, out float elbowZ, out float wristZ)
-            {
-                if (!pose.TryGetImage($"{side}_shoulder", .35f, out var shoulderImage) ||
-                    !pose.TryGetImage($"{side}_elbow", .35f, out var elbowImage) ||
-                    !pose.TryGetImage($"{side}_hand_wrist", .35f, out var wristImage) ||
-                    !pose.TryGetImage("left_shoulder", .35f, out var leftShoulderImage) ||
-                    !pose.TryGetImage("right_shoulder", .35f, out var rightShoulderImage))
-                {
-                    elbowZ = shoulder.z;
-                    wristZ = shoulder.z;
-                    return false;
-                }
-
-                Vector2 Pixel(Vector3 point) => new Vector2(
-                    point.x * pose.source_width, point.y * pose.source_height);
-                var shoulderPixels = Vector2.Distance(Pixel(leftShoulderImage), Pixel(rightShoulderImage));
-                if (shoulderPixels < 10f || avatarShoulderWidth < .001f || sourceShoulderWidth < .001f)
-                {
-                    elbowZ = shoulder.z;
-                    wristZ = shoulder.z;
-                    return false;
-                }
-
-                var avatarUnitsPerPixel = avatarShoulderWidth / shoulderPixels;
-                var upperPlanar = Mathf.Min(
-                    Vector2.Distance(Pixel(shoulderImage), Pixel(elbowImage)) * avatarUnitsPerPixel,
-                    upperLength * .999f);
-                var lowerPlanar = Mathf.Min(
-                    Vector2.Distance(Pixel(elbowImage), Pixel(wristImage)) * avatarUnitsPerPixel,
-                    lowerLength * .999f);
-                var upperMagnitude = Mathf.Sqrt(Mathf.Max(
-                    upperLength * upperLength - upperPlanar * upperPlanar, 0f));
-                var lowerMagnitude = Mathf.Sqrt(Mathf.Max(
-                    lowerLength * lowerLength - lowerPlanar * lowerPlanar, 0f));
-
-                var sourceToAvatarScale = avatarShoulderWidth / sourceShoulderWidth;
-                var upperPoseSign = Mathf.Sign(rawElbow.z - shoulder.z);
-                var lowerPoseSign = Mathf.Sign(rawWrist.z - rawElbow.z);
-                var elbowAvatarDepth = SelectDepth(
-                    upperMagnitude, initialized ? previousElbowDepth : 0f, upperPoseSign, initialized);
-                var wristFront = elbowAvatarDepth + lowerMagnitude;
-                var wristBack = elbowAvatarDepth - lowerMagnitude;
-                var wristAvatarDepth = SelectCandidate(
-                    wristFront, wristBack, initialized ? previousWristDepth : 0f,
-                    lowerPoseSign, initialized);
-                previousElbowDepth = elbowAvatarDepth;
-                previousWristDepth = wristAvatarDepth;
-                initialized = true;
-
-                elbowZ = shoulder.z + elbowAvatarDepth / sourceToAvatarScale;
-                wristZ = shoulder.z + wristAvatarDepth / sourceToAvatarScale;
-                return true;
-            }
-
-            private static float SelectDepth(float magnitude, float previous, float poseSign, bool hasPrevious)
-            {
-                return SelectCandidate(magnitude, -magnitude, previous, poseSign, hasPrevious);
-            }
-
-            private static float SelectCandidate(float positive, float negative, float previous,
-                float poseSign, bool hasPrevious)
-            {
-                if (!hasPrevious) return poseSign < 0f ? negative : positive;
-                var positiveError = Mathf.Abs(positive - previous);
-                var negativeError = Mathf.Abs(negative - previous);
-                if (Mathf.Abs(positiveError - negativeError) < .01f)
-                    return poseSign < 0f ? negative : positive;
-                return positiveError <= negativeError ? positive : negative;
-            }
-
-            public void Reset()
-            {
-                initialized = false;
-                previousElbowDepth = 0f;
-                previousWristDepth = 0f;
-            }
         }
 
         private sealed class PalmProjectionTracker
@@ -2836,8 +2722,6 @@ namespace RealtimeBodyTracking
             rightHandDepthTracker.Reset();
             leftPalmProjectionTracker.Reset();
             rightPalmProjectionTracker.Reset();
-            leftArmDepthReconstructor.Reset();
-            rightArmDepthReconstructor.Reset();
             leftPalmMissingFrames = 0;
             rightPalmMissingFrames = 0;
             leftPalmLastProcessedFrame = long.MinValue;
