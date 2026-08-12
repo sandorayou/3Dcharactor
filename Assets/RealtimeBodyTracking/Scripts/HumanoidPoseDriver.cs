@@ -72,8 +72,6 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.8f, 3f)] private float handNeutralProjectionRatio = 1.15f;
         [SerializeField, Range(0f, .25f)] private float handForwardOffsetShoulderWidths = .02f;
         [SerializeField, Range(0f, .1f)] private float handForwardOffsetMeters = .03f;
-        [SerializeField, Range(0f, 2f)] private float distantBodyHandForwardGain = 1f;
-        [SerializeField, Range(0f, .2f)] private float maxDistantBodyHandForwardMeters = .12f;
         [SerializeField, Range(0f, .3f)] private float maxPoseDepthCorrectionShoulderWidths = .1f;
         [SerializeField, Range(.25f, 1.5f)] private float maxHandDepthShoulderWidths = .85f;
         [SerializeField, Range(.5f, 30f)] private float handDepthSmoothing = 6f;
@@ -1551,17 +1549,6 @@ namespace RealtimeBodyTracking
             var relativeScale = hasProjectionScale
                 ? projectionScale / Mathf.Max(shoulderWidth, .001f)
                 : 0f;
-            // The close upper-body framing used at startup is the known-good baseline.
-            // When the performer steps backward the screen shoulder span shrinks and the
-            // tracker underestimates both chest clearance and punch depth. Add only a final
-            // forward offset; do not amplify or otherwise reshape the hand-depth signal.
-            var depthShoulderWidth = stableShoulderWidth > .03f ? stableShoulderWidth : shoulderWidth;
-            var bodyRetreatRatio = sourceShoulderWidthOrigin > .03f
-                ? Mathf.Max(sourceShoulderWidthOrigin / Mathf.Max(depthShoulderWidth, .03f) - 1f, 0f)
-                : 0f;
-            var distantBodyForwardOffset = Mathf.Min(
-                bodyRetreatRatio * worldShoulderWidth * distantBodyHandForwardGain,
-                maxDistantBodyHandForwardMeters);
             if (hasProjectionScale)
             {
                 handDepthZ = shoulderDepthZ + depthTracker.Update(
@@ -1571,8 +1558,6 @@ namespace RealtimeBodyTracking
                     armPointDeadZoneScale, Time.deltaTime, out var depthState);
                 handDepthZ += worldShoulderWidth * handForwardOffsetShoulderWidths;
                 handDepthZ += handForwardOffsetMeters;
-                handDepthZ += distantBodyForwardOffset;
-                depthState += $", bodyRetreat={bodyRetreatRatio:F2}, distanceOffset={distantBodyForwardOffset:F3}";
                 depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}]";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
@@ -1581,10 +1566,8 @@ namespace RealtimeBodyTracking
                 if ((left ? leftPalmMissingFrames : rightPalmMissingFrames) >= 5)
                     depthTracker.Reset();
                 handDepthZ = (hasPoseDepth ? wristDepthZ : shoulderDepthZ) +
-                             worldShoulderWidth * handForwardOffsetShoulderWidths + handForwardOffsetMeters +
-                             distantBodyForwardOffset;
+                             worldShoulderWidth * handForwardOffsetShoulderWidths + handForwardOffsetMeters;
                 var depthState = $"source={(hasPoseDepth ? "pose" : "plane")}, projectionScale=missing";
-                depthState += $", bodyRetreat={bodyRetreatRatio:F2}, distanceOffset={distantBodyForwardOffset:F3}";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
             var state = $"detectorPoints={accepted}/4, association={associationDistance:F3}, maxCluster={maxClusterDistance:F3}, limit={clusterLimit:F3}, valid={valid}";
