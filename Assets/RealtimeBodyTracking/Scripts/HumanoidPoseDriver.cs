@@ -200,7 +200,6 @@ namespace RealtimeBodyTracking
         private readonly HandDepthTracker rightHandDepthTracker = new();
         private readonly PalmProjectionTracker leftPalmProjectionTracker = new();
         private readonly PalmProjectionTracker rightPalmProjectionTracker = new();
-        private readonly SourceShoulderScaleTracker sourceShoulderScaleTracker = new();
         private Vector2 lastLeftHandWristImage;
         private Vector2 lastRightHandWristImage;
         private Vector3 lastLeftResolvedWrist;
@@ -1539,7 +1538,6 @@ namespace RealtimeBodyTracking
             // landmarks exist, the hand is authoritative even when fingers are foreshortened.
             var valid = associated && hasPalm;
             var depthTracker = left ? leftHandDepthTracker : rightHandDepthTracker;
-            var referenceShoulderWidth = sourceShoulderScaleTracker.Update(worldShoulderWidth, pose.frame);
             var projectionScale = 0f;
             var handOpenness = 0f;
             var projectionState = "not_measured";
@@ -1554,11 +1552,11 @@ namespace RealtimeBodyTracking
             if (hasProjectionScale)
             {
                 handDepthZ = shoulderDepthZ + depthTracker.Update(
-                    relativeScale, referenceShoulderWidth, hasPoseDepth, wristDepthZ - shoulderDepthZ,
+                    relativeScale, worldShoulderWidth, hasPoseDepth, wristDepthZ - shoulderDepthZ,
                     handDepthGain, handNeutralProjectionRatio, maxPoseDepthCorrectionShoulderWidths,
                     maxHandDepthShoulderWidths, handDepthSmoothing,
                     armPointDeadZoneScale, Time.deltaTime, out var depthState);
-                handDepthZ += referenceShoulderWidth * handForwardOffsetShoulderWidths;
+                handDepthZ += worldShoulderWidth * handForwardOffsetShoulderWidths;
                 handDepthZ += handForwardOffsetMeters;
                 depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}]";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
@@ -1568,7 +1566,7 @@ namespace RealtimeBodyTracking
                 if ((left ? leftPalmMissingFrames : rightPalmMissingFrames) >= 5)
                     depthTracker.Reset();
                 handDepthZ = (hasPoseDepth ? wristDepthZ : shoulderDepthZ) +
-                             referenceShoulderWidth * handForwardOffsetShoulderWidths + handForwardOffsetMeters;
+                             worldShoulderWidth * handForwardOffsetShoulderWidths + handForwardOffsetMeters;
                 var depthState = $"source={(hasPoseDepth ? "pose" : "plane")}, projectionScale=missing";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
@@ -1633,41 +1631,6 @@ namespace RealtimeBodyTracking
             var maxShoulderX = Mathf.Max(leftShoulder.x, rightShoulder.x);
             var meanShoulderY = (leftShoulder.y + rightShoulder.y) * .5f;
             return wrist.x >= minShoulderX && wrist.x <= maxShoulderX && wrist.y <= meanShoulderY;
-        }
-
-        private sealed class SourceShoulderScaleTracker
-        {
-            private const int CalibrationFrameCount = 30;
-            private float referenceWidth;
-            private int calibrationFrames;
-            private long lastProcessedFrame = long.MinValue;
-
-            public float Update(float measuredWidth, long frame)
-            {
-                measuredWidth = Mathf.Max(measuredWidth, .05f);
-                if (frame == lastProcessedFrame) return GetOrDefault(measuredWidth);
-                lastProcessedFrame = frame;
-                if (calibrationFrames < CalibrationFrameCount)
-                {
-                    referenceWidth = referenceWidth <= .001f
-                        ? measuredWidth
-                        : Mathf.Lerp(referenceWidth, measuredWidth, .1f);
-                    calibrationFrames++;
-                }
-                return GetOrDefault(measuredWidth);
-            }
-
-            public float GetOrDefault(float fallback)
-            {
-                return referenceWidth > .001f ? referenceWidth : Mathf.Max(fallback, .05f);
-            }
-
-            public void Reset()
-            {
-                referenceWidth = 0f;
-                calibrationFrames = 0;
-                lastProcessedFrame = long.MinValue;
-            }
         }
 
         private sealed class PalmProjectionTracker
@@ -1839,12 +1802,7 @@ namespace RealtimeBodyTracking
                 ? Vector3.Distance(upperTransform.position, lowerTransform.position) + Vector3.Distance(lowerTransform.position, handTransform.position) - .001f
                 : avatarShoulderWidth * 1.5f;
 
-            // Use the calibrated physical shoulder width for depth conversion. MediaPipe's
-            // pose-world shoulder span drifts with camera distance; using the live span made
-            // the same chest-to-punch motion shallower when the performer stepped backward.
-            var sourceToAvatarScale = avatarShoulderWidth /
-                                      sourceShoulderScaleTracker.GetOrDefault(
-                                          Mathf.Max(body.Lateral.magnitude, .05f));
+            var sourceToAvatarScale = avatarShoulderWidth / Mathf.Max(body.Lateral.magnitude, .05f);
             var rawDepthOffset = (sourceZ - shoulder.z) * sourceToAvatarScale;
 
             // Compute pure 2D planar offset at shoulder camera depth to isolate X/Y from depth un-projection skew
@@ -2764,7 +2722,6 @@ namespace RealtimeBodyTracking
             rightHandDepthTracker.Reset();
             leftPalmProjectionTracker.Reset();
             rightPalmProjectionTracker.Reset();
-            sourceShoulderScaleTracker.Reset();
             leftPalmMissingFrames = 0;
             rightPalmMissingFrames = 0;
             leftPalmLastProcessedFrame = long.MinValue;
