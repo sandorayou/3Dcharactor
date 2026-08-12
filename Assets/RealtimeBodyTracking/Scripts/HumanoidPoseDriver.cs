@@ -1546,21 +1546,13 @@ namespace RealtimeBodyTracking
                                      palmProjectionTracker.TryMeasure(
                                          pose, side, minHandConfidence, out projectionScale, out handOpenness,
                                          out projectionState);
-            var depthShoulderWidth = stableShoulderWidth > .03f
-                ? stableShoulderWidth
-                : shoulderWidth;
             var relativeScale = hasProjectionScale
-                ? projectionScale / Mathf.Max(depthShoulderWidth, .001f)
+                ? projectionScale / Mathf.Max(shoulderWidth, .001f)
                 : 0f;
-            var cameraDistanceScale = sourceShoulderWidthOrigin > .03f
-                ? Mathf.Clamp(
-                    sourceShoulderWidthOrigin / Mathf.Max(depthShoulderWidth, .03f), .6f, 2.5f)
-                : 1f;
             if (hasProjectionScale)
             {
                 handDepthZ = shoulderDepthZ + depthTracker.Update(
-                    relativeScale, worldShoulderWidth, cameraDistanceScale,
-                    hasPoseDepth, wristDepthZ - shoulderDepthZ,
+                    relativeScale, worldShoulderWidth, hasPoseDepth, wristDepthZ - shoulderDepthZ,
                     handDepthGain, handNeutralProjectionRatio, maxPoseDepthCorrectionShoulderWidths,
                     maxHandDepthShoulderWidths, handDepthSmoothing,
                     armPointDeadZoneScale, Time.deltaTime, out var depthState);
@@ -2769,8 +2761,7 @@ namespace RealtimeBodyTracking
             private float stableDepth;
             private float lastProjectionScale;
 
-            public float Update(float projectionScale, float shoulderWidth, float cameraDistanceScale,
-                bool hasPoseDepth, float poseDepth,
+            public float Update(float projectionScale, float shoulderWidth, bool hasPoseDepth, float poseDepth,
                 float gain, float neutralProjectionRatio, float maxPoseCorrectionShoulderWidths,
                 float maxShoulderWidths, float smoothing, float deadZoneScale, float deltaTime,
                 out string state)
@@ -2800,7 +2791,7 @@ namespace RealtimeBodyTracking
                 var absoluteProjectionRatio = projectionScale * shoulderWidth;
                 var scaleRatio = Mathf.Clamp(
                     absoluteProjectionRatio / Mathf.Max(neutralProjectionRatio, .01f), .25f, 8f);
-                var scaleDepth = Mathf.Log(scaleRatio) * shoulderWidth * gain * cameraDistanceScale;
+                var scaleDepth = Mathf.Log(scaleRatio) * shoulderWidth * gain;
                 var poseCorrectionLimit = shoulderWidth * maxPoseCorrectionShoulderWidths;
                 var constrainedPoseDepth = Mathf.Clamp(
                     poseDepth, scaleDepth - poseCorrectionLimit, scaleDepth + poseCorrectionLimit);
@@ -2814,7 +2805,6 @@ namespace RealtimeBodyTracking
                 state = $"source={(hasPoseDepth ? "scale3d+bounded_pose" : "scale3d")}, absoluteRatio={absoluteProjectionRatio:F2}, " +
                         $"neutralRatio={neutralProjectionRatio:F2}, scaleRatio={scaleRatio:F2}, pose={poseDepth:F3}->{constrainedPoseDepth:F3}, " +
                         $"projection={rawProjectionScale:F2}->{projectionScale:F2}, limited={projectionLimited}, " +
-                        $"cameraDistanceScale={cameraDistanceScale:F2}, " +
                         $"measured={measuredDepth:F3}, stable={stableDepth:F3}";
                 return stableDepth;
             }
