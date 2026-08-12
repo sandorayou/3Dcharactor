@@ -56,7 +56,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 1f)] private float wristMinConfidence = .5f;
         [SerializeField, Min(0f)] private float maxWristSpeed = 2.5f;
         [SerializeField, Min(0f)] private float maxElbowSpeed = 3f;
-        [SerializeField, Range(.25f, 1.5f)] private float handHorizontalGain = .75f;
+        [SerializeField, Range(.25f, 1.5f)] private float handHorizontalGain = 1f;
         [SerializeField, Range(.5f, 2f)] private float armVerticalGain = 1.5f;
         [SerializeField, Range(1, 5)] private int armAcquireFrames = 2;
         [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .03f;
@@ -1812,7 +1812,9 @@ namespace RealtimeBodyTracking
             var planarVec = new Vector2(localPlanarOffset.x, localPlanarOffset.y);
 
             // Prioritize 2D planar position (screen target) and bound 3D Z depth by remaining arm reach
-            var maxReach = maxArmLength * .95f;
+            // Keep only a tiny bend margin so a visibly straight source arm can reach
+            // essentially the full avatar arm length without destabilizing the IK pole.
+            var maxReach = maxArmLength * .9995f;
             if (planarVec.magnitude > maxReach)
             {
                 planarVec = planarVec.normalized * maxReach;
