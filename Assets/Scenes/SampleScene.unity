@@ -353,10 +353,10 @@ MonoBehaviour:
   positionMeasurementSmoothing: 6
   positionFollowSpeed: 6
   positionMinConfidence: 0.6
-  bodyLeanDeadZone: 1
-  maxBodyLean: 25
-  bodyLeanSmoothing: 5
-  bodyLeanGain: 1.5
+  bodyLeanDeadZone: 0.5
+  maxBodyLean: 40
+  bodyLeanSmoothing: 14
+  bodyLeanGain: 1
   enableBodyTurn: 1
   bodyTurnSpeed: 240
   bodyTurnDeadZone: 25

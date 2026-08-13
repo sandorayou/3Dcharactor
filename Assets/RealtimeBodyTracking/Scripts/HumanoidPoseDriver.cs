@@ -35,10 +35,10 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.5f, 30f)] private float positionMeasurementSmoothing = 6f;
         [SerializeField, Range(.5f, 30f)] private float positionFollowSpeed = 5f;
         [SerializeField, Range(0f, 1f)] private float positionMinConfidence = .6f;
-        [SerializeField, Range(0f, 10f)] private float bodyLeanDeadZone = 2.5f;
-        [SerializeField, Range(0f, 45f)] private float maxBodyLean = 25f;
-        [SerializeField, Range(.5f, 30f)] private float bodyLeanSmoothing = 5f;
-        [SerializeField, Range(.5f, 3f)] private float bodyLeanGain = 1.5f;
+        [SerializeField, Range(0f, 10f)] private float bodyLeanDeadZone = .5f;
+        [SerializeField, Range(0f, 45f)] private float maxBodyLean = 40f;
+        [SerializeField, Range(.5f, 30f)] private float bodyLeanSmoothing = 14f;
+        [SerializeField, Range(.5f, 3f)] private float bodyLeanGain = 1f;
         [Header("Face Zoom")]
         [SerializeField] private bool enableFaceZoom = true;
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
@@ -398,8 +398,10 @@ namespace RealtimeBodyTracking
             ApplyRestBoneRoll(HumanBodyBones.UpperChest, bodyLeanDegrees);
             if (enableArms)
             {
-                ReturnBoneToRest(HumanBodyBones.LeftShoulder);
-                ReturnBoneToRest(HumanBodyBones.RightShoulder);
+                // Keep clavicles at their local rest pose so they inherit the chest
+                // roll. Resetting their world rotation here cancelled shoulder tilt.
+                ReturnBoneToParentRest(HumanBodyBones.LeftShoulder);
+                ReturnBoneToParentRest(HumanBodyBones.RightShoulder);
                 var faceObserved = PoseInputMapper.TryReadHeadFacing(pose, InputCoordinatesNeedMirror, headMinConfidence, out _);
                 if (faceObserved) lastReliableFaceTime = Time.unscaledTime;
                 // A hand aimed at the camera commonly occludes an eye or ear. Face
@@ -2740,6 +2742,16 @@ namespace RealtimeBodyTracking
             if (!solver.TryGetRestRotation(bone, out var rest)) return;
             var transform = targetAnimator.GetBoneTransform(bone);
             if (transform != null) transform.rotation = smoother.Smooth(bone, transform.rotation, rootRotationDelta * rest, smoothingSpeed, rotationDeadZoneDegrees, Time.deltaTime);
+        }
+
+        private void ReturnBoneToParentRest(HumanBodyBones bone)
+        {
+            if (!solver.TryGetRestLocalRotation(bone, out var rest)) return;
+            var transform = targetAnimator.GetBoneTransform(bone);
+            if (transform != null)
+                transform.localRotation = Quaternion.Slerp(
+                    transform.localRotation, rest,
+                    1f - Mathf.Exp(-smoothingSpeed * Time.deltaTime));
         }
 
         private void RelaxArmsToRest()
