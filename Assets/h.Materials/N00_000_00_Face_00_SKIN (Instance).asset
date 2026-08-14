@@ -13,7 +13,7 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - MTOON_OUTLINE_COLOR_FIXED
-  - MTOON_OUTLINE_WIDTH_WORLD
+  - MTOON_OUTLINE_WIDTH_SCREEN
   - _ALPHATEST_ON
   - _NORMALMAP
   m_InvalidKeywords: []
@@ -41,7 +41,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OutlineWidthTexture:
-        m_Texture: {fileID: 2800000, guid: 2ff2bd2f76350c240968a7db1d56703f, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _ReceiveShadowTexture:
@@ -82,10 +82,10 @@ Material:
     - _MToonVersion: 39
     - _OutlineColorMode: 0
     - _OutlineCullMode: 1
-    - _OutlineLightingMix: 0.12
+    - _OutlineLightingMix: 0
     - _OutlineScaledMaxDistance: 4.63
-    - _OutlineWidth: 0.10916667
-    - _OutlineWidthMode: 1
+    - _OutlineWidth: 0.22
+    - _OutlineWidthMode: 2
     - _ReceiveShadowRate: 0.16
     - _RimFresnelPower: 100
     - _RimLift: 0.1
@@ -101,7 +101,7 @@ Material:
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _OutlineColor: {r: 0.12, g: 0.035, b: 0.045, a: 1}
+    - _OutlineColor: {r: 0.008, g: 0.008, b: 0.012, a: 1}
     - _RimColor: {r: 0.16333333, g: 0.16333333, b: 0.16333333, a: 1}
     - _ShadeColor: {r: 0.9686274, g: 0.8117647, b: 0.85882354, a: 1}
   m_BuildTextureStacks: []
