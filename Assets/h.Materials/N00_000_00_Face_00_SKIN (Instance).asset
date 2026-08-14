@@ -86,7 +86,7 @@ Material:
     - _OutlineScaledMaxDistance: 4.63
     - _OutlineWidth: 0.10916667
     - _OutlineWidthMode: 1
-    - _ReceiveShadowRate: 1
+    - _ReceiveShadowRate: 0
     - _RimFresnelPower: 100
     - _RimLift: 0.1
     - _RimLightingMix: 0
