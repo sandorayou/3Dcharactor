@@ -20,16 +20,6 @@ output.parent.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(source), import_shading="NORMALS")
 
-# Preview the same front-camera cheats used by Unity: a slightly larger head and
-# narrower upper torso make the 360-degree game avatar read like a bust-up VTuber.
-for armature in (obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE"):
-    for bone in armature.pose.bones:
-        lowered = bone.name.lower()
-        if lowered.endswith("head") or lowered == "head":
-            bone.scale = (1.08, 1.08, 1.08)
-        elif "upperchest" in lowered or "upper_chest" in lowered:
-            bone.scale.x = 0.92
-
 if eye_texture:
     replacement = bpy.data.images.load(str(eye_texture), check_existing=False)
     for material in bpy.data.materials:
