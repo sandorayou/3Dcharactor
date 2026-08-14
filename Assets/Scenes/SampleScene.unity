@@ -332,6 +332,11 @@ MonoBehaviour:
   cameraCalibrationSeconds: 0.75
   cameraFramingMargin: 0.12
   cameraMinimumDistance: 0.5
+  enablePresentationCheats: 1
+  portraitCameraFov: 34
+  portraitHeadScale: 1.08
+  portraitShoulderWidthScale: 0.92
+  portraitBackgroundColor: {r: 0.012, g: 0.02, b: 0.035, a: 1}
   smoothingSpeed: 30
   rotationDeadZoneDegrees: 3
   avatarMirror: 1
