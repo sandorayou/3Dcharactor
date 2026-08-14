@@ -12,6 +12,8 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
+  - MTOON_OUTLINE_COLOR_FIXED
+  - MTOON_OUTLINE_WIDTH_WORLD
   - _ALPHATEST_ON
   - _NORMALMAP
   m_InvalidKeywords: []
@@ -80,10 +82,10 @@ Material:
     - _MToonVersion: 39
     - _OutlineColorMode: 1
     - _OutlineCullMode: 1
-    - _OutlineLightingMix: 1
+    - _OutlineLightingMix: 0
     - _OutlineScaledMaxDistance: 1
-    - _OutlineWidth: 0
-    - _OutlineWidthMode: 0
+    - _OutlineWidth: 0.07
+    - _OutlineWidthMode: 1
     - _ReceiveShadowRate: 1
     - _RimFresnelPower: 100
     - _RimLift: 0.1
@@ -99,7 +101,7 @@ Material:
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0.28, g: 0.34, b: 0.38, a: 1}
-    - _OutlineColor: {r: 0.47450978, g: 0.74509805, b: 0.737255, a: 1}
+    - _OutlineColor: {r: 0.025, g: 0.09, b: 0.105, a: 1}
     - _RimColor: {r: 0.6900002, g: 0.6900002, b: 0.6900002, a: 1}
     - _ShadeColor: {r: 0.42, g: 0.7, b: 0.73, a: 1}
   m_BuildTextureStacks: []
