@@ -19,24 +19,6 @@ def composite_color(image: Image.Image, color, alpha: int) -> Image.Image:
     return Image.alpha_composite(image, layer)
 
 
-def add_face_detail(path: Path) -> None:
-    image = Image.open(path).convert("RGBA")
-    w, h = image.size
-    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    # Soft blush and eye-socket warmth, positioned on the existing VRoid face UV.
-    for cx in (w * 0.355, w * 0.645):
-        draw.ellipse((cx - w * 0.105, h * 0.59, cx + w * 0.105, h * 0.745), fill=(240, 103, 116, 29))
-        draw.ellipse((cx - w * 0.075, h * 0.535, cx + w * 0.075, h * 0.63), fill=(178, 77, 90, 13))
-    # Minimal nose definition that remains subtle in front-facing toon lighting.
-    draw.ellipse((w * 0.487, h * 0.625, w * 0.513, h * 0.695), fill=(255, 240, 226, 30))
-    draw.arc((w * 0.485, h * 0.65, w * 0.515, h * 0.71), 20, 160, fill=(172, 79, 84, 35), width=max(1, w // 512))
-    overlay = overlay.filter(ImageFilter.GaussianBlur(w * 0.018))
-    image = Image.alpha_composite(image, overlay)
-    image.putalpha(Image.open(path).convert("RGBA").getchannel("A"))
-    image.save(path, optimize=True)
-
-
 def add_hair_detail(path: Path, red: bool = False) -> None:
     original = Image.open(path).convert("RGBA")
     alpha = original.getchannel("A")
@@ -92,7 +74,6 @@ def add_fabric_detail(path: Path, white: bool = False) -> None:
     image.save(path, optimize=True)
 
 
-add_face_detail(texture_dir / "_04.png")
 add_hair_detail(texture_dir / "_12.png")
 add_hair_detail(texture_dir / "_18.png")
 add_hair_detail(texture_dir / "_20.png", red=True)

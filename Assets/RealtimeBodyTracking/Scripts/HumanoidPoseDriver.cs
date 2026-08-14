@@ -92,6 +92,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 1f)] private float headMinConfidence = .1f;
         [SerializeField, Range(0f, 1f)] private float faceHoldTime = .25f;
         [SerializeField, Range(0f, 1f)] private float neckRotationWeight = .35f;
+        [SerializeField] private bool mirrorHeadRotation = true;
         [SerializeField] private Vector3 headRotationOffsetEuler;
         [SerializeField, Range(1f, 40f)] private float headRotationSmoothing = 14f;
         [SerializeField] private bool enableFaceExpressions = true;
@@ -563,6 +564,17 @@ namespace RealtimeBodyTracking
                 return;
             }
             lastHeadRotationTime = Time.unscaledTime;
+            if (mirrorHeadRotation)
+            {
+                // Mirror the captured orientation across the camera's vertical plane.
+                // Pitch stays unchanged; yaw and roll reverse so the avatar behaves
+                // like the user's reflection instead of turning away from them.
+                absoluteHeadRotation = new Quaternion(
+                    absoluteHeadRotation.x,
+                    -absoluteHeadRotation.y,
+                    -absoluteHeadRotation.z,
+                    absoluteHeadRotation.w).normalized;
+            }
             absoluteHeadRotation = Quaternion.Euler(headRotationOffsetEuler) * absoluteHeadRotation;
             var bodyRotation = Quaternion.AngleAxis(currentBodyYaw, Vector3.up);
             var relativeHeadRotation = Quaternion.Inverse(bodyRotation) * absoluteHeadRotation;
