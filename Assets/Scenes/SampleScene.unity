@@ -385,6 +385,7 @@ MonoBehaviour:
   legMinConfidence: 0.75
   headMinConfidence: 0.1
   neckRotationWeight: 0.65
+  mirrorHeadRotation: 1
   headRotationOffsetEuler: {x: 0, y: 0, z: 0}
   headRotationSmoothing: 14
   enableRollCorrection: 1
