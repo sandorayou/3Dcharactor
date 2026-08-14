@@ -77,7 +77,7 @@ Material:
     - _Cutoff: 0.5
     - _DebugMode: 0
     - _DstBlend: 0
-    - _IndirectLightIntensity: 0.1
+    - _IndirectLightIntensity: 0.28
     - _LightColorAttenuation: 0
     - _MToonVersion: 39
     - _OutlineColorMode: 0
@@ -86,7 +86,7 @@ Material:
     - _OutlineScaledMaxDistance: 4.63
     - _OutlineWidth: 0.10916667
     - _OutlineWidthMode: 1
-    - _ReceiveShadowRate: 0
+    - _ReceiveShadowRate: 0.16
     - _RimFresnelPower: 100
     - _RimLift: 0.1
     - _RimLightingMix: 0
