@@ -18,12 +18,6 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.2f, 3f)] private float cameraCalibrationSeconds = .75f;
         [SerializeField, Range(0f, .4f)] private float cameraFramingMargin = .12f;
         [SerializeField, Range(.35f, 2f)] private float cameraMinimumDistance = .5f;
-        [Header("VTuber Presentation")]
-        [SerializeField] private bool enablePresentationCheats = true;
-        [SerializeField, Range(20f, 60f)] private float portraitCameraFov = 34f;
-        [SerializeField, Range(1f, 1.2f)] private float portraitHeadScale = 1.08f;
-        [SerializeField, Range(.8f, 1f)] private float portraitShoulderWidthScale = .92f;
-        [SerializeField] private Color portraitBackgroundColor = new Color(.012f, .02f, .035f, 1f);
         [Header("Tracking")]
         [SerializeField, Range(1f, 60f)] private float smoothingSpeed = 24f;
         [SerializeField, Range(0f, 10f)] private float rotationDeadZoneDegrees = 3f;
@@ -299,7 +293,6 @@ namespace RealtimeBodyTracking
             if (trackingCamera != null) trackingCamera.nearClipPlane = Mathf.Min(trackingCamera.nearClipPlane, .03f);
             avatarRootOriginPosition = targetAnimator.transform.position;
             avatarRootOriginRotation = targetAnimator.transform.rotation;
-            ApplyPresentationCheats();
             solver.Initialize(targetAnimator);
             faceBlendShapeProxy = targetAnimator.GetComponentInChildren<VRMBlendShapeProxy>(true);
             manualController = targetAnimator.GetComponent<ManualAvatarController>();
@@ -310,39 +303,6 @@ namespace RealtimeBodyTracking
             CacheRestHandBasis(true);
             CacheRestHandBasis(false);
             if (debugLogging) Debug.Log($"Avatar collision geometry measured: {collisionGeometry.DebugSummary}", this);
-        }
-
-        private void ApplyPresentationCheats()
-        {
-            if (!enablePresentationCheats) return;
-            QualitySettings.antiAliasing = Mathf.Max(QualitySettings.antiAliasing, 4);
-            if (trackingCamera != null)
-            {
-                trackingCamera.fieldOfView = portraitCameraFov;
-                trackingCamera.clearFlags = CameraClearFlags.SolidColor;
-                trackingCamera.backgroundColor = portraitBackgroundColor;
-                var fillObject = new GameObject("VTuber Portrait Fill Light");
-                fillObject.transform.SetParent(trackingCamera.transform, false);
-                fillObject.transform.localRotation = Quaternion.Euler(24f, -32f, 0f);
-                var fill = fillObject.AddComponent<Light>();
-                fill.type = LightType.Directional;
-                fill.color = new Color(.72f, .86f, 1f);
-                fill.intensity = .32f;
-                fill.shadows = LightShadows.None;
-            }
-            ScaleBone(HumanBodyBones.Head, Vector3.one * portraitHeadScale);
-            var upperChest = targetAnimator.GetBoneTransform(HumanBodyBones.UpperChest);
-            if (upperChest != null)
-                upperChest.localScale = Vector3.Scale(
-                    upperChest.localScale, new Vector3(portraitShoulderWidthScale, 1f, 1f));
-            else
-                ScaleBone(HumanBodyBones.Chest, new Vector3(portraitShoulderWidthScale, 1f, 1f));
-        }
-
-        private void ScaleBone(HumanBodyBones bone, Vector3 scale)
-        {
-            var transform = targetAnimator.GetBoneTransform(bone);
-            if (transform != null) transform.localScale = Vector3.Scale(transform.localScale, scale);
         }
 
         private void LateUpdate()
