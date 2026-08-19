@@ -18,6 +18,13 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.2f, 3f)] private float cameraCalibrationSeconds = .75f;
         [SerializeField, Range(0f, .4f)] private float cameraFramingMargin = .12f;
         [SerializeField, Range(.35f, 2f)] private float cameraMinimumDistance = .5f;
+        [Header("Anime Internal Lines")]
+        [SerializeField] private bool enableAnimeInternalLines = true;
+        [SerializeField, Range(.25f, 2.5f)] private float animeLineThickness = 1f;
+        [SerializeField, Range(.02f, .4f)] private float animeLineThreshold = .115f;
+        [SerializeField, Range(.005f, .2f)] private float animeLineSoftness = .07f;
+        [SerializeField, Range(0f, 1f)] private float animeLineStrength = .82f;
+        [SerializeField] private Color animeLineColor = new Color(.008f, .01f, .016f, .92f);
         [Header("Tracking")]
         [SerializeField, Range(1f, 60f)] private float smoothingSpeed = 24f;
         [SerializeField, Range(0f, 10f)] private float rotationDeadZoneDegrees = 3f;
@@ -293,6 +300,7 @@ namespace RealtimeBodyTracking
             if (trackingCamera != null) trackingCamera.nearClipPlane = Mathf.Min(trackingCamera.nearClipPlane, .03f);
             avatarRootOriginPosition = targetAnimator.transform.position;
             avatarRootOriginRotation = targetAnimator.transform.rotation;
+            ConfigureAnimeInternalLines();
             solver.Initialize(targetAnimator);
             faceBlendShapeProxy = targetAnimator.GetComponentInChildren<VRMBlendShapeProxy>(true);
             manualController = targetAnimator.GetComponent<ManualAvatarController>();
@@ -303,6 +311,21 @@ namespace RealtimeBodyTracking
             CacheRestHandBasis(true);
             CacheRestHandBasis(false);
             if (debugLogging) Debug.Log($"Avatar collision geometry measured: {collisionGeometry.DebugSummary}", this);
+        }
+
+        private void ConfigureAnimeInternalLines()
+        {
+            if (trackingCamera == null) return;
+            var effect = trackingCamera.GetComponent<AnimeLinePostEffect>();
+            if (!enableAnimeInternalLines)
+            {
+                if (effect != null) effect.enabled = false;
+                return;
+            }
+            if (effect == null) effect = trackingCamera.gameObject.AddComponent<AnimeLinePostEffect>();
+            effect.enabled = true;
+            effect.Configure(animeLineThickness, animeLineThreshold, animeLineSoftness,
+                animeLineStrength, animeLineColor);
         }
 
         private void LateUpdate()

@@ -332,6 +332,12 @@ MonoBehaviour:
   cameraCalibrationSeconds: 0.75
   cameraFramingMargin: 0.12
   cameraMinimumDistance: 0.5
+  enableAnimeInternalLines: 1
+  animeLineThickness: 1
+  animeLineThreshold: 0.115
+  animeLineSoftness: 0.07
+  animeLineStrength: 0.82
+  animeLineColor: {r: 0.008, g: 0.01, b: 0.016, a: 0.92}
   smoothingSpeed: 30
   rotationDeadZoneDegrees: 3
   avatarMirror: 1
