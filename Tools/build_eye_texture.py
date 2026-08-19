@@ -33,10 +33,16 @@ right_box = (
 # Crop the two generated irises. These regions intentionally exclude the black
 # atlas background and are fitted back into the exact original UV islands.
 gw, gh = generated.size
-generated_boxes = (
-    (int(gw * 0.025), int(gh * 0.265), int(gw * 0.46), int(gh * 0.58)),
-    (int(gw * 0.53), int(gh * 0.265), int(gw * 0.965), int(gh * 0.58)),
-)
+if gw > gh:
+    generated_boxes = (
+        (int(gw * 0.152), int(gh * 0.225), int(gw * 0.366), int(gh * 0.744)),
+        (int(gw * 0.635), int(gh * 0.225), int(gw * 0.847), int(gh * 0.744)),
+    )
+else:
+    generated_boxes = (
+        (int(gw * 0.025), int(gh * 0.265), int(gw * 0.46), int(gh * 0.58)),
+        (int(gw * 0.53), int(gh * 0.265), int(gw * 0.965), int(gh * 0.58)),
+    )
 
 result = Image.new("RGBA", source.size, (0, 0, 0, 0))
 for target_box, generated_box in zip((left_box, right_box), generated_boxes):
