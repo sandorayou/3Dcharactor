@@ -12,7 +12,6 @@ def arg(name: str) -> Path:
 
 texture_dir = arg("--texture-dir")
 hair_reference = arg("--hair-reference") if "--hair-reference" in sys.argv else None
-hair_only = "--hair-only" in sys.argv
 
 
 def composite_color(image: Image.Image, color, alpha: int) -> Image.Image:
@@ -36,7 +35,7 @@ def add_hair_detail(path: Path, red: bool = False) -> None:
             band = (math.sin((x / w) * math.pi * 13 + phase) + 1) * 0.5
             fine = (math.sin((x / w) * math.pi * 41 + phase * 0.7) + 1) * 0.5
             highlight = max(0.0, 1.0 - abs(vertical - 0.34) / 0.18)
-            strength = int(8 * band * highlight + 2 * fine)
+            strength = int(22 * band * highlight + 7 * fine)
             if red:
                 px[x, y] = (255, 92, 72, strength)
             else:
@@ -52,13 +51,13 @@ def add_hair_detail(path: Path, red: bool = False) -> None:
         reference.putalpha(alpha)
         # The generated texture supplies detailed strand structure; retaining most
         # of the original keeps the established teal palette and toon readability.
-        image = Image.blend(image, reference, 0.58)
+        image = Image.blend(image, reference, 0.32)
     # Deepen roots and undersides for readable clump separation.
     root = Image.new("RGBA", image.size, (6, 25, 34, 0))
     root_alpha = Image.new("L", image.size)
     rpx = root_alpha.load()
     for y in range(h):
-        a = int(30 * max(0.0, (y / h - 0.56) / 0.44))
+        a = int(48 * max(0.0, (y / h - 0.56) / 0.44))
         for x in range(w):
             rpx[x, y] = a
     root.putalpha(ImageChops.multiply(alpha, root_alpha))
@@ -110,10 +109,9 @@ def add_fabric_detail(path: Path, white: bool = False, stitched: bool = False, s
 
 add_hair_detail(texture_dir / "_12.png")
 add_hair_detail(texture_dir / "_18.png")
-if not hair_only:
-    add_hair_detail(texture_dir / "_20.png", red=True)
-    add_hair_detail(texture_dir / "_22.png", red=True)
-    add_fabric_detail(texture_dir / "_13.png", satin=True)
-    add_fabric_detail(texture_dir / "_14.png", white=True)
-    add_fabric_detail(texture_dir / "_15.png", stitched=True, satin=True)
-    add_fabric_detail(texture_dir / "_16.png", stitched=True)
+add_hair_detail(texture_dir / "_20.png", red=True)
+add_hair_detail(texture_dir / "_22.png", red=True)
+add_fabric_detail(texture_dir / "_13.png", satin=True)
+add_fabric_detail(texture_dir / "_14.png", white=True)
+add_fabric_detail(texture_dir / "_15.png", stitched=True, satin=True)
+add_fabric_detail(texture_dir / "_16.png", stitched=True)

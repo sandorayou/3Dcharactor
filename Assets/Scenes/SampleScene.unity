@@ -332,7 +332,7 @@ MonoBehaviour:
   cameraCalibrationSeconds: 0.75
   cameraFramingMargin: 0.12
   cameraMinimumDistance: 0.5
-  enableAnimeInternalLines: 0
+  enableAnimeInternalLines: 1
   animeLineThickness: 1
   animeLineThreshold: 0.115
   animeLineSoftness: 0.07
