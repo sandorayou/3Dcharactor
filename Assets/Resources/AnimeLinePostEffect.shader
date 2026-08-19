@@ -42,11 +42,14 @@ Shader "Hidden/RealtimeBodyTracking/AnimeLinePostEffect"
                 float vertical = length(up - down);
                 float diagonal = length(diagonalA - diagonalB) * .65;
                 float contrast = max(max(horizontal, vertical), diagonal);
-                float edge = smoothstep(_Threshold, _Threshold + _Softness, contrast);
+                // Keep the ink edge hard.  The former wide smoothstep made the
+                // line look like a blurred shadow instead of drawn line art.
+                float hardWidth = max(_Softness, 0.001);
+                float edge = smoothstep(_Threshold, _Threshold + hardWidth, contrast);
 
                 // Preserve broad painted shading while darkening only narrow color borders.
                 float localDifference = max(length(center - left), length(center - up));
-                edge *= smoothstep(_Threshold * .55, _Threshold + _Softness, localDifference);
+                edge *= smoothstep(_Threshold * .55, _Threshold * .55 + hardWidth, localDifference);
                 edge = saturate(edge * _Strength * _LineColor.a);
                 return fixed4(lerp(center, _LineColor.rgb, edge), 1);
             }
