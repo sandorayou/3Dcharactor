@@ -19,7 +19,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, .4f)] private float cameraFramingMargin = .12f;
         [SerializeField, Range(.35f, 2f)] private float cameraMinimumDistance = .5f;
         [Header("Anime Internal Lines")]
-        [SerializeField] private bool enableAnimeInternalLines;
+        [SerializeField] private bool enableAnimeInternalLines = true;
         [SerializeField, Range(.25f, 2.5f)] private float animeLineThickness = 1f;
         [SerializeField, Range(.02f, .4f)] private float animeLineThreshold = .115f;
         [SerializeField, Range(.005f, .2f)] private float animeLineSoftness = .07f;

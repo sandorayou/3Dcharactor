@@ -20,14 +20,6 @@ output.parent.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(source), import_shading="NORMALS")
 
-for material in bpy.data.materials:
-    if "EyeHighlight" not in material.name or not material.use_nodes:
-        continue
-    material.node_tree.nodes.clear()
-    output_node = material.node_tree.nodes.new("ShaderNodeOutputMaterial")
-    transparent_node = material.node_tree.nodes.new("ShaderNodeBsdfTransparent")
-    material.node_tree.links.new(transparent_node.outputs[0], output_node.inputs[0])
-
 if eye_texture:
     replacement = bpy.data.images.load(str(eye_texture), check_existing=False)
     for material in bpy.data.materials:
