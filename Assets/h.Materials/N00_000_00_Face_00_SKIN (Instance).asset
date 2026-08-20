@@ -13,7 +13,7 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - MTOON_OUTLINE_COLOR_FIXED
-  - MTOON_OUTLINE_WIDTH_SCREEN
+  - MTOON_OUTLINE_WIDTH_WORLD
   - _ALPHATEST_ON
   - _NORMALMAP
   m_InvalidKeywords: []
@@ -29,7 +29,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BumpMap:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 89a03c2008572134cb486b49ee06b5cd, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _EmissionMap:
@@ -41,7 +41,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OutlineWidthTexture:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 2ff2bd2f76350c240968a7db1d56703f, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _ReceiveShadowTexture:
@@ -61,7 +61,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _SphereAdd:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: c7cbeae4a573cce478392896eef5b662, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _UvAnimMaskTexture:
@@ -72,21 +72,21 @@ Material:
     m_Floats:
     - _AlphaToMask: 0
     - _BlendMode: 1
-      - _BumpScale: 0
+    - _BumpScale: 1
     - _CullMode: 0
     - _Cutoff: 0.5
     - _DebugMode: 0
     - _DstBlend: 0
-    - _IndirectLightIntensity: 0.28
+    - _IndirectLightIntensity: 0.1
     - _LightColorAttenuation: 0
     - _MToonVersion: 39
     - _OutlineColorMode: 0
     - _OutlineCullMode: 1
-    - _OutlineLightingMix: 0
+    - _OutlineLightingMix: 1
     - _OutlineScaledMaxDistance: 4.63
-    - _OutlineWidth: 1
-    - _OutlineWidthMode: 2
-      - _ReceiveShadowRate: 0
+    - _OutlineWidth: 0.10916667
+    - _OutlineWidthMode: 1
+    - _ReceiveShadowRate: 0
     - _RimFresnelPower: 100
     - _RimLift: 0.1
     - _RimLightingMix: 0
@@ -101,7 +101,7 @@ Material:
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _OutlineColor: {r: 0.008, g: 0.008, b: 0.012, a: 1}
-    - _RimColor: {r: 0, g: 0, b: 0, a: 0}
-    - _ShadeColor: {r: 1, g: 1, b: 1, a: 1}
+    - _OutlineColor: {r: 0.2745098, g: 0.090196066, b: 0.12549016, a: 1}
+    - _RimColor: {r: 0.16333333, g: 0.16333333, b: 0.16333333, a: 1}
+    - _ShadeColor: {r: 0.9686274, g: 0.8117647, b: 0.85882354, a: 1}
   m_BuildTextureStacks: []

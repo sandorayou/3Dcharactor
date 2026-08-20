@@ -14,8 +14,6 @@ source = Path(argv_value("--input")).resolve()
 output = Path(argv_value("--output")).resolve()
 args = sys.argv[sys.argv.index("--") + 1 :]
 eye_texture = Path(argv_value("--eye-texture")).resolve() if "--eye-texture" in args else None
-texture_dir = Path(argv_value("--texture-dir")).resolve() if "--texture-dir" in args else None
-framing = argv_value("--framing") if "--framing" in args else "portrait"
 output.parent.mkdir(parents=True, exist_ok=True)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -30,27 +28,6 @@ if eye_texture:
             if node.type == "TEX_IMAGE" and node.image:
                 node.image = replacement
 
-if texture_dir:
-    material_textures = {
-        "Face_00_SKIN": "_04.png",
-        "HairBack_00_HAIR": "_12.png",
-        "Hair_00_HAIR_01": "_18.png",
-        "Hair_00_HAIR_02": "_20.png",
-        "Hair_00_HAIR_03": "_22.png",
-        "Tops_01_CLOTH_01": "_13.png",
-        "Tops_01_CLOTH_02": "_14.png",
-        "Tops_01_CLOTH_03": "_15.png",
-        "Bottoms_01_CLOTH": "_16.png",
-    }
-    for material in bpy.data.materials:
-        match = next((filename for key, filename in material_textures.items() if key in material.name), None)
-        if not match or not material.use_nodes:
-            continue
-        replacement = bpy.data.images.load(str(texture_dir / match), check_existing=False)
-        for node in material.node_tree.nodes:
-            if node.type == "TEX_IMAGE" and node.image:
-                node.image = replacement
-
 meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
 if not meshes:
     raise RuntimeError("No meshes were imported from the VRM/GLB file")
@@ -61,22 +38,14 @@ for obj in meshes:
 minimum = Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
 maximum = Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points)))
 height = maximum.z - minimum.z
-if framing == "full":
-    target = Vector(((minimum.x + maximum.x) * 0.5, (minimum.y + maximum.y) * 0.5, (minimum.z + maximum.z) * 0.5))
-else:
-    target = Vector(((minimum.x + maximum.x) * 0.5, (minimum.y + maximum.y) * 0.5, minimum.z + height * 0.885))
+target = Vector(((minimum.x + maximum.x) * 0.5, (minimum.y + maximum.y) * 0.5, minimum.z + height * 0.885))
 
 camera_data = bpy.data.cameras.new("Portrait Camera")
 camera = bpy.data.objects.new("Portrait Camera", camera_data)
 bpy.context.collection.objects.link(camera)
 bpy.context.scene.camera = camera
-if framing == "full":
-    camera_data.type = "ORTHO"
-    camera_data.ortho_scale = height * 1.12
-    camera.location = target + Vector((0.0, height * 2.0, 0.0))
-else:
-    camera_data.lens = 72
-    camera.location = target + Vector((0.0, height * 0.28, height * 0.02))
+camera_data.lens = 72
+camera.location = target + Vector((0.0, height * 0.28, height * 0.02))
 
 
 def point_at(obj, destination):
