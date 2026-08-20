@@ -18,6 +18,13 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.2f, 3f)] private float cameraCalibrationSeconds = .75f;
         [SerializeField, Range(0f, .4f)] private float cameraFramingMargin = .12f;
         [SerializeField, Range(.35f, 2f)] private float cameraMinimumDistance = .5f;
+        [Header("Anime Internal Lines")]
+        [SerializeField] private bool enableAnimeInternalLines = false;
+        [SerializeField, Range(.25f, 2.5f)] private float animeLineThickness = 1f;
+        [SerializeField, Range(.02f, .4f)] private float animeLineThreshold = .115f;
+        [SerializeField, Range(.005f, .2f)] private float animeLineSoftness = .07f;
+        [SerializeField, Range(0f, 1f)] private float animeLineStrength = .82f;
+        [SerializeField] private Color animeLineColor = new Color(.008f, .01f, .016f, .92f);
         [Header("Tracking")]
         [SerializeField, Range(1f, 60f)] private float smoothingSpeed = 24f;
         [SerializeField, Range(0f, 10f)] private float rotationDeadZoneDegrees = 3f;
@@ -93,6 +100,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 1f)] private float headMinConfidence = .1f;
         [SerializeField, Range(0f, 1f)] private float faceHoldTime = .25f;
         [SerializeField, Range(0f, 1f)] private float neckRotationWeight = .35f;
+        [SerializeField] private bool mirrorHeadRotation = true;
         [SerializeField] private Vector3 headRotationOffsetEuler;
         [SerializeField, Range(1f, 40f)] private float headRotationSmoothing = 14f;
         [SerializeField] private bool enableFaceExpressions = true;
@@ -293,6 +301,7 @@ namespace RealtimeBodyTracking
             if (trackingCamera != null) trackingCamera.nearClipPlane = Mathf.Min(trackingCamera.nearClipPlane, .03f);
             avatarRootOriginPosition = targetAnimator.transform.position;
             avatarRootOriginRotation = targetAnimator.transform.rotation;
+            ConfigureAnimeInternalLines();
             solver.Initialize(targetAnimator);
             faceBlendShapeProxy = targetAnimator.GetComponentInChildren<VRMBlendShapeProxy>(true);
             manualController = targetAnimator.GetComponent<ManualAvatarController>();
@@ -303,6 +312,21 @@ namespace RealtimeBodyTracking
             CacheRestHandBasis(true);
             CacheRestHandBasis(false);
             if (debugLogging) Debug.Log($"Avatar collision geometry measured: {collisionGeometry.DebugSummary}", this);
+        }
+
+        private void ConfigureAnimeInternalLines()
+        {
+            if (trackingCamera == null) return;
+            var effect = trackingCamera.GetComponent<AnimeLinePostEffect>();
+            if (!enableAnimeInternalLines)
+            {
+                if (effect != null) effect.enabled = false;
+                return;
+            }
+            if (effect == null) effect = trackingCamera.gameObject.AddComponent<AnimeLinePostEffect>();
+            effect.enabled = true;
+            effect.Configure(animeLineThickness, animeLineThreshold, animeLineSoftness,
+                animeLineStrength, animeLineColor);
         }
 
         private void LateUpdate()
@@ -564,6 +588,17 @@ namespace RealtimeBodyTracking
                 return;
             }
             lastHeadRotationTime = Time.unscaledTime;
+            if (mirrorHeadRotation)
+            {
+                // Mirror the captured orientation across the camera's vertical plane.
+                // Pitch stays unchanged; yaw and roll reverse so the avatar behaves
+                // like the user's reflection instead of turning away from them.
+                absoluteHeadRotation = new Quaternion(
+                    absoluteHeadRotation.x,
+                    -absoluteHeadRotation.y,
+                    -absoluteHeadRotation.z,
+                    absoluteHeadRotation.w).normalized;
+            }
             absoluteHeadRotation = Quaternion.Euler(headRotationOffsetEuler) * absoluteHeadRotation;
             var bodyRotation = Quaternion.AngleAxis(currentBodyYaw, Vector3.up);
             var relativeHeadRotation = Quaternion.Inverse(bodyRotation) * absoluteHeadRotation;
@@ -2315,8 +2350,6 @@ namespace RealtimeBodyTracking
                 }
                 targetLean = Mathf.DeltaAngle(rightShoulderLeanOrigin, body.LeanSignal);
             }
-            // Mirror only the visible shoulder slope. Arm, elbow, wrist, and hand
-            // source-side selection remains controlled by avatarMirror.
             if (mirrorShoulderElevation) targetLean = -targetLean;
             lastBodyShoulderMode = body.ShoulderMode;
             var t = 1f - Mathf.Exp(-bodyLeanSmoothing * Time.deltaTime);

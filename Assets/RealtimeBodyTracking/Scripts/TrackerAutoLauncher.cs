@@ -66,10 +66,11 @@ namespace RealtimeBodyTracking
                 ownedTracker = Process.Start(new ProcessStartInfo
                 {
                     FileName = python,
-                    Arguments = $"\"{appPath}\" --source 0 --host 127.0.0.1 --port {receiver.Port}",
+                    Arguments = $"\"{appPath}\" --source 0 --host 127.0.0.1 --port {receiver.Port} --no-preview",
                     WorkingDirectory = trackerDirectory,
-                    UseShellExecute = true,
-                    CreateNoWindow = false,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
                 });
                 launcherState = "tracker_started_waiting_for_udp";
                 lastFailure = string.Empty;
@@ -86,8 +87,12 @@ namespace RealtimeBodyTracking
 
         private static string ResolvePythonExecutable(string projectRoot)
         {
+            var localPythonw = Path.Combine(projectRoot, "python-tracker", ".venv", "Scripts", "pythonw.exe");
+            if (File.Exists(localPythonw)) return localPythonw;
             var localPython = Path.Combine(projectRoot, "python-tracker", ".venv", "Scripts", "python.exe");
             if (File.Exists(localPython)) return localPython;
+            const string installedPythonw = @"C:\Python314\pythonw.exe";
+            if (File.Exists(installedPythonw)) return installedPythonw;
             const string installedPython = @"C:\Python314\python.exe";
             return File.Exists(installedPython) ? installedPython : "python";
         }
