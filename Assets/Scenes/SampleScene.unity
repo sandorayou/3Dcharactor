@@ -340,7 +340,7 @@ MonoBehaviour:
   animeLineColor: {r: 0.004, g: 0.005, b: 0.008, a: 1}
   smoothingSpeed: 30
   rotationDeadZoneDegrees: 3
-  avatarMirror: 1
+  avatarMirror: 0
   enableHipsPosition: 1
   hipsPositionScale: 0.25
   enableFaceZoom: 1
