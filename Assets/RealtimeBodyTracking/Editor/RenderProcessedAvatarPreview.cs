@@ -11,6 +11,7 @@ namespace RealtimeBodyTracking.Editor
     {
         private const string PendingKey = "RealtimeBodyTracking.ProcessedPreview.Pending";
         private static double enteredPlayModeAt;
+        private static bool idlePoseStarted;
 
         static RenderProcessedAvatarPreview()
         {
@@ -24,6 +25,7 @@ namespace RealtimeBodyTracking.Editor
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             SessionState.SetBool(PendingKey, true);
             enteredPlayModeAt = 0d;
+            idlePoseStarted = false;
             EditorApplication.isPlaying = true;
         }
 
@@ -36,6 +38,21 @@ namespace RealtimeBodyTracking.Editor
                 return;
             }
             if (EditorApplication.timeSinceStartup - enteredPlayModeAt < 2d) return;
+
+            if (!idlePoseStarted)
+            {
+                var avatar = GameObject.Find("h");
+                var animator = avatar != null ? avatar.GetComponentInChildren<Animator>() : null;
+                var controller = Resources.Load<RuntimeAnimatorController>("VTuberAnimator");
+                if (animator == null || controller == null)
+                    throw new InvalidOperationException("Idle preview animation could not be loaded.");
+                animator.runtimeAnimatorController = controller;
+                animator.Play("Idle", 0, .25f);
+                animator.Update(0f);
+                idlePoseStarted = true;
+                enteredPlayModeAt = EditorApplication.timeSinceStartup;
+                return;
+            }
 
             SessionState.SetBool(PendingKey, false);
             try
