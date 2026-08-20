@@ -39,6 +39,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 45f)] private float maxBodyLean = 40f;
         [SerializeField, Range(.5f, 30f)] private float bodyLeanSmoothing = 14f;
         [SerializeField, Range(.5f, 3f)] private float bodyLeanGain = 1f;
+        [SerializeField] private bool mirrorShoulderElevation = true;
         [Header("Face Zoom")]
         [SerializeField] private bool enableFaceZoom = true;
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
@@ -2314,6 +2315,9 @@ namespace RealtimeBodyTracking
                 }
                 targetLean = Mathf.DeltaAngle(rightShoulderLeanOrigin, body.LeanSignal);
             }
+            // Mirror only the visible shoulder slope. Arm, elbow, wrist, and hand
+            // source-side selection remains controlled by avatarMirror.
+            if (mirrorShoulderElevation) targetLean = -targetLean;
             lastBodyShoulderMode = body.ShoulderMode;
             var t = 1f - Mathf.Exp(-bodyLeanSmoothing * Time.deltaTime);
             filteredBodyLean = Mathf.LerpAngle(filteredBodyLean, Mathf.Clamp(targetLean, -maxBodyLean, maxBodyLean), t);

@@ -357,6 +357,7 @@ MonoBehaviour:
   maxBodyLean: 40
   bodyLeanSmoothing: 14
   bodyLeanGain: 1
+  mirrorShoulderElevation: 1
   enableBodyTurn: 1
   bodyTurnSpeed: 240
   bodyTurnDeadZone: 25
