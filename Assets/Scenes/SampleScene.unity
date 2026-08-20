@@ -333,7 +333,7 @@ MonoBehaviour:
   cameraFramingMargin: 0.12
   cameraMinimumDistance: 0.5
   enableAnimeInternalLines: 1
-  animeLineThickness: 1.25
+  animeLineThickness: 1.8
   animeLineThreshold: 0.105
   animeLineSoftness: 0.006
   animeLineStrength: 0.94
