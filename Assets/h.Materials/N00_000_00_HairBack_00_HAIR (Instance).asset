@@ -84,7 +84,7 @@ Material:
     - _OutlineCullMode: 1
     - _OutlineLightingMix: 0
     - _OutlineScaledMaxDistance: 1
-    - _OutlineWidth: 0.3
+    - _OutlineWidth: 0.18
     - _OutlineWidthMode: 2
     - _ReceiveShadowRate: 1
     - _RimFresnelPower: 100
@@ -101,7 +101,7 @@ Material:
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0.28, g: 0.34, b: 0.38, a: 1}
-    - _OutlineColor: {r: 0.004, g: 0.006, b: 0.008, a: 1}
+    - _OutlineColor: {r: 0.018, g: 0.055, b: 0.065, a: 1}
     - _RimColor: {r: 0.6900002, g: 0.6900002, b: 0.6900002, a: 1}
     - _ShadeColor: {r: 0.42, g: 0.7, b: 0.73, a: 1}
   m_BuildTextureStacks: []
