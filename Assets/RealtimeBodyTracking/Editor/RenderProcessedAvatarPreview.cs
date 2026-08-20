@@ -89,7 +89,7 @@ namespace RealtimeBodyTracking.Editor
             camera.orthographic = true;
             camera.orthographicSize = height * .38f;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = Color.yellow;
+            camera.backgroundColor = new Color(.55f, .85f, 1f, 1f);
             camera.allowHDR = false;
             camera.allowMSAA = true;
 
