@@ -37,8 +37,6 @@ def clean_eye_line(name: str, opening_size: int) -> None:
 
 
 def main() -> None:
-    for name in ("_13.png", "_14.png", "_15.png"):
-        clean_clothing(name)
     clean_eye_line("_08.png", 3)
     clean_eye_line("_09.png", 3)
 
