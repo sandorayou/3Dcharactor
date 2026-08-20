@@ -71,6 +71,9 @@ namespace RealtimeBodyTracking.Editor
         {
             var avatar = GameObject.Find("h");
             if (avatar == null) throw new InvalidOperationException("Avatar root 'h' was not found.");
+            // With no UDP frame the driver has not applied its serialized 180-degree
+            // facing offset yet. Apply the same offset used as soon as tracking starts.
+            avatar.transform.rotation = Quaternion.Euler(0f, 180f, 0f) * avatar.transform.rotation;
             var renderers = avatar.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0) throw new InvalidOperationException("No avatar renderers found.");
 
@@ -81,8 +84,8 @@ namespace RealtimeBodyTracking.Editor
             if (camera == null) throw new InvalidOperationException("Main Camera was not found.");
             var height = bounds.size.y;
             var target = new Vector3(bounds.center.x, bounds.min.y + height * .72f, bounds.center.z);
-            camera.transform.position = target + Vector3.forward * Mathf.Max(4f, height * 3f);
-            camera.transform.rotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
+            camera.transform.position = target + Vector3.back * Mathf.Max(4f, height * 3f);
+            camera.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
             camera.orthographic = true;
             camera.orthographicSize = height * .38f;
             camera.clearFlags = CameraClearFlags.SolidColor;
