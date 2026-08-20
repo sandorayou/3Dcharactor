@@ -28,7 +28,7 @@ namespace RealtimeBodyTracking
         [Header("Tracking")]
         [SerializeField, Range(1f, 60f)] private float smoothingSpeed = 24f;
         [SerializeField, Range(0f, 10f)] private float rotationDeadZoneDegrees = 3f;
-        [SerializeField] private bool avatarMirror = true;
+        [SerializeField] private bool avatarMirror = false;
         [SerializeField] private bool enableHipsPosition = true;
         [SerializeField, Range(0f, 5f)] private float hipsPositionScale = .25f;
         [SerializeField, Range(0f, 3f)] private float bodyDepthFromShoulderWidth = 1.2f;
