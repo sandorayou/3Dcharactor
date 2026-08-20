@@ -332,15 +332,9 @@ MonoBehaviour:
   cameraCalibrationSeconds: 0.75
   cameraFramingMargin: 0.12
   cameraMinimumDistance: 0.5
-  enableAnimeInternalLines: 0
-  animeLineThickness: 1.8
-  animeLineThreshold: 0.105
-  animeLineSoftness: 0.006
-  animeLineStrength: 0.94
-  animeLineColor: {r: 0.004, g: 0.005, b: 0.008, a: 1}
   smoothingSpeed: 30
   rotationDeadZoneDegrees: 3
-  avatarMirror: 0
+  avatarMirror: 1
   enableHipsPosition: 1
   hipsPositionScale: 0.25
   enableFaceZoom: 1
@@ -363,7 +357,6 @@ MonoBehaviour:
   maxBodyLean: 40
   bodyLeanSmoothing: 14
   bodyLeanGain: 1
-  mirrorShoulderElevation: 1
   enableBodyTurn: 1
   bodyTurnSpeed: 240
   bodyTurnDeadZone: 25
@@ -392,7 +385,6 @@ MonoBehaviour:
   legMinConfidence: 0.75
   headMinConfidence: 0.1
   neckRotationWeight: 0.65
-  mirrorHeadRotation: 1
   headRotationOffsetEuler: {x: 0, y: 0, z: 0}
   headRotationSmoothing: 14
   enableRollCorrection: 1
