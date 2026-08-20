@@ -19,7 +19,6 @@ foreach ($directory in @("Assets", "Packages", "ProjectSettings")) {
 $env:UNITY_PREVIEW_OUTPUT = $output
 $arguments = @(
     "-batchmode",
-    "-quit",
     "-projectPath", "`"$previewProject`"",
     "-executeMethod", "RealtimeBodyTracking.Editor.RenderProcessedAvatarPreview.Render",
     "-logFile", "`"$log`""

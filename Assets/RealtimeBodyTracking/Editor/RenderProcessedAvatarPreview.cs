@@ -6,14 +6,58 @@ using UnityEngine;
 
 namespace RealtimeBodyTracking.Editor
 {
+    [InitializeOnLoad]
     public static class RenderProcessedAvatarPreview
     {
+        private const string PendingKey = "RealtimeBodyTracking.ProcessedPreview.Pending";
+        private static double enteredPlayModeAt;
+
+        static RenderProcessedAvatarPreview()
+        {
+            EditorApplication.update -= ContinueRender;
+            EditorApplication.update += ContinueRender;
+        }
+
         public static void Render()
         {
             EditorSceneManager.OpenScene("Assets/Scenes/SampleScene.unity", OpenSceneMode.Single);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            SessionState.SetBool(PendingKey, true);
+            enteredPlayModeAt = 0d;
+            EditorApplication.isPlaying = true;
+        }
 
-            var renderers = UnityEngine.Object.FindObjectsOfType<Renderer>();
+        private static void ContinueRender()
+        {
+            if (!SessionState.GetBool(PendingKey, false) || !EditorApplication.isPlaying) return;
+            if (enteredPlayModeAt <= 0d)
+            {
+                enteredPlayModeAt = EditorApplication.timeSinceStartup;
+                return;
+            }
+            if (EditorApplication.timeSinceStartup - enteredPlayModeAt < 2d) return;
+
+            SessionState.SetBool(PendingKey, false);
+            try
+            {
+                CaptureGameViewState();
+                EditorApplication.Exit(0);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        private static void CaptureGameViewState()
+        {
+            var avatar = GameObject.Find("h");
+            if (avatar == null) throw new InvalidOperationException("Avatar root 'h' was not found.");
+            // With no UDP frame the driver has not applied its serialized 180-degree
+            // facing offset yet. Apply the same offset used as soon as tracking starts.
+            avatar.transform.rotation = Quaternion.Euler(0f, 180f, 0f) * avatar.transform.rotation;
+            var renderers = avatar.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0) throw new InvalidOperationException("No avatar renderers found.");
 
             var bounds = renderers[0].bounds;
@@ -21,11 +65,10 @@ namespace RealtimeBodyTracking.Editor
 
             var camera = Camera.main;
             if (camera == null) throw new InvalidOperationException("Main Camera was not found.");
-
             var height = bounds.size.y;
             var target = new Vector3(bounds.center.x, bounds.min.y + height * .72f, bounds.center.z);
-            camera.transform.position = target + Vector3.forward * Mathf.Max(4f, height * 3f);
-            camera.transform.rotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
+            camera.transform.position = target + Vector3.back * Mathf.Max(4f, height * 3f);
+            camera.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
             camera.orthographic = true;
             camera.orthographicSize = height * .38f;
             camera.clearFlags = CameraClearFlags.SolidColor;
@@ -33,17 +76,11 @@ namespace RealtimeBodyTracking.Editor
             camera.allowHDR = false;
             camera.allowMSAA = true;
 
-            foreach (var effect in camera.GetComponents<AnimeLinePostEffect>()) effect.enabled = false;
-
             const int size = 1024;
-            var renderTexture = new RenderTexture(size, size, 24, RenderTextureFormat.ARGB32)
-            {
-                antiAliasing = 8
-            };
+            var renderTexture = new RenderTexture(size, size, 24, RenderTextureFormat.ARGB32) { antiAliasing = 8 };
             var image = new Texture2D(size, size, TextureFormat.RGB24, false);
             var previousTarget = camera.targetTexture;
             var previousActive = RenderTexture.active;
-
             try
             {
                 QualitySettings.antiAliasing = 8;
@@ -59,7 +96,7 @@ namespace RealtimeBodyTracking.Editor
                 output = Path.GetFullPath(output);
                 Directory.CreateDirectory(Path.GetDirectoryName(output) ?? ".");
                 File.WriteAllBytes(output, image.EncodeToPNG());
-                Debug.Log($"Processed avatar preview written to {output}");
+                Debug.Log($"Processed avatar play-mode preview written to {output}");
             }
             finally
             {
