@@ -301,13 +301,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
+  m_LocalPosition: {x: 0, y: 1, z: 10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!1 &1316547653 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1029089546570068762, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
@@ -366,7 +366,7 @@ MonoBehaviour:
   enableBodyTurn: 1
   bodyTurnSpeed: 240
   bodyTurnDeadZone: 25
-  avatarFacingOffsetDegrees: 180
+  avatarFacingOffsetDegrees: 0
   bodyTurnMinConfidence: 0.85
   bodyCollisionRadiusScale: 1
   wristMinConfidence: 0.5

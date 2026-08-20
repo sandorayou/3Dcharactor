@@ -56,7 +56,7 @@ namespace RealtimeBodyTracking
         [SerializeField] private bool enableBodyTurn = true;
         [SerializeField, Min(0f)] private float bodyTurnSpeed = 360f;
         [SerializeField, Range(0f, 30f)] private float bodyTurnDeadZone = 2f;
-        [SerializeField, Range(-180f, 180f)] private float avatarFacingOffsetDegrees = 180f;
+        [SerializeField, Range(-180f, 180f)] private float avatarFacingOffsetDegrees = 0f;
         [SerializeField, Range(0f, 1f)] private float bodyTurnMinConfidence = .6f;
         [Header("Arm Stability")]
         [SerializeField, Range(0f, 1f)] private float bodyCollisionRadiusScale = 1f;
