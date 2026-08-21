@@ -252,7 +252,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 1, g: 1, b: 0, a: 1}
+  m_BackGroundColor: {r: 0.55, g: 0.85, b: 1, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -363,6 +363,7 @@ MonoBehaviour:
   maxBodyLean: 40
   bodyLeanSmoothing: 14
   bodyLeanGain: 1
+  mirrorShoulderElevation: 1
   enableBodyTurn: 1
   bodyTurnSpeed: 240
   bodyTurnDeadZone: 25
