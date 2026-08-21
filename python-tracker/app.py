@@ -14,8 +14,7 @@ from pose_estimator import PoseEstimator
 from settings import TrackerSettings
 from udp_sender import UdpPoseSender
 
-CAMERA_WINDOW = "Camera Feed (Q to stop)"
-TRACKER_WINDOW = "Realtime Body Tracker (Q to stop)"
+PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
 
 
 def parse_args() -> TrackerSettings:
@@ -109,9 +108,6 @@ def main() -> None:
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
-                camera_preview = camera.last_frame.copy()
-                if settings.preview_mirror:
-                    camera_preview = cv2.flip(camera_preview, 1)
                 preview = draw_preview(
                     camera.last_frame,
                     estimator,
@@ -119,15 +115,11 @@ def main() -> None:
                     settings.preview_mirror,
                 )
                 video_recorder.write(preview)
-                cv2.imshow(CAMERA_WINDOW, camera_preview)
-                cv2.imshow(TRACKER_WINDOW, preview)
+                cv2.imshow(PREVIEW_WINDOW, preview)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("q"), 27):
                     break
-                if (
-                    cv2.getWindowProperty(CAMERA_WINDOW, cv2.WND_PROP_VISIBLE) < 1
-                    or cv2.getWindowProperty(TRACKER_WINDOW, cv2.WND_PROP_VISIBLE) < 1
-                ):
+                if cv2.getWindowProperty(PREVIEW_WINDOW, cv2.WND_PROP_VISIBLE) < 1:
                     break
             else:
                 time.sleep(0.001)
