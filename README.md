@@ -20,6 +20,6 @@ Windows向けの、MediaPipe Pose LandmarkerからUnity Humanoid/VRMへ低遅延
 
 `HumanoidPoseDriver` は Inspector から **Smoothing Speed**、**Avatar Mirror**、**Enable Hips Position**、**Hips Position Scale**、頭・腕・脚の有効化、**Tracking Timeout**、**Return To Rest Pose**、**Debug Logging** を設定できます。Inspectorには最新フレーム番号とTracking状態、`UdpPoseReceiver` には受信フレームと不正・破棄パケット数が表示されます。受信スレッドは最新パケットの置換だけを行い、ボーン更新は `LateUpdate` で行います。
 
-Play Mode中に **Ctrl + テンキー `/`** を押すと、画面外に出た腰・脚の座標保持を切り替えます。腰が見えている状態で有効にしてから座ったり前傾すると、腰の位置を固定したまま上半身を曲げられます。もう一度押すと解除して位置追従を再基準化します。
+Play Mode中に **Ctrl + テンキー `/`** を押すと、その瞬間の腰の座標と下半身の姿勢を固定します。固定中も肩・頭・手は追従し、腰から上の傾きとして反映されます。もう一度押すと解除し、通常の全身追従へ戻して位置を再基準化します。
 
 `MotionRecorder` はリアルタイム駆動と独立した任意機能です。必要な場合だけ追加し、Hips位置とHumanoidのQuaternionをJSON記録します。FBX変換は録画後の別処理としてください。
