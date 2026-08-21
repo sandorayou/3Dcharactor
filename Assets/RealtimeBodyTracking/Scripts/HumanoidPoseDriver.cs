@@ -19,7 +19,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, .4f)] private float cameraFramingMargin = .12f;
         [SerializeField, Range(.35f, 2f)] private float cameraMinimumDistance = .5f;
         [Header("Anime Internal Lines")]
-        [SerializeField] private bool enableAnimeInternalLines = true;
+        [SerializeField] private bool enableAnimeInternalLines = false;
         [SerializeField, Range(.25f, 2.5f)] private float animeLineThickness = 1f;
         [SerializeField, Range(.02f, .4f)] private float animeLineThreshold = .115f;
         [SerializeField, Range(.005f, .2f)] private float animeLineSoftness = .07f;
@@ -46,6 +46,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 45f)] private float maxBodyLean = 40f;
         [SerializeField, Range(.5f, 30f)] private float bodyLeanSmoothing = 14f;
         [SerializeField, Range(.5f, 3f)] private float bodyLeanGain = 1f;
+        [SerializeField] private bool mirrorShoulderElevation = true;
         [Header("Face Zoom")]
         [SerializeField] private bool enableFaceZoom = true;
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
@@ -2349,6 +2350,7 @@ namespace RealtimeBodyTracking
                 }
                 targetLean = Mathf.DeltaAngle(rightShoulderLeanOrigin, body.LeanSignal);
             }
+            if (mirrorShoulderElevation) targetLean = -targetLean;
             lastBodyShoulderMode = body.ShoulderMode;
             var t = 1f - Mathf.Exp(-bodyLeanSmoothing * Time.deltaTime);
             filteredBodyLean = Mathf.LerpAngle(filteredBodyLean, Mathf.Clamp(targetLean, -maxBodyLean, maxBodyLean), t);

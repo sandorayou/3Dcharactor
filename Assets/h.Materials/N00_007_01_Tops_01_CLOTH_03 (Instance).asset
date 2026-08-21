@@ -77,15 +77,15 @@ Material:
     - _Cutoff: 0.5
     - _DebugMode: 0
     - _DstBlend: 0
-    - _IndirectLightIntensity: 0.32
+    - _IndirectLightIntensity: 0.1
     - _LightColorAttenuation: 0
     - _MToonVersion: 39
     - _OutlineColorMode: 0
     - _OutlineCullMode: 1
-    - _OutlineLightingMix: 0.08
+    - _OutlineLightingMix: 1
     - _OutlineScaledMaxDistance: 1
-    - _OutlineWidth: 0.26
-    - _OutlineWidthMode: 2
+    - _OutlineWidth: 0.14
+    - _OutlineWidthMode: 1
     - _ReceiveShadowRate: 1
     - _RimFresnelPower: 100
     - _RimLift: 0.1
@@ -101,7 +101,7 @@ Material:
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _OutlineColor: {r: 0.018, g: 0.022, b: 0.035, a: 1}
+    - _OutlineColor: {r: 0.2745098, g: 0.090196066, b: 0.12549016, a: 1}
     - _RimColor: {r: 0.6400001, g: 0.6400001, b: 0.6400001, a: 1}
-    - _ShadeColor: {r: 0.62, g: 0.65, b: 0.75, a: 1}
+    - _ShadeColor: {r: 0.93333334, g: 0.92941177, b: 0.9411765, a: 1}
   m_BuildTextureStacks: []
