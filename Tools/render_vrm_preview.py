@@ -15,7 +15,6 @@ output = Path(argv_value("--output")).resolve()
 args = sys.argv[sys.argv.index("--") + 1 :]
 eye_texture = Path(argv_value("--eye-texture")).resolve() if "--eye-texture" in args else None
 texture_dir = Path(argv_value("--texture-dir")).resolve() if "--texture-dir" in args else None
-framing = argv_value("--framing") if "--framing" in args else "portrait"
 output.parent.mkdir(parents=True, exist_ok=True)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -61,22 +60,14 @@ for obj in meshes:
 minimum = Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
 maximum = Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points)))
 height = maximum.z - minimum.z
-if framing == "full":
-    target = Vector(((minimum.x + maximum.x) * 0.5, (minimum.y + maximum.y) * 0.5, (minimum.z + maximum.z) * 0.5))
-else:
-    target = Vector(((minimum.x + maximum.x) * 0.5, (minimum.y + maximum.y) * 0.5, minimum.z + height * 0.885))
+target = Vector(((minimum.x + maximum.x) * 0.5, (minimum.y + maximum.y) * 0.5, minimum.z + height * 0.885))
 
 camera_data = bpy.data.cameras.new("Portrait Camera")
 camera = bpy.data.objects.new("Portrait Camera", camera_data)
 bpy.context.collection.objects.link(camera)
 bpy.context.scene.camera = camera
-if framing == "full":
-    camera_data.type = "ORTHO"
-    camera_data.ortho_scale = height * 1.12
-    camera.location = target + Vector((0.0, height * 2.0, 0.0))
-else:
-    camera_data.lens = 72
-    camera.location = target + Vector((0.0, height * 0.28, height * 0.02))
+camera_data.lens = 72
+camera.location = target + Vector((0.0, height * 0.28, height * 0.02))
 
 
 def point_at(obj, destination):
