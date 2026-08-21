@@ -124,7 +124,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Tooltip("Live state")] private bool handContactTracking;
         [SerializeField, Tooltip("Live state")] private float wristSeparationRatio;
         [SerializeField, Tooltip("Live state")] private bool bodyPositionTracking;
-        [SerializeField, Tooltip("Ctrl+Numpad /: keep the last coordinates of landmarks that leave the camera frame")] private bool holdOccludedCoordinates;
+        [SerializeField, Tooltip("Ctrl+Numpad /: lock the waist at its current coordinates")] private bool waistCoordinatesLocked;
         [SerializeField, Tooltip("Live state")] private Vector3 bodyPositionOffset;
         [SerializeField, Tooltip("Live state")] private float bodyLeanDegrees;
         [SerializeField, Tooltip("Live state")] private int bodyShoulderMode;
@@ -392,19 +392,19 @@ namespace RealtimeBodyTracking
                 var target = Quaternion.AngleAxis(currentBodyYaw + avatarFacingOffsetDegrees, Vector3.up) * avatarRootOriginRotation;
                 root.rotation = Quaternion.RotateTowards(root.rotation, target, bodyTurnSpeed * Time.deltaTime);
                 rootRotationDelta = root.rotation * Quaternion.Inverse(avatarRootOriginRotation);
-                if (returnToRestPose && !holdOccludedCoordinates) ReturnToRest();
+                if (returnToRestPose && !waistCoordinatesLocked) ReturnToRest();
                 if (enableHead) ApplyHead(pose);
                 ApplyFaceExpressions(pose);
                 ApplyFaceZoom(pose, Time.unscaledDeltaTime);
                 return;
             }
             var hipsVisible = upperBody.HipsTracked;
-            if (hipsVisible)
+            if (!waistCoordinatesLocked && hipsVisible)
             {
                 heldHipCenter = upperBody.HipCenter;
                 heldHipCenterInitialized = true;
             }
-            else if (holdOccludedCoordinates && heldHipCenterInitialized)
+            else if (waistCoordinatesLocked && heldHipCenterInitialized)
             {
                 upperBody = new UpperBodyPose(
                     upperBody.LeftShoulder,
@@ -426,18 +426,21 @@ namespace RealtimeBodyTracking
                 TryCalibrateCameraFraming(pose, screenBody, screenBody.ShoulderWidth);
             }
 
-            if (enableHipsPosition && hasScreenBody && !(holdOccludedCoordinates && !hipsVisible))
+            if (hasScreenBody)
             {
-                bodyPositionTracking = true;
                 bodyLeanDegrees = ResolveBodyLean(screenBody);
-                var screenCenter = ResolveScreenBody(screenBody, bodyLeanDegrees, out var shoulderWidth);
-                ApplyHips(pose, screenCenter, shoulderWidth, screenBody.ShoulderMode);
+                if (enableHipsPosition && !waistCoordinatesLocked)
+                {
+                    bodyPositionTracking = true;
+                    var screenCenter = ResolveScreenBody(screenBody, bodyLeanDegrees, out var shoulderWidth);
+                    ApplyHips(pose, screenCenter, shoulderWidth, screenBody.ShoulderMode);
+                }
             }
 
             ApplyBodyTurn(upperBody);
-            if (enableLegs && (hipsVisible || (holdOccludedCoordinates && heldHipCenterInitialized)))
+            if (!waistCoordinatesLocked && enableLegs && hipsVisible)
                 ApplyDirection(HumanBodyBones.Hips, upperBody.Torso, upperBody.Forward, bodyLeanDegrees * .15f);
-            else if (!holdOccludedCoordinates)
+            else if (!waistCoordinatesLocked)
                 ReturnBoneToRest(HumanBodyBones.Hips);
             ApplyDirection(HumanBodyBones.Spine, upperBody.Torso, upperBody.Forward, bodyLeanDegrees * .55f);
             ApplyRestBoneRoll(HumanBodyBones.Chest, bodyLeanDegrees * .8f);
@@ -468,11 +471,11 @@ namespace RealtimeBodyTracking
                     ReturnFingersToRest(false);
                 }
             }
-            if (enableLegs)
+            if (enableLegs && !waistCoordinatesLocked)
                 foreach (var chain in LegChains)
                     if (PoseInputMapper.TryGetVisible(pose, chain.from, InputCoordinatesNeedMirror, legMinConfidence, out var from) && PoseInputMapper.TryGetVisible(pose, chain.to, InputCoordinatesNeedMirror, legMinConfidence, out var to))
                         ApplyDirection(chain.bone, to - from, upperBody.Forward);
-                    else if (!holdOccludedCoordinates)
+                    else
                         ReturnBoneToRest(chain.bone);
             if (enableHead) ApplyHead(pose);
             ApplyFaceExpressions(pose);
@@ -495,10 +498,10 @@ namespace RealtimeBodyTracking
                 avatarHipOrigin = targetAnimator.transform.position;
         }
 
-        public void ToggleOccludedCoordinateHold()
+        public void ToggleWaistCoordinateLock()
         {
-            holdOccludedCoordinates = !holdOccludedCoordinates;
-            if (holdOccludedCoordinates)
+            waistCoordinatesLocked = !waistCoordinatesLocked;
+            if (waistCoordinatesLocked)
             {
                 if (hasLastUpperBody)
                 {

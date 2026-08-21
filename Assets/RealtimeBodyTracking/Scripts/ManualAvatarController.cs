@@ -46,7 +46,7 @@ namespace RealtimeBodyTracking
         private void Update()
         {
             if (animator == null) return;
-            HandleOccludedCoordinateToggle();
+            HandleWaistCoordinateToggle();
             HandlePlacementToggle();
             HandleMovement();
             HandleMotions();
@@ -54,10 +54,10 @@ namespace RealtimeBodyTracking
             SynchronizeManualOverride();
         }
 
-        private void HandleOccludedCoordinateToggle()
+        private void HandleWaistCoordinateToggle()
         {
             if (!ControlHeld() || !Input.GetKeyDown(KeyCode.KeypadDivide)) return;
-            poseDriver?.ToggleOccludedCoordinateHold();
+            poseDriver?.ToggleWaistCoordinateLock();
         }
 
         private void LateUpdate()
