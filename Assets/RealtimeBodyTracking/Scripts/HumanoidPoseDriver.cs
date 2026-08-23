@@ -109,11 +109,6 @@ namespace RealtimeBodyTracking
         [SerializeField] private bool enableAnatomyLimits = true;
         [SerializeField, Min(0f)] private float trackingTimeout = .5f;
         [SerializeField] private bool returnToRestPose = true;
-        [Header("Tracking Exit")]
-        [SerializeField] private bool continueAvatarOffscreenWhenTrackingLost = true;
-        [SerializeField, Min(0f)] private float trackingExitHoldTime = .12f;
-        [SerializeField, Min(0f)] private float minimumTrackingExitViewportSpeed = .65f;
-        [SerializeField, Min(0f)] private float maximumTrackingExitSeconds = 2.5f;
         [Header("Debug")]
         [SerializeField] private bool debugLogging;
         [SerializeField, Tooltip("Live state")] private bool tracking;
@@ -163,16 +158,9 @@ namespace RealtimeBodyTracking
         private Vector3 heldHipCenter;
         private bool heldHipCenterInitialized;
         private float lastTrackingTime = float.NegativeInfinity;
-        private Vector2 trackedViewportVelocity;
-        private Vector2 previousTrackedViewport;
-        private float previousTrackedViewportTime = float.NegativeInfinity;
-        private Vector2 trackingExitViewportVelocity;
-        private float trackingExitStarted = float.NegativeInfinity;
-        private bool trackingExitActive;
         private float lastReliableFaceTime = float.NegativeInfinity;
         private float nextDebugLog;
         private bool receivedNewPoseFrame;
-        private bool receivedTrackedPoseFrame;
         private float filteredSourceFaceWidth;
         private float filteredSourceShoulderFramingWidth;
         private bool shoulderZoomInitialized;
@@ -347,7 +335,6 @@ namespace RealtimeBodyTracking
         private void LateUpdate()
         {
             receivedNewPoseFrame = false;
-            receivedTrackedPoseFrame = false;
             if (udpReceiver != null && udpReceiver.TryTakeLatest(out var packet))
             {
                 receivedNewPoseFrame = true;
@@ -356,7 +343,6 @@ namespace RealtimeBodyTracking
                 latestFrame = packet.frame;
                 if (packet.tracking || packet.points?.Count > 0)
                 {
-                    receivedTrackedPoseFrame = true;
                     lastTrackedPose = packet;
                     lastTrackingTime = Time.unscaledTime;
                     tracking = true;
@@ -378,8 +364,6 @@ namespace RealtimeBodyTracking
                     ApplyPose(lastTrackedPose);
                 }
             }
-
-            UpdateTrackingExit();
 
             if (debugLogging && Time.unscaledTime >= nextDebugLog)
             {
@@ -2453,7 +2437,6 @@ namespace RealtimeBodyTracking
             var sourceViewport = SourceImageToViewport(
                 new Vector2(stableScreenCenter.x, -stableScreenCenter.y),
                 pose.source_width, pose.source_height);
-            UpdateTrackedViewportVelocity(sourceViewport);
             var lockedPlacement = manualController != null && manualController.PlacementLocked;
             var leftAnchor = targetAnimator.GetBoneTransform(
                 shoulderMode == 2 ? HumanBodyBones.LeftEye : HumanBodyBones.LeftUpperArm);
@@ -2498,71 +2481,6 @@ namespace RealtimeBodyTracking
             var t = 1f - Mathf.Exp(-positionFollowSpeed * Time.deltaTime);
             var maxStep = maxHipsSpeed > 0f ? maxHipsSpeed * Time.deltaTime : float.PositiveInfinity;
             root.position = Vector3.MoveTowards(root.position, Vector3.Lerp(root.position, target, t), maxStep);
-        }
-
-        private void UpdateTrackedViewportVelocity(Vector2 viewport)
-        {
-            if (!receivedTrackedPoseFrame) return;
-            var now = Time.unscaledTime;
-            if (trackingExitActive)
-            {
-                previousTrackedViewport = viewport;
-                previousTrackedViewportTime = now;
-                trackedViewportVelocity = Vector2.zero;
-                trackingExitActive = false;
-                return;
-            }
-            if (previousTrackedViewportTime > float.NegativeInfinity)
-            {
-                var deltaTime = now - previousTrackedViewportTime;
-                if (deltaTime > .001f && deltaTime < .5f)
-                {
-                    var measured = (viewport - previousTrackedViewport) / deltaTime;
-                    var blend = 1f - Mathf.Exp(-10f * deltaTime);
-                    trackedViewportVelocity = Vector2.Lerp(trackedViewportVelocity, measured, blend);
-                }
-            }
-            previousTrackedViewport = viewport;
-            previousTrackedViewportTime = now;
-        }
-
-        private void UpdateTrackingExit()
-        {
-            if (!continueAvatarOffscreenWhenTrackingLost || targetAnimator == null || trackingCamera == null) return;
-            var lostTime = Time.unscaledTime - lastTrackingTime;
-            if (lostTime <= trackingExitHoldTime)
-            {
-                trackingExitActive = false;
-                return;
-            }
-
-            if (!trackingExitActive)
-            {
-                var speed = trackedViewportVelocity.magnitude;
-                // A stationary person disappearing is probably a brief detection failure.
-                // Only continue an actual movement that was already heading off camera.
-                if (speed < .08f) return;
-                trackingExitViewportVelocity = trackedViewportVelocity.normalized *
-                    Mathf.Max(speed, minimumTrackingExitViewportSpeed);
-                trackingExitStarted = Time.unscaledTime;
-                trackingExitActive = true;
-            }
-            if (Time.unscaledTime - trackingExitStarted > maximumTrackingExitSeconds) return;
-
-            var left = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var right = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-            if (left == null || right == null) return;
-            var anchor = (left.position + right.position) * .5f;
-            var viewport = trackingCamera.WorldToViewportPoint(anchor);
-            if (viewport.z <= .05f || viewport.x < -.75f || viewport.x > 1.75f ||
-                viewport.y < -.75f || viewport.y > 1.75f) return;
-
-            var nextViewport = new Vector3(
-                viewport.x + trackingExitViewportVelocity.x * Time.unscaledDeltaTime,
-                viewport.y + trackingExitViewportVelocity.y * Time.unscaledDeltaTime,
-                viewport.z);
-            var nextAnchor = trackingCamera.ViewportToWorldPoint(nextViewport);
-            targetAnimator.transform.position += nextAnchor - anchor;
         }
 
         private Vector2 SourceImageToViewport(Vector2 imagePoint, int sourceWidth, int sourceHeight)
