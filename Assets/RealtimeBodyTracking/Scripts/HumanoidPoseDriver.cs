@@ -109,11 +109,6 @@ namespace RealtimeBodyTracking
         [SerializeField] private bool enableAnatomyLimits = true;
         [SerializeField, Min(0f)] private float trackingTimeout = .5f;
         [SerializeField] private bool returnToRestPose = true;
-        [Header("Avatar Visibility")]
-        [SerializeField] private bool fadeAvatarWhenTrackingLost = true;
-        [SerializeField, Min(0f)] private float avatarLostHoldTime = .15f;
-        [SerializeField, Min(0f)] private float avatarFadeOutSeconds = .35f;
-        [SerializeField, Min(0f)] private float avatarFadeInSeconds = .2f;
         [Header("Debug")]
         [SerializeField] private bool debugLogging;
         [SerializeField, Tooltip("Live state")] private bool tracking;
@@ -157,7 +152,6 @@ namespace RealtimeBodyTracking
         private readonly BoneRotationSolver solver = new();
         private readonly AvatarCollisionGeometry collisionGeometry = new();
         private readonly PoseSmoother smoother = new();
-        private readonly AvatarVisibilityFader visibilityFader = new();
         private PosePacket lastTrackedPose;
         private UpperBodyPose lastUpperBody;
         private bool hasLastUpperBody;
@@ -318,7 +312,6 @@ namespace RealtimeBodyTracking
                 manualController = targetAnimator.gameObject.AddComponent<ManualAvatarController>();
             manualController.Initialize(targetAnimator, this);
             collisionGeometry.Initialize(targetAnimator);
-            visibilityFader.Initialize(targetAnimator);
             CacheRestHandBasis(true);
             CacheRestHandBasis(false);
             if (debugLogging) Debug.Log($"Avatar collision geometry measured: {collisionGeometry.DebugSummary}", this);
@@ -370,12 +363,6 @@ namespace RealtimeBodyTracking
                 {
                     ApplyPose(lastTrackedPose);
                 }
-            }
-
-            if (fadeAvatarWhenTrackingLost)
-            {
-                var avatarVisible = Time.unscaledTime - lastTrackingTime <= avatarLostHoldTime;
-                visibilityFader.Update(avatarVisible, avatarFadeInSeconds, avatarFadeOutSeconds, Time.unscaledDeltaTime);
             }
 
             if (debugLogging && Time.unscaledTime >= nextDebugLog)
@@ -509,11 +496,6 @@ namespace RealtimeBodyTracking
             cameraDistanceVelocity = 0f;
             if (targetAnimator != null)
                 avatarHipOrigin = targetAnimator.transform.position;
-        }
-
-        private void OnDestroy()
-        {
-            visibilityFader.Dispose();
         }
 
         public void ToggleWaistCoordinateLock()
