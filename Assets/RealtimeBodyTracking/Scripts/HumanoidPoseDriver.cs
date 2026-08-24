@@ -115,6 +115,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, .2f)] private float horizontalExitMargin = .02f;
         [SerializeField, Range(.5f, 1f)] private float horizontalExitEdgeThreshold = .82f;
         [SerializeField, Min(0f)] private float horizontalExitMinimumSpeed = .12f;
+        [SerializeField, Min(.1f)] private float horizontalExitViewportSpeed = 2.5f;
         [Header("Debug")]
         [SerializeField] private bool debugLogging;
         [SerializeField, Tooltip("Live state")] private bool tracking;
@@ -172,6 +173,9 @@ namespace RealtimeBodyTracking
         private float previousFramingViewportTime = float.NegativeInfinity;
         private float horizontalFramingVelocity;
         private int pendingHorizontalExitDirection;
+        private int horizontalExitDirection;
+        private bool horizontalExitInProgress;
+        private bool horizontalExitCompleted;
         private float filteredSourceFaceWidth;
         private float filteredSourceShoulderFramingWidth;
         private bool shoulderZoomInitialized;
@@ -357,6 +361,8 @@ namespace RealtimeBodyTracking
                 {
                     receivedTrackedPoseFrame = true;
                     pendingHorizontalExitDirection = 0;
+                    horizontalExitInProgress = false;
+                    horizontalExitCompleted = false;
                     lastTrackedPose = packet;
                     lastTrackingTime = Time.unscaledTime;
                     tracking = true;
@@ -373,7 +379,7 @@ namespace RealtimeBodyTracking
                     }
                     if (returnToRestPose) ReturnToRest();
                 }
-                else
+                else if (!horizontalExitInProgress && !horizontalExitCompleted)
                 {
                     ApplyPose(lastTrackedPose);
                 }
@@ -2513,25 +2519,38 @@ namespace RealtimeBodyTracking
         private void CompleteHorizontalExitIfNeeded()
         {
             if (!finishHorizontalExitOnTrackingLost || targetAnimator == null || trackingCamera == null ||
-                pendingHorizontalExitDirection == 0 ||
-                Time.unscaledTime - lastTrackingTime <= horizontalExitLostDelay ||
+                horizontalExitCompleted ||
                 !TryGetAvatarHorizontalViewportBounds(out var minimumX, out var maximumX, out var depth))
                 return;
 
-            var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-            if (leftShoulder == null || rightShoulder == null) return;
-            var shoulderViewport = trackingCamera.WorldToViewportPoint((leftShoulder.position + rightShoulder.position) * .5f);
+            if (!horizontalExitInProgress)
+            {
+                if (pendingHorizontalExitDirection == 0 ||
+                    Time.unscaledTime - lastTrackingTime <= horizontalExitLostDelay) return;
+                var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                if (leftShoulder == null || rightShoulder == null) return;
+                var shoulderViewport = trackingCamera.WorldToViewportPoint((leftShoulder.position + rightShoulder.position) * .5f);
+                var crossesExpectedEdge = pendingHorizontalExitDirection > 0
+                    ? shoulderViewport.x >= horizontalExitEdgeThreshold && minimumX < 1f && maximumX > 1f
+                    : shoulderViewport.x <= 1f - horizontalExitEdgeThreshold && minimumX < 0f && maximumX > 0f;
+                if (!crossesExpectedEdge) return;
+                horizontalExitDirection = pendingHorizontalExitDirection;
+                horizontalExitInProgress = true;
+            }
 
-            float viewportShift;
-            if (pendingHorizontalExitDirection > 0 && shoulderViewport.x >= horizontalExitEdgeThreshold &&
-                minimumX < 1f && maximumX > 1f)
-                viewportShift = 1f + horizontalExitMargin - minimumX;
-            else if (pendingHorizontalExitDirection < 0 && shoulderViewport.x <= 1f - horizontalExitEdgeThreshold &&
-                     minimumX < 0f && maximumX > 0f)
-                viewportShift = -horizontalExitMargin - maximumX;
-            else
+            var remainingShift = horizontalExitDirection > 0
+                ? 1f + horizontalExitMargin - minimumX
+                : -horizontalExitMargin - maximumX;
+            if ((horizontalExitDirection > 0 && remainingShift <= 0f) ||
+                (horizontalExitDirection < 0 && remainingShift >= 0f))
+            {
+                horizontalExitInProgress = false;
+                horizontalExitCompleted = true;
                 return;
+            }
+            var maximumStep = horizontalExitViewportSpeed * Time.unscaledDeltaTime;
+            var viewportShift = Mathf.Sign(remainingShift) * Mathf.Min(Mathf.Abs(remainingShift), maximumStep);
 
             var center = trackingCamera.WorldToViewportPoint(targetAnimator.transform.position);
             center.z = depth;
