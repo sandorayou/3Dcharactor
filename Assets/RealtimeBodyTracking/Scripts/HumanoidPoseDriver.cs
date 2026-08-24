@@ -109,6 +109,10 @@ namespace RealtimeBodyTracking
         [SerializeField] private bool enableAnatomyLimits = true;
         [SerializeField, Min(0f)] private float trackingTimeout = .5f;
         [SerializeField] private bool returnToRestPose = true;
+        [Header("Frame Exit")]
+        [SerializeField] private bool finishHorizontalExitOnTrackingLost = true;
+        [SerializeField, Min(0f)] private float horizontalExitLostDelay = .08f;
+        [SerializeField, Range(0f, .2f)] private float horizontalExitMargin = .02f;
         [Header("Debug")]
         [SerializeField] private bool debugLogging;
         [SerializeField, Tooltip("Live state")] private bool tracking;
@@ -364,6 +368,8 @@ namespace RealtimeBodyTracking
                     ApplyPose(lastTrackedPose);
                 }
             }
+
+            CompleteHorizontalExitIfNeeded();
 
             if (debugLogging && Time.unscaledTime >= nextDebugLog)
             {
@@ -2491,6 +2497,55 @@ namespace RealtimeBodyTracking
             var x = 1f - imagePoint.x;
             var y = 1f - imagePoint.y;
             return new Vector2(x, y);
+        }
+
+        private void CompleteHorizontalExitIfNeeded()
+        {
+            if (!finishHorizontalExitOnTrackingLost || targetAnimator == null || trackingCamera == null ||
+                Time.unscaledTime - lastTrackingTime <= horizontalExitLostDelay ||
+                !TryGetAvatarHorizontalViewportBounds(out var minimumX, out var maximumX, out var depth))
+                return;
+
+            float viewportShift;
+            if (maximumX > 1f && minimumX < 1f)
+                viewportShift = 1f + horizontalExitMargin - minimumX;
+            else if (minimumX < 0f && maximumX > 0f)
+                viewportShift = -horizontalExitMargin - maximumX;
+            else
+                return;
+
+            var center = trackingCamera.WorldToViewportPoint(targetAnimator.transform.position);
+            center.z = depth;
+            var shifted = center;
+            shifted.x += viewportShift;
+            targetAnimator.transform.position +=
+                trackingCamera.ViewportToWorldPoint(shifted) - trackingCamera.ViewportToWorldPoint(center);
+        }
+
+        private bool TryGetAvatarHorizontalViewportBounds(out float minimumX, out float maximumX, out float depth)
+        {
+            minimumX = float.PositiveInfinity;
+            maximumX = float.NegativeInfinity;
+            depth = 0f;
+            var found = false;
+            foreach (var renderer in targetAnimator.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!renderer.enabled) continue;
+                var bounds = renderer.bounds;
+                for (var x = -1; x <= 1; x += 2)
+                for (var y = -1; y <= 1; y += 2)
+                for (var z = -1; z <= 1; z += 2)
+                {
+                    var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
+                    var viewport = trackingCamera.WorldToViewportPoint(corner);
+                    if (viewport.z <= 0f) continue;
+                    minimumX = Mathf.Min(minimumX, viewport.x);
+                    maximumX = Mathf.Max(maximumX, viewport.x);
+                    depth = Mathf.Max(depth, viewport.z);
+                    found = true;
+                }
+            }
+            return found;
         }
 
         private bool TryReadSourceFace(PosePacket pose, out Vector2 faceCenter, out float faceWidth)
