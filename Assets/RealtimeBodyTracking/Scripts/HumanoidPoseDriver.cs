@@ -116,6 +116,10 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.5f, 1f)] private float horizontalExitEdgeThreshold = .82f;
         [SerializeField, Min(0f)] private float horizontalExitMinimumSpeed = .12f;
         [SerializeField, Min(.1f)] private float horizontalExitViewportSpeed = 2.5f;
+        [SerializeField] private bool finishBottomExitOnTrackingLost = true;
+        [SerializeField, Range(0f, .5f)] private float bottomExitEdgeThreshold = .18f;
+        [SerializeField, Min(0f)] private float bottomExitMinimumSpeed = .12f;
+        [SerializeField, Min(.1f)] private float bottomExitViewportSpeed = 2.5f;
         [Header("Debug")]
         [SerializeField] private bool debugLogging;
         [SerializeField, Tooltip("Live state")] private bool tracking;
@@ -172,10 +176,14 @@ namespace RealtimeBodyTracking
         private Vector2 previousFramingViewport;
         private float previousFramingViewportTime = float.NegativeInfinity;
         private float horizontalFramingVelocity;
+        private float verticalFramingVelocity;
         private int pendingHorizontalExitDirection;
         private int horizontalExitDirection;
         private bool horizontalExitInProgress;
         private bool horizontalExitCompleted;
+        private bool pendingBottomExit;
+        private bool bottomExitInProgress;
+        private bool bottomExitCompleted;
         private float filteredSourceFaceWidth;
         private float filteredSourceShoulderFramingWidth;
         private bool shoulderZoomInitialized;
@@ -363,6 +371,9 @@ namespace RealtimeBodyTracking
                     pendingHorizontalExitDirection = 0;
                     horizontalExitInProgress = false;
                     horizontalExitCompleted = false;
+                    pendingBottomExit = false;
+                    bottomExitInProgress = false;
+                    bottomExitCompleted = false;
                     lastTrackedPose = packet;
                     lastTrackingTime = Time.unscaledTime;
                     tracking = true;
@@ -379,13 +390,15 @@ namespace RealtimeBodyTracking
                     }
                     if (returnToRestPose) ReturnToRest();
                 }
-                else if (!horizontalExitInProgress && !horizontalExitCompleted)
+                else if (!horizontalExitInProgress && !horizontalExitCompleted &&
+                         !bottomExitInProgress && !bottomExitCompleted)
                 {
                     ApplyPose(lastTrackedPose);
                 }
             }
 
             CompleteHorizontalExitIfNeeded();
+            CompleteBottomExitIfNeeded();
 
             if (debugLogging && Time.unscaledTime >= nextDebugLog)
             {
@@ -2519,8 +2532,8 @@ namespace RealtimeBodyTracking
         private void CompleteHorizontalExitIfNeeded()
         {
             if (!finishHorizontalExitOnTrackingLost || targetAnimator == null || trackingCamera == null ||
-                horizontalExitCompleted ||
-                !TryGetAvatarHorizontalViewportBounds(out var minimumX, out var maximumX, out var depth))
+                horizontalExitCompleted || bottomExitInProgress || bottomExitCompleted ||
+                !TryGetAvatarViewportBounds(out var minimumX, out var maximumX, out _, out _, out var depth))
                 return;
 
             if (!horizontalExitInProgress)
@@ -2560,6 +2573,48 @@ namespace RealtimeBodyTracking
                 trackingCamera.ViewportToWorldPoint(shifted) - trackingCamera.ViewportToWorldPoint(center);
         }
 
+        private void CompleteBottomExitIfNeeded()
+        {
+            if (!finishBottomExitOnTrackingLost || targetAnimator == null || trackingCamera == null ||
+                bottomExitCompleted || horizontalExitInProgress || horizontalExitCompleted ||
+                !TryGetAvatarViewportBounds(out _, out _, out var minimumY, out var maximumY, out var depth))
+                return;
+
+            if (!bottomExitInProgress)
+            {
+                if (!pendingBottomExit || Time.unscaledTime - lastTrackingTime <= horizontalExitLostDelay) return;
+                var leftEye = targetAnimator.GetBoneTransform(HumanBodyBones.LeftEye);
+                var rightEye = targetAnimator.GetBoneTransform(HumanBodyBones.RightEye);
+                var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                Vector3 anchor;
+                if (leftEye != null && rightEye != null)
+                    anchor = (leftEye.position + rightEye.position) * .5f;
+                else if (leftShoulder != null && rightShoulder != null)
+                    anchor = (leftShoulder.position + rightShoulder.position) * .5f;
+                else
+                    return;
+                var anchorViewport = trackingCamera.WorldToViewportPoint(anchor);
+                if (anchorViewport.y > bottomExitEdgeThreshold || minimumY >= 0f || maximumY <= 0f) return;
+                bottomExitInProgress = true;
+            }
+
+            var remainingShift = -horizontalExitMargin - maximumY;
+            if (remainingShift >= 0f)
+            {
+                bottomExitInProgress = false;
+                bottomExitCompleted = true;
+                return;
+            }
+            var viewportShift = -Mathf.Min(Mathf.Abs(remainingShift), bottomExitViewportSpeed * Time.unscaledDeltaTime);
+            var center = trackingCamera.WorldToViewportPoint(targetAnimator.transform.position);
+            center.z = depth;
+            var shifted = center;
+            shifted.y += viewportShift;
+            targetAnimator.transform.position +=
+                trackingCamera.ViewportToWorldPoint(shifted) - trackingCamera.ViewportToWorldPoint(center);
+        }
+
         private void UpdateHorizontalExitEvidence(Vector2 viewport)
         {
             if (!receivedTrackedPoseFrame) return;
@@ -2570,12 +2625,15 @@ namespace RealtimeBodyTracking
                 if (deltaTime > .001f && deltaTime < .5f)
                 {
                     var measuredVelocity = (viewport.x - previousFramingViewport.x) / deltaTime;
+                    var measuredVerticalVelocity = (viewport.y - previousFramingViewport.y) / deltaTime;
                     var blend = 1f - Mathf.Exp(-12f * deltaTime);
                     horizontalFramingVelocity = Mathf.Lerp(horizontalFramingVelocity, measuredVelocity, blend);
+                    verticalFramingVelocity = Mathf.Lerp(verticalFramingVelocity, measuredVerticalVelocity, blend);
                 }
                 else if (deltaTime >= .5f)
                 {
                     horizontalFramingVelocity = 0f;
+                    verticalFramingVelocity = 0f;
                 }
             }
             previousFramingViewport = viewport;
@@ -2584,12 +2642,16 @@ namespace RealtimeBodyTracking
             pendingHorizontalExitDirection =
                 viewport.x >= horizontalExitEdgeThreshold && horizontalFramingVelocity >= horizontalExitMinimumSpeed ? 1 :
                 viewport.x <= 1f - horizontalExitEdgeThreshold && horizontalFramingVelocity <= -horizontalExitMinimumSpeed ? -1 : 0;
+            pendingBottomExit = viewport.y <= bottomExitEdgeThreshold && verticalFramingVelocity <= -bottomExitMinimumSpeed;
         }
 
-        private bool TryGetAvatarHorizontalViewportBounds(out float minimumX, out float maximumX, out float depth)
+        private bool TryGetAvatarViewportBounds(
+            out float minimumX, out float maximumX, out float minimumY, out float maximumY, out float depth)
         {
             minimumX = float.PositiveInfinity;
             maximumX = float.NegativeInfinity;
+            minimumY = float.PositiveInfinity;
+            maximumY = float.NegativeInfinity;
             depth = 0f;
             var found = false;
             foreach (var renderer in targetAnimator.GetComponentsInChildren<Renderer>(true))
@@ -2605,6 +2667,8 @@ namespace RealtimeBodyTracking
                     if (viewport.z <= 0f) continue;
                     minimumX = Mathf.Min(minimumX, viewport.x);
                     maximumX = Mathf.Max(maximumX, viewport.x);
+                    minimumY = Mathf.Min(minimumY, viewport.y);
+                    maximumY = Mathf.Max(maximumY, viewport.y);
                     depth = Mathf.Max(depth, viewport.z);
                     found = true;
                 }
