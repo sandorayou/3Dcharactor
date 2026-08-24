@@ -113,6 +113,8 @@ namespace RealtimeBodyTracking
         [SerializeField] private bool finishHorizontalExitOnTrackingLost = true;
         [SerializeField, Min(0f)] private float horizontalExitLostDelay = .08f;
         [SerializeField, Range(0f, .2f)] private float horizontalExitMargin = .02f;
+        [SerializeField, Range(.5f, 1f)] private float horizontalExitEdgeThreshold = .82f;
+        [SerializeField, Min(0f)] private float horizontalExitMinimumSpeed = .12f;
         [Header("Debug")]
         [SerializeField] private bool debugLogging;
         [SerializeField, Tooltip("Live state")] private bool tracking;
@@ -165,6 +167,11 @@ namespace RealtimeBodyTracking
         private float lastReliableFaceTime = float.NegativeInfinity;
         private float nextDebugLog;
         private bool receivedNewPoseFrame;
+        private bool receivedTrackedPoseFrame;
+        private Vector2 previousFramingViewport;
+        private float previousFramingViewportTime = float.NegativeInfinity;
+        private float horizontalFramingVelocity;
+        private int pendingHorizontalExitDirection;
         private float filteredSourceFaceWidth;
         private float filteredSourceShoulderFramingWidth;
         private bool shoulderZoomInitialized;
@@ -339,6 +346,7 @@ namespace RealtimeBodyTracking
         private void LateUpdate()
         {
             receivedNewPoseFrame = false;
+            receivedTrackedPoseFrame = false;
             if (udpReceiver != null && udpReceiver.TryTakeLatest(out var packet))
             {
                 receivedNewPoseFrame = true;
@@ -347,6 +355,8 @@ namespace RealtimeBodyTracking
                 latestFrame = packet.frame;
                 if (packet.tracking || packet.points?.Count > 0)
                 {
+                    receivedTrackedPoseFrame = true;
+                    pendingHorizontalExitDirection = 0;
                     lastTrackedPose = packet;
                     lastTrackingTime = Time.unscaledTime;
                     tracking = true;
@@ -2443,6 +2453,7 @@ namespace RealtimeBodyTracking
             var sourceViewport = SourceImageToViewport(
                 new Vector2(stableScreenCenter.x, -stableScreenCenter.y),
                 pose.source_width, pose.source_height);
+            UpdateHorizontalExitEvidence(sourceViewport);
             var lockedPlacement = manualController != null && manualController.PlacementLocked;
             var leftAnchor = targetAnimator.GetBoneTransform(
                 shoulderMode == 2 ? HumanBodyBones.LeftEye : HumanBodyBones.LeftUpperArm);
@@ -2502,14 +2513,22 @@ namespace RealtimeBodyTracking
         private void CompleteHorizontalExitIfNeeded()
         {
             if (!finishHorizontalExitOnTrackingLost || targetAnimator == null || trackingCamera == null ||
+                pendingHorizontalExitDirection == 0 ||
                 Time.unscaledTime - lastTrackingTime <= horizontalExitLostDelay ||
                 !TryGetAvatarHorizontalViewportBounds(out var minimumX, out var maximumX, out var depth))
                 return;
 
+            var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            if (leftShoulder == null || rightShoulder == null) return;
+            var shoulderViewport = trackingCamera.WorldToViewportPoint((leftShoulder.position + rightShoulder.position) * .5f);
+
             float viewportShift;
-            if (maximumX > 1f && minimumX < 1f)
+            if (pendingHorizontalExitDirection > 0 && shoulderViewport.x >= horizontalExitEdgeThreshold &&
+                minimumX < 1f && maximumX > 1f)
                 viewportShift = 1f + horizontalExitMargin - minimumX;
-            else if (minimumX < 0f && maximumX > 0f)
+            else if (pendingHorizontalExitDirection < 0 && shoulderViewport.x <= 1f - horizontalExitEdgeThreshold &&
+                     minimumX < 0f && maximumX > 0f)
                 viewportShift = -horizontalExitMargin - maximumX;
             else
                 return;
@@ -2520,6 +2539,32 @@ namespace RealtimeBodyTracking
             shifted.x += viewportShift;
             targetAnimator.transform.position +=
                 trackingCamera.ViewportToWorldPoint(shifted) - trackingCamera.ViewportToWorldPoint(center);
+        }
+
+        private void UpdateHorizontalExitEvidence(Vector2 viewport)
+        {
+            if (!receivedTrackedPoseFrame) return;
+            var now = Time.unscaledTime;
+            if (previousFramingViewportTime > float.NegativeInfinity)
+            {
+                var deltaTime = now - previousFramingViewportTime;
+                if (deltaTime > .001f && deltaTime < .5f)
+                {
+                    var measuredVelocity = (viewport.x - previousFramingViewport.x) / deltaTime;
+                    var blend = 1f - Mathf.Exp(-12f * deltaTime);
+                    horizontalFramingVelocity = Mathf.Lerp(horizontalFramingVelocity, measuredVelocity, blend);
+                }
+                else if (deltaTime >= .5f)
+                {
+                    horizontalFramingVelocity = 0f;
+                }
+            }
+            previousFramingViewport = viewport;
+            previousFramingViewportTime = now;
+
+            pendingHorizontalExitDirection =
+                viewport.x >= horizontalExitEdgeThreshold && horizontalFramingVelocity >= horizontalExitMinimumSpeed ? 1 :
+                viewport.x <= 1f - horizontalExitEdgeThreshold && horizontalFramingVelocity <= -horizontalExitMinimumSpeed ? -1 : 0;
         }
 
         private bool TryGetAvatarHorizontalViewportBounds(out float minimumX, out float maximumX, out float depth)
