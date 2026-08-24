@@ -120,6 +120,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, .5f)] private float bottomExitEdgeThreshold = .18f;
         [SerializeField, Min(0f)] private float bottomExitMinimumSpeed = .12f;
         [SerializeField, Min(.1f)] private float bottomExitViewportSpeed = 2.5f;
+        [SerializeField, Min(0f)] private float bottomFallbackLostDelay = .3f;
         [Header("Debug")]
         [SerializeField] private bool debugLogging;
         [SerializeField, Tooltip("Live state")] private bool tracking;
@@ -2582,20 +2583,13 @@ namespace RealtimeBodyTracking
 
             if (!bottomExitInProgress)
             {
-                if (!pendingBottomExit || Time.unscaledTime - lastTrackingTime <= horizontalExitLostDelay) return;
-                var leftEye = targetAnimator.GetBoneTransform(HumanBodyBones.LeftEye);
-                var rightEye = targetAnimator.GetBoneTransform(HumanBodyBones.RightEye);
-                var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-                var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-                Vector3 anchor;
-                if (leftEye != null && rightEye != null)
-                    anchor = (leftEye.position + rightEye.position) * .5f;
-                else if (leftShoulder != null && rightShoulder != null)
-                    anchor = (leftShoulder.position + rightShoulder.position) * .5f;
-                else
-                    return;
-                var anchorViewport = trackingCamera.WorldToViewportPoint(anchor);
-                if (anchorViewport.y > bottomExitEdgeThreshold || minimumY >= 0f || maximumY <= 0f) return;
+                var fallbackToBottom = pendingHorizontalExitDirection == 0;
+                if (!pendingBottomExit && !fallbackToBottom) return;
+                var requiredDelay = pendingBottomExit ? horizontalExitLostDelay : bottomFallbackLostDelay;
+                if (Time.unscaledTime - lastTrackingTime <= requiredDelay) return;
+                // With no left/right exit evidence, losing every landmark means the
+                // avatar leaves through the bottom. Start from any still-visible pose.
+                if (maximumY <= 0f || minimumY >= 1f) return;
                 bottomExitInProgress = true;
             }
 
