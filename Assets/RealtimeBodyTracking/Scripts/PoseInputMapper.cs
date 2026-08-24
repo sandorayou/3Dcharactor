@@ -149,12 +149,14 @@ namespace RealtimeBodyTracking
 
         public static bool TryReadScreenBody(PosePacket pose, bool mirror, float minConfidence, out ScreenBodyPose body)
         {
-            var hasLeft = TryGetVisibleImage(pose, "left_shoulder", minConfidence, out var leftShoulder);
-            var hasRight = TryGetVisibleImage(pose, "right_shoulder", minConfidence, out var rightShoulder);
+            // Keep following landmarks a little beyond the frame. MediaPipe still
+            // returns useful shoulder positions while a person walks out of shot.
+            var hasLeft = TryGetFramingImage(pose, "left_shoulder", minConfidence, out var leftShoulder);
+            var hasRight = TryGetFramingImage(pose, "right_shoulder", minConfidence, out var rightShoulder);
             if (!hasLeft && !hasRight)
             {
-                if (!TryGetVisibleImage(pose, "left_eye", minConfidence, out var leftEye) ||
-                    !TryGetVisibleImage(pose, "right_eye", minConfidence, out var rightEye))
+                if (!TryGetFramingImage(pose, "left_eye", minConfidence, out var leftEye) ||
+                    !TryGetFramingImage(pose, "right_eye", minConfidence, out var rightEye))
                 {
                     body = default;
                     return false;
@@ -191,15 +193,15 @@ namespace RealtimeBodyTracking
                 return true;
             }
 
-            if (!TryGetVisibleImage(pose, "nose", minConfidence, out var nose)) { body = default; return false; }
+            if (!TryGetFramingImage(pose, "nose", minConfidence, out var nose)) { body = default; return false; }
             nose = MapImagePoint(nose, mirror);
             var shoulder = hasLeft ? leftShoulder : rightShoulder;
             var single = new Vector2(shoulder.x, shoulder.y);
             var estimatedWidth = 0f;
             var estimatedCenter = single;
             var faceAnchor = nose;
-            if (TryGetVisibleImage(pose, "left_ear", minConfidence, out var leftEar) &&
-                TryGetVisibleImage(pose, "right_ear", minConfidence, out var rightEar))
+            if (TryGetFramingImage(pose, "left_ear", minConfidence, out var leftEar) &&
+                TryGetFramingImage(pose, "right_ear", minConfidence, out var rightEar))
             {
                 leftEar = MapImagePoint(leftEar, mirror);
                 rightEar = MapImagePoint(rightEar, mirror);
@@ -216,6 +218,12 @@ namespace RealtimeBodyTracking
             var leanSignal = Mathf.Atan2(faceOffset.x, Mathf.Max(Mathf.Abs(faceOffset.y), .001f)) * Mathf.Rad2Deg;
             body = new ScreenBodyPose(single, estimatedCenter, estimatedWidth, leanSignal, hasLeft ? -1 : 1, 0f);
             return true;
+        }
+
+        private static bool TryGetFramingImage(PosePacket pose, string name, float minConfidence, out Vector3 image)
+        {
+            if (!pose.TryGetImage(name, minConfidence, out image)) return false;
+            return image.x >= -.35f && image.x <= 1.35f && image.y >= -.25f && image.y <= 1.35f;
         }
 
         private static Vector2 EstimateHipAnchor(PosePacket pose, bool mirror, float minConfidence, Vector3 shoulderCenter, Vector3 lateral, float shoulderWidth)

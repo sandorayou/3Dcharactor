@@ -342,22 +342,22 @@ MonoBehaviour:
   rotationDeadZoneDegrees: 3
   avatarMirror: 1
   enableHipsPosition: 1
-  hipsPositionScale: 0.25
+  hipsPositionScale: 1
   enableFaceZoom: 1
   faceZoomSmoothTime: 0.18
   minimumFaceCameraDistance: 0.28
   maximumFaceCameraDistance: 8
   faceSizeDeadZoneRatio: 0.025
   bodyDepthFromShoulderWidth: 1.2
-  maxHipsSpeed: 0.8
+  maxHipsSpeed: 3
   screenHorizontalRange: 1.2
   screenVerticalRange: 0.8
   maxDepthOffset: 1.5
-  horizontalPositionDeadZone: 0.02
-  verticalPositionDeadZone: 0.025
+  horizontalPositionDeadZone: 0.005
+  verticalPositionDeadZone: 0.005
   depthPositionDeadZone: 0.06
-  positionMeasurementSmoothing: 6
-  positionFollowSpeed: 6
+  positionMeasurementSmoothing: 14
+  positionFollowSpeed: 14
   positionMinConfidence: 0.6
   bodyLeanDeadZone: 0.5
   maxBodyLean: 40

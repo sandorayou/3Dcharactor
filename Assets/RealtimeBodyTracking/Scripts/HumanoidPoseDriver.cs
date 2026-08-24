@@ -2485,18 +2485,11 @@ namespace RealtimeBodyTracking
 
         private Vector2 SourceImageToViewport(Vector2 imagePoint, int sourceWidth, int sourceHeight)
         {
-            // Match the mirrored camera preview used by arm screen-space mapping.
-            // The pose labels stay anatomical; only the displayed X coordinate flips.
+            // Python already removes the square inference letterbox and reports
+            // coordinates normalized to the original camera image. Map 0..1 directly
+            // to Unity so the camera and game-view edges line up.
             var x = 1f - imagePoint.x;
             var y = 1f - imagePoint.y;
-            if (sourceWidth <= 0 || sourceHeight <= 0) return new Vector2(x, y);
-
-            var sourceAspect = (float)sourceWidth / sourceHeight;
-            var targetAspect = trackingCamera.aspect;
-            if (targetAspect > sourceAspect)
-                x = .5f + (x - .5f) * (sourceAspect / targetAspect);
-            else
-                y = .5f + (y - .5f) * (targetAspect / sourceAspect);
             return new Vector2(x, y);
         }
 
@@ -2527,13 +2520,7 @@ namespace RealtimeBodyTracking
                 !pose.TryGetImage("right_shoulder", .55f, out var right))
                 return false;
 
-            var sourceAspect = pose.source_height > 0
-                ? (float)pose.source_width / pose.source_height
-                : 4f / 3f;
-            var viewportScaleX = trackingCamera.aspect > sourceAspect
-                ? sourceAspect / trackingCamera.aspect
-                : 1f;
-            width = Mathf.Abs(right.x - left.x) * viewportScaleX;
+            width = Mathf.Abs(right.x - left.x);
             return width >= .03f;
         }
 
