@@ -190,6 +190,7 @@ namespace RealtimeBodyTracking
         private float filteredSourceShoulderFramingWidth;
         private bool shoulderZoomInitialized;
         private float cameraDistanceVelocity;
+        private float minimumAutoFramedDistance;
         private bool faceZoomInitialized;
         private Vector2 sourceScreenOrigin;
         private Vector2 filteredScreenCenter;
@@ -2348,6 +2349,7 @@ namespace RealtimeBodyTracking
                                  trackingCamera.transform.up * ((sourceFrameCenter.y - .5f) * 2f * halfHeight);
             var cameraCenter = avatarFrameCenter - viewportOffset;
             trackingCamera.transform.position = cameraCenter - trackingCamera.transform.forward * distance;
+            minimumAutoFramedDistance = distance;
             screenHorizontalRange = halfWidth * 2f;
             screenVerticalRange = halfHeight * 2f;
             cameraFramingReady = true;
@@ -2818,7 +2820,8 @@ namespace RealtimeBodyTracking
                 return;
             }
 
-            float targetDistance = Mathf.Clamp(currentDistance * sizeRatio, minimumFaceCameraDistance, maximumFaceCameraDistance);
+            var minimumDistance = Mathf.Max(minimumFaceCameraDistance, minimumAutoFramedDistance);
+            float targetDistance = Mathf.Clamp(currentDistance * sizeRatio, minimumDistance, maximumFaceCameraDistance);
 
             float smoothDistance = Mathf.SmoothDamp(
                 currentDistance,
