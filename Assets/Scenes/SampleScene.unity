@@ -332,7 +332,7 @@ MonoBehaviour:
   cameraCalibrationSeconds: 0.75
   cameraFramingMargin: 0.12
   cameraMinimumDistance: 0.5
-  avatarViewportVerticalOffset: -0.06
+  avatarViewportVerticalOffset: -0.09
   enableAnimeInternalLines: 0
   animeLineThickness: 1.8
   animeLineThreshold: 0.105
