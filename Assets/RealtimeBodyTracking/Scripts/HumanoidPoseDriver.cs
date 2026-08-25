@@ -18,7 +18,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.2f, 3f)] private float cameraCalibrationSeconds = .75f;
         [SerializeField, Range(0f, .4f)] private float cameraFramingMargin = .12f;
         [SerializeField, Range(.35f, 2f)] private float cameraMinimumDistance = .5f;
-        [SerializeField, Range(-.2f, .2f)] private float avatarViewportVerticalOffset = -.09f;
+        [SerializeField, Range(-.2f, .2f)] private float avatarViewportVerticalOffset = -.06f;
         [Header("Anime Internal Lines")]
         [SerializeField] private bool enableAnimeInternalLines = false;
         [SerializeField, Range(.25f, 2.5f)] private float animeLineThickness = 1f;
@@ -54,6 +54,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Min(0.15f)] private float minimumFaceCameraDistance = 0.28f;
         [SerializeField, Min(1f)] private float maximumFaceCameraDistance = 8f;
         [SerializeField, Range(0f, 0.2f)] private float faceSizeDeadZoneRatio = 0.025f;
+        [SerializeField, Range(.75f, 1.25f)] private float avatarSizeMatchScale = .92f;
         [Header("Body Turn")]
         [SerializeField] private bool enableBodyTurn = true;
         [SerializeField, Min(0f)] private float bodyTurnSpeed = 360f;
@@ -2809,6 +2810,8 @@ namespace RealtimeBodyTracking
                 }
                 sourceWidth = filteredSourceFaceWidth;
             }
+
+            sourceWidth *= avatarSizeMatchScale;
 
             Vector3 cameraPosition = trackingCamera.transform.position;
             Vector3 cameraForward = trackingCamera.transform.forward;
