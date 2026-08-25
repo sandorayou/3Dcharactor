@@ -375,7 +375,6 @@ MonoBehaviour:
   maxWristSpeed: 2.5
   maxElbowSpeed: 3
   handHorizontalGain: 0.75
-  armVerticalGain: 1
   armAcquireFrames: 2
   armPointDeadZoneScale: 0.03
   armPositionSmoothingCutoff: 2
