@@ -344,7 +344,6 @@ MonoBehaviour:
   enableHipsPosition: 1
   hipsPositionScale: 1
   enableFaceZoom: 1
-  enableFaceOnlyZoom: 0
   faceZoomSmoothTime: 0.18
   minimumFaceCameraDistance: 0.28
   maximumFaceCameraDistance: 8

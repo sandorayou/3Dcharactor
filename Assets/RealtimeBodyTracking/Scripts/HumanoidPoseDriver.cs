@@ -49,7 +49,6 @@ namespace RealtimeBodyTracking
         [SerializeField] private bool mirrorShoulderElevation = true;
         [Header("Face Zoom")]
         [SerializeField] private bool enableFaceZoom = true;
-        [SerializeField] private bool enableFaceOnlyZoom;
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
         [SerializeField, Min(0.15f)] private float minimumFaceCameraDistance = 0.28f;
         [SerializeField, Min(1f)] private float maximumFaceCameraDistance = 8f;
@@ -2781,10 +2780,6 @@ namespace RealtimeBodyTracking
             }
             else
             {
-                // A partially visible face is not a reliable scale reference. Keeping
-                // the calibrated camera distance prevents the avatar from becoming a
-                // permanent close-up when shoulders leave the camera frame.
-                if (!enableFaceOnlyZoom) return;
                 if (!TryReadSourceFace(pose, out _, out var rawSourceFaceWidth) ||
                     !TryReadAvatarFace(out _, out avatarWidth, out avatarWorldCenter))
                     return;
