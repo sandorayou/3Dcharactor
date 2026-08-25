@@ -18,6 +18,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.2f, 3f)] private float cameraCalibrationSeconds = .75f;
         [SerializeField, Range(0f, .4f)] private float cameraFramingMargin = .12f;
         [SerializeField, Range(.35f, 2f)] private float cameraMinimumDistance = .5f;
+        [SerializeField, Range(-.2f, .2f)] private float avatarViewportVerticalOffset = -.06f;
         [Header("Anime Internal Lines")]
         [SerializeField] private bool enableAnimeInternalLines = false;
         [SerializeField, Range(.25f, 2.5f)] private float animeLineThickness = 1f;
@@ -2474,6 +2475,7 @@ namespace RealtimeBodyTracking
                 new Vector2(stableScreenCenter.x, -stableScreenCenter.y),
                 pose.source_width, pose.source_height);
             UpdateHorizontalExitEvidence(sourceViewport);
+            sourceViewport.y += avatarViewportVerticalOffset;
             var lockedPlacement = manualController != null && manualController.PlacementLocked;
             var leftAnchor = targetAnimator.GetBoneTransform(
                 shoulderMode == 2 ? HumanBodyBones.LeftEye : HumanBodyBones.LeftUpperArm);
@@ -2498,6 +2500,7 @@ namespace RealtimeBodyTracking
                 var originViewport = SourceImageToViewport(
                     new Vector2(sourceScreenOrigin.x, -sourceScreenOrigin.y),
                     pose.source_width, pose.source_height);
+                originViewport.y += avatarViewportVerticalOffset;
                 var originAnchor = trackingCamera.ViewportToWorldPoint(
                     new Vector3(originViewport.x, originViewport.y, depth));
                 correction = desiredAnchor - originAnchor;
