@@ -13,8 +13,6 @@ namespace RealtimeBodyTracking
     {
         [SerializeField, Tooltip("Enable only when Unity should start the live camera tracker process.")]
         private bool autoLaunchLiveTracker = true;
-        [SerializeField, Tooltip("Show the mirrored camera and tracking landmarks in a separate window.")]
-        private bool showCameraPreviewWindow = true;
         [SerializeField, Tooltip("Live state")] private string launcherState = "waiting";
         [SerializeField, Tooltip("Live state")] private long observedFrame = -1;
         [SerializeField, Tooltip("Live state")] private string lastFailure;
@@ -65,11 +63,10 @@ namespace RealtimeBodyTracking
             var python = ResolvePythonExecutable(applicationRoot);
             try
             {
-                var previewArgument = showCameraPreviewWindow ? string.Empty : " --no-preview";
                 ownedTracker = Process.Start(new ProcessStartInfo
                 {
                     FileName = python,
-                    Arguments = $"\"{appPath}\" --source 0 --host 127.0.0.1 --port {receiver.Port}{previewArgument}",
+                    Arguments = $"\"{appPath}\" --source 0 --host 127.0.0.1 --port {receiver.Port} --no-preview",
                     WorkingDirectory = trackerDirectory,
                     UseShellExecute = false,
                     CreateNoWindow = true,
