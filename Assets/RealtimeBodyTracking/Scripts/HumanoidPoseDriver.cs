@@ -2697,7 +2697,16 @@ namespace RealtimeBodyTracking
                 !pose.TryGetImage("right_shoulder", .55f, out var right))
                 return false;
 
-            width = Mathf.Abs(right.x - left.x);
+            // Keep the size calculation used by tracker-video-avatar-overlay: the
+            // camera image occupies only part of a wider Unity viewport, so compare
+            // shoulder widths in that fitted viewport rather than raw image space.
+            var sourceAspect = pose.source_height > 0
+                ? (float)pose.source_width / pose.source_height
+                : 4f / 3f;
+            var viewportScaleX = trackingCamera.aspect > sourceAspect
+                ? sourceAspect / trackingCamera.aspect
+                : 1f;
+            width = Mathf.Abs(right.x - left.x) * viewportScaleX;
             return width >= .03f;
         }
 
