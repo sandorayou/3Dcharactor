@@ -56,9 +56,11 @@ class FastPersonHider:
         else:
             head_x = (left_ear[0] + right_ear[0]) // 2
             head_y = (left_ear[1] + right_ear[1]) // 2
-        head_radius_x = max(round(ear_span * .62), 10)
-        head_radius_y = max(round(head_radius_x * 1.35), 14)
-        head_center = (head_x, head_y - round(head_radius_y * .28))
+        # Ears are often detected too close together during yaw. Keep the mask
+        # tied to shoulder scale so a turned head cannot escape it.
+        head_radius_x = max(round(ear_span * .68), round(shoulder_width * .38), 12)
+        head_radius_y = max(round(head_radius_x * 1.38), round(shoulder_width * .5), 17)
+        head_center = (head_x, head_y - round(head_radius_y * .32))
         cv2.ellipse(mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
         for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
             for start, end in zip(chain, chain[1:]):
@@ -81,8 +83,14 @@ class FastPersonHider:
         plate_guard = cv2.dilate(mask, np.ones((17, 17), np.uint8), iterations=1)
 
         if self._plate is None or self._plate.shape != small.shape:
-            # Inpaint only once at mask resolution. Later frames are masked copies.
-            self._plate = cv2.inpaint(small, plate_guard, 3, cv2.INPAINT_TELEA)
+            # Reconstruct the initial clean plate at very low resolution. Large
+            # person-shaped holes then collapse into surrounding room colours
+            # instead of retaining facial detail or producing vertical streaks.
+            seed_size = (80, 60)
+            seed = cv2.resize(small, seed_size, interpolation=cv2.INTER_AREA)
+            seed_guard = cv2.resize(plate_guard, seed_size, interpolation=cv2.INTER_NEAREST)
+            seed_plate = cv2.inpaint(seed, seed_guard, 3, cv2.INPAINT_TELEA)
+            self._plate = cv2.resize(seed_plate, self._size, interpolation=cv2.INTER_LINEAR)
         else:
             self._plate[plate_guard == 0] = small[plate_guard == 0]
         # Preserve the original full-resolution camera image everywhere except
