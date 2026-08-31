@@ -23,7 +23,6 @@ PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
 class FastPersonHider:
     """Cheap pose-guided clean plate; no segmentation network or full-size inpaint."""
     def __init__(self) -> None:
-        self._plate = None
         self._size = (320, 240)
         self._last_mask = None
         self._last_safe_frame = None
@@ -104,30 +103,42 @@ class FastPersonHider:
                 self._last_mask, np.ones((5, 5), np.uint8), iterations=1)
             mask = cv2.max(mask, previous_guard)
 
-        # The visible replacement stays tight, but the cached clean plate needs a
-        # wider exclusion zone. Otherwise hair, sleeves, and motion edges just
-        # outside the tight mask get copied into the plate and reappear inside the
-        # next replacement patch.
-        plate_guard = cv2.dilate(mask, np.ones((17, 17), np.uint8), iterations=1)
-
-        if self._plate is None or self._plate.shape != small.shape:
-            # Reconstruct the initial clean plate at very low resolution. Large
-            # person-shaped holes then collapse into surrounding room colours
-            # instead of retaining facial detail or producing vertical streaks.
-            seed_size = (80, 60)
-            seed = cv2.resize(small, seed_size, interpolation=cv2.INTER_AREA)
-            seed_guard = cv2.resize(plate_guard, seed_size, interpolation=cv2.INTER_NEAREST)
-            seed_plate = cv2.inpaint(seed, seed_guard, 3, cv2.INPAINT_TELEA)
-            self._plate = cv2.resize(seed_plate, self._size, interpolation=cv2.INTER_LINEAR)
+        # Sample six safe 3x3 patches immediately outside the person's left/right
+        # bounds. The channel-wise median rejects an occasional edge or shadow.
+        ys, xs = np.nonzero(mask)
+        if not len(xs):
+            return self._last_safe_frame.copy() if self._last_safe_frame is not None else np.zeros_like(frame)
+        min_x, max_x = int(xs.min()), int(xs.max())
+        min_y, max_y = int(ys.min()), int(ys.max())
+        sample_xs = (min_x - 5, max_x + 5)
+        sample_ys = (
+            min_y + (max_y - min_y) // 4,
+            min_y + (max_y - min_y) // 2,
+            min_y + (max_y - min_y) * 3 // 4,
+        )
+        samples = []
+        for sample_x in sample_xs:
+            if sample_x < 1 or sample_x >= self._size[0] - 1:
+                continue
+            for sample_y in sample_ys:
+                sample_y = int(np.clip(sample_y, 1, self._size[1] - 2))
+                patch = small[sample_y - 1:sample_y + 2, sample_x - 1:sample_x + 2]
+                patch_mask = mask[sample_y - 1:sample_y + 2, sample_x - 1:sample_x + 2]
+                safe_pixels = patch[patch_mask == 0]
+                if len(safe_pixels):
+                    samples.append(safe_pixels)
+        if samples:
+            fill_color = np.median(np.concatenate(samples, axis=0), axis=0).astype(np.uint8)
         else:
-            self._plate[plate_guard == 0] = small[plate_guard == 0]
-        # Preserve the original full-resolution camera image everywhere except
-        # the concealed performer pixels. Only the replacement patch is upscaled.
+            fill_color = np.median(small.reshape(-1, 3), axis=0).astype(np.uint8)
+
+        # Keep the original full-resolution camera background. Only the person
+        # silhouette is replaced by the sampled solid colour; linear mask scaling
+        # provides a cheap 1-2 pixel feather at the edge.
         full_size = (frame.shape[1], frame.shape[0])
-        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_NEAREST)
-        full_plate = cv2.resize(self._plate, full_size, interpolation=cv2.INTER_LINEAR)
-        hidden = frame.copy()
-        hidden[full_mask != 0] = full_plate[full_mask != 0]
+        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_LINEAR)
+        alpha = (full_mask.astype(np.float32) / 255.0)[:, :, None]
+        hidden = np.rint(frame * (1.0 - alpha) + fill_color * alpha).astype(np.uint8)
         self._last_mask = mask.copy()
         self._last_safe_frame = hidden.copy()
         return hidden
