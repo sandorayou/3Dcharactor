@@ -2812,6 +2812,38 @@ namespace RealtimeBodyTracking
             return width > .001f;
         }
 
+        private bool TryReadShoulderDepthRotationCompensation(
+            PosePacket pose, out float sourceProjection, out float avatarProjection)
+        {
+            sourceProjection = 1f;
+            avatarProjection = 1f;
+            if (!pose.TryGet("left_shoulder", .55f, out var sourceLeft) ||
+                !pose.TryGet("right_shoulder", .55f, out var sourceRight) ||
+                trackingCamera == null || targetAnimator == null)
+                return false;
+            var avatarLeft = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var avatarRight = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            if (avatarLeft == null || avatarRight == null) return false;
+
+            var sourceAxis = sourceRight - sourceLeft;
+            var sourceHorizontalLength = Mathf.Sqrt(
+                sourceAxis.x * sourceAxis.x + sourceAxis.z * sourceAxis.z);
+            var avatarAxis = trackingCamera.transform.InverseTransformVector(
+                avatarRight.position - avatarLeft.position);
+            var avatarHorizontalLength = Mathf.Sqrt(
+                avatarAxis.x * avatarAxis.x + avatarAxis.z * avatarAxis.z);
+            if (sourceHorizontalLength <= .001f || avatarHorizontalLength <= .001f) return false;
+
+            // cos(yaw): 1 while frontal, smaller as the shoulder line rotates
+            // into camera Z. Correct source and avatar symmetrically; correcting
+            // only one side changes scale instead of cancelling perspective.
+            sourceProjection = Mathf.Clamp(
+                Mathf.Abs(sourceAxis.x) / sourceHorizontalLength, .35f, 1f);
+            avatarProjection = Mathf.Clamp(
+                Mathf.Abs(avatarAxis.x) / avatarHorizontalLength, .35f, 1f);
+            return true;
+        }
+
         private bool TryReadAvatarFace(out Vector2 faceCenter, out float faceWidth, out Vector3 faceWorldCenter)
         {
             faceCenter = default;
@@ -2859,6 +2891,12 @@ namespace RealtimeBodyTracking
             if (TryReadSourceShoulderWidth(pose, out var rawShoulderWidth) &&
                 TryReadAvatarShoulders(out avatarWidth, out avatarWorldCenter))
             {
+                if (TryReadShoulderDepthRotationCompensation(
+                        pose, out var sourceProjection, out var avatarProjection))
+                {
+                    rawShoulderWidth /= sourceProjection;
+                    avatarWidth /= avatarProjection;
+                }
                 if (!shoulderZoomInitialized)
                 {
                     filteredSourceShoulderFramingWidth = rawShoulderWidth;
