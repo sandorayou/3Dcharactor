@@ -24,7 +24,7 @@ class FastPersonHider:
     """Cheap pose-guided clean plate; no segmentation network or full-size inpaint."""
     def __init__(self) -> None:
         self._plate = None
-        self._size = (160, 120)
+        self._size = (320, 240)
 
     def apply(self, frame, estimator: PoseEstimator):
         if not estimator.last_normalized_landmarks:
@@ -38,12 +38,28 @@ class FastPersonHider:
             return int(p.x * self._size[0]), int(p.y * self._size[1])
 
         shoulder_width = max(abs(point(11)[0] - point(12)[0]), 10)
-        body_thickness = max(shoulder_width // 2, 9)
-        limb_thickness = max(shoulder_width // 3, 7)
-        # Torso, head and limbs form a conservative silhouette around the real performer.
+        limb_thickness = max(round(shoulder_width * .18), 7)
+        # Keep the torso close to the measured outline instead of expanding it
+        # sideways with one large body-width brush.
         torso = np.array([point(11), point(12), point(24), point(23)], dtype=np.int32)
         cv2.fillConvexPoly(mask, torso, 255)
-        cv2.circle(mask, point(0), max(shoulder_width // 2, 9), 255, -1)
+
+        # A shoulder-based circle was too wide at the sides and still missed hair
+        # above the nose. Derive a vertically biased head ellipse from ears/eyes.
+        left_ear, right_ear = point(7), point(8)
+        ear_span = abs(left_ear[0] - right_ear[0])
+        if ear_span < 8:
+            left_eye, right_eye = point(2), point(5)
+            ear_span = max(round(abs(left_eye[0] - right_eye[0]) * 2.2), 10)
+            head_x = (left_eye[0] + right_eye[0]) // 2
+            head_y = (left_eye[1] + right_eye[1]) // 2
+        else:
+            head_x = (left_ear[0] + right_ear[0]) // 2
+            head_y = (left_ear[1] + right_ear[1]) // 2
+        head_radius_x = max(round(ear_span * .62), 10)
+        head_radius_y = max(round(head_radius_x * 1.35), 14)
+        head_center = (head_x, head_y - round(head_radius_y * .28))
+        cv2.ellipse(mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
         for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
             for start, end in zip(chain, chain[1:]):
                 cv2.line(mask, point(start), point(end), 255, limb_thickness)
@@ -54,7 +70,9 @@ class FastPersonHider:
             ], dtype=np.int32)
             if len(hand_points) >= 3:
                 cv2.fillConvexPoly(mask, cv2.convexHull(hand_points), 255)
-        mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+        # Two pixels at mask resolution cover detector jitter without producing
+        # the broad horizontal replacement band seen with the old 7x7 dilation.
+        mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
 
         if self._plate is None or self._plate.shape != small.shape:
             # Inpaint only once, at 160x120. Later frames are simple masked copies.
