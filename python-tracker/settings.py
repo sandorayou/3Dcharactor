@@ -20,6 +20,7 @@ class TrackerSettings:
     video_port: int = 39543
     preview: bool = True
     preview_mirror: bool = True
+    show_landmarks: bool = False
     tracking_mirror: bool = False
     debug: bool = False
     debug_log_path: Path = Path("debug/tracker-latest.jsonl")

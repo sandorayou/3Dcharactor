@@ -21,12 +21,10 @@ PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
 
 
 class FastPersonHider:
-    """Cheap pose-guided clean plate; no segmentation network or full-size inpaint."""
+    """Pose-guided clean plate that never publishes an unmasked frame."""
     def __init__(self) -> None:
         self._size = (320, 240)
-        self._last_face_mask = None
-        self._last_face_fill_color = None
-        self._last_face_seen_at = float("-inf")
+        self._last_clean_frame = None
 
     def _fill_mask(self, frame, mask, fill_color):
         full_size = (frame.shape[1], frame.shape[0])
@@ -36,15 +34,12 @@ class FastPersonHider:
 
     def apply(self, frame, estimator: PoseEstimator):
         if not estimator.last_normalized_landmarks:
-            if (self._last_face_mask is not None and
-                    self._last_face_fill_color is not None and
-                    time.perf_counter() - self._last_face_seen_at <= .1):
-                return self._fill_mask(
-                    frame, self._last_face_mask, self._last_face_fill_color)
-            return frame
+            # A single raw fallback frame would expose the tracker. Holding the
+            # last clean plate is intentional because background latency is
+            # acceptable while tracker visibility is not.
+            return None if self._last_clean_frame is None else self._last_clean_frame.copy()
         small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
         mask = np.zeros((self._size[1], self._size[0]), dtype=np.uint8)
-        face_mask = np.zeros_like(mask)
         points = estimator.last_normalized_landmarks
 
         def point(index):
@@ -76,7 +71,6 @@ class FastPersonHider:
         head_radius_y = max(round(head_radius_x * 1.38), round(shoulder_width * .5), 17)
         head_center = (head_x, head_y - round(head_radius_y * .32))
         cv2.ellipse(mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
-        cv2.ellipse(face_mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
 
         # Face Landmarker remains reliable when only one pose ear is visible.
         # Add its actual profile hull instead of deriving profile width from the
@@ -94,7 +88,6 @@ class FastPersonHider:
             expanded[~above, 1] = center[1] + (expanded[~above, 1] - center[1]) * 1.12
             face_hull = cv2.convexHull(np.rint(expanded).astype(np.int32))
             cv2.fillConvexPoly(mask, face_hull, 255)
-            cv2.fillConvexPoly(face_mask, face_hull, 255)
         for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
             for start, end in zip(chain, chain[1:]):
                 cv2.line(mask, point(start), point(end), 255, limb_thickness)
@@ -108,11 +101,10 @@ class FastPersonHider:
         # Two pixels at mask resolution cover detector jitter without producing
         # the broad horizontal replacement band seen with the old 7x7 dilation.
         mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
-        face_mask = cv2.dilate(face_mask, np.ones((3, 3), np.uint8), iterations=1)
 
         ys, xs = np.nonzero(mask)
         if not len(xs):
-            return frame
+            return None if self._last_clean_frame is None else self._last_clean_frame.copy()
         min_x, max_x = int(xs.min()), int(xs.max())
         min_y, max_y = int(ys.min()), int(ys.max())
         sample_xs = (min_x - 5, max_x + 5)
@@ -138,10 +130,9 @@ class FastPersonHider:
             else np.median(small.reshape(-1, 3), axis=0).astype(np.uint8)
         )
 
-        self._last_face_mask = face_mask.copy()
-        self._last_face_fill_color = fill_color.copy()
-        self._last_face_seen_at = time.perf_counter()
-        return self._fill_mask(frame, mask, fill_color)
+        clean_frame = self._fill_mask(frame, mask, fill_color)
+        self._last_clean_frame = clean_frame.copy()
+        return clean_frame
 
 
 class TrackerFrameServer:
@@ -191,6 +182,10 @@ def parse_args() -> TrackerSettings:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=39540)
     parser.add_argument("--no-preview", action="store_true")
+    parser.add_argument(
+        "--show-landmarks", action="store_true",
+        help="Show tracker landmarks in the local debug window only; never in Unity's background.",
+    )
     parser.add_argument("--tracking-mirror", action="store_true")
     parser.add_argument("--debug-log", type=Path, default=Path("debug/tracker-latest.jsonl"))
     parser.add_argument("--debug-video", type=Path, default=Path("debug/tracker-preview-latest.avi"))
@@ -207,34 +202,36 @@ def parse_args() -> TrackerSettings:
         udp_host=args.host,
         udp_port=args.port,
         preview=not args.no_preview,
+        show_landmarks=args.show_landmarks,
         tracking_mirror=args.tracking_mirror,
         debug_log_path=args.debug_log,
         debug_video_path=args.debug_video,
     )
 
 
-def draw_preview(frame, estimator: PoseEstimator, text: str, mirror: bool):
+def draw_preview(frame, estimator: PoseEstimator, text: str, mirror: bool, show_landmarks: bool = False):
     preview = frame.copy()
     h, w = preview.shape[:2]
 
-    # Draw body pose landmarks (Green circles)
-    if estimator.last_normalized_landmarks:
-        for landmark in estimator.last_normalized_landmarks:
-            x, y = int(landmark.x * w), int(landmark.y * h)
-            cv2.circle(preview, (x, y), 3, (0, 220, 0), -1)
+    if show_landmarks:
+        # Draw body pose landmarks (Green circles)
+        if estimator.last_normalized_landmarks:
+            for landmark in estimator.last_normalized_landmarks:
+                x, y = int(landmark.x * w), int(landmark.y * h)
+                cv2.circle(preview, (x, y), 3, (0, 220, 0), -1)
 
-    # Draw hand 21 landmarks with Cyan (Left) / Magenta (Right)
-    for hand_landmarks, assignment in zip(estimator.last_hand_landmarks, estimator.last_hand_assignments):
-        is_left = (assignment.get("side") == "left")
-        color = (255, 255, 0) if is_left else (255, 0, 255) # Cyan for Left, Magenta for Right
+        # Draw hand 21 landmarks with Cyan (Left) / Magenta (Right)
+        for hand_landmarks, assignment in zip(estimator.last_hand_landmarks, estimator.last_hand_assignments):
+            is_left = (assignment.get("side") == "left")
+            color = (255, 255, 0) if is_left else (255, 0, 255) # Cyan for Left, Magenta for Right
 
-        for landmark in hand_landmarks:
-            x, y = int(landmark.x * w), int(landmark.y * h)
-            cv2.circle(preview, (x, y), 3, color, -1)
+            for landmark in hand_landmarks:
+                x, y = int(landmark.x * w), int(landmark.y * h)
+                cv2.circle(preview, (x, y), 3, color, -1)
 
-        wrist_x = 1.0 - assignment["wrist_x"] if mirror else assignment["wrist_x"]
-        position = (int(wrist_x * w), int(assignment["wrist_y"] * h))
-        cv2.putText(preview, assignment["side"].upper(), position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            wrist_x = 1.0 - assignment["wrist_x"] if mirror else assignment["wrist_x"]
+            position = (int(wrist_x * w), int(assignment["wrist_y"] * h))
+            cv2.putText(preview, assignment["side"].upper(), position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
     if mirror:
         preview = cv2.flip(preview, 1)
@@ -269,11 +266,11 @@ def main() -> None:
                 packet = estimator.estimate(frame, timestamp_ms, frame_number)
                 sender.send(packet)
                 recorder.write(packet, estimator.last_hand_assignments)
-                # Publish the same captured frame that produced this packet,
-                # with tracker points overlaid for Unity's background.
+                # Publish the same captured frame that produced this packet.
+                # The clean plate is deliberately free of tracker overlays.
                 hidden_frame = person_hider.apply(frame, estimator)
-                frame_server.update(draw_preview(
-                    hidden_frame, estimator, "", settings.preview_mirror))
+                if hidden_frame is not None:
+                    frame_server.update(hidden_frame)
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
@@ -282,6 +279,7 @@ def main() -> None:
                     estimator,
                     f"cam {camera.camera_fps:.1f} | pose {estimator.inference_fps:.1f} fps | {estimator.inference_ms:.0f} ms | sent {sender.sent_packets} | drop {frames.dropped_frames} | latency {latency if item else '-'} ms",
                     settings.preview_mirror,
+                    settings.show_landmarks,
                 )
                 video_recorder.write(preview)
                 cv2.imshow(PREVIEW_WINDOW, preview)
