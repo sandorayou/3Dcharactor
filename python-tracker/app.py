@@ -105,6 +105,10 @@ def main() -> None:
                 packet = estimator.estimate(frame, timestamp_ms, frame_number)
                 sender.send(packet)
                 recorder.write(packet, estimator.last_hand_assignments)
+                # Publish the same captured frame that produced this packet,
+                # with tracker points overlaid for Unity's background.
+                frame_server.update(draw_preview(
+                    frame, estimator, f"frame {frame_number}", settings.preview_mirror))
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
