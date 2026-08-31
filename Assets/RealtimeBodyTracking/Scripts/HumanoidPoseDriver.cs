@@ -338,6 +338,7 @@ namespace RealtimeBodyTracking
                 enabled = false;
                 return;
             }
+            ApplyLowLatencyOverlayProfile();
             wristMinConfidence = Mathf.Max(wristMinConfidence, .5f);
             // Pose wrist depth can use almost the full arm length on the camera-depth axis.
             // Older serialized values capped it at less than one shoulder width.
@@ -356,6 +357,29 @@ namespace RealtimeBodyTracking
             CacheRestHandBasis(true);
             CacheRestHandBasis(false);
             if (debugLogging) Debug.Log($"Avatar collision geometry measured: {collisionGeometry.DebugSummary}", this);
+        }
+
+        private void ApplyLowLatencyOverlayProfile()
+        {
+            if (!strictScreenLock) return;
+            smoothingSpeed = 30f;
+            rotationDeadZoneDegrees = .8f;
+            centerJitterDeadZone = .0015f;
+            centerPredictionSeconds = .033f;
+            centerPredictionVelocityThreshold = .025f;
+            faceSizeDeadZoneRatio = .01f;
+            avatarSizeMatchScale = 1f;
+            bodyTurnSpeed = 540f;
+            bodyTurnDeadZone = .8f;
+            armAcquireFrames = 1;
+            armPointDeadZoneScale = .008f;
+            armPositionSmoothingCutoff = 3.5f;
+            armMotionResponsiveness = .9f;
+            armRotationSmoothingSpeed = 24f;
+            wristHoldTime = .10f;
+            handOrientationSmoothing = 12f;
+            fingerSmoothingSpeed = 12f;
+            fingerRotationDeadZoneDegrees = 1f;
         }
 
         private void ConfigureAnimeInternalLines()
@@ -434,8 +458,7 @@ namespace RealtimeBodyTracking
             lastAnatomyClamp = string.Empty;
             armCameraClampCount = 0;
             lastArmCameraClamp = string.Empty;
-            if (manualController != null && manualController.ShouldBlockTracking)
-                return;
+            if (manualController != null && manualController.ShouldBlockTracking) return;
             if (!PoseInputMapper.TryReadUpperBody(pose, InputCoordinatesNeedMirror, bodyTurnMinConfidence, out var upperBody))
             {
                 bodyPositionTracking = false;
@@ -479,14 +502,20 @@ namespace RealtimeBodyTracking
                 TryCalibrateCameraFraming(pose, screenBody, screenBody.ShoulderWidth);
             }
 
+            bool hasPendingScreenPosition = false;
+            Vector2 pendingScreenCenter = default;
+            float pendingShoulderWidth = 0f;
+            int pendingShoulderMode = 0;
             if (hasScreenBody)
             {
                 bodyLeanDegrees = ResolveBodyLean(screenBody);
                 if (enableHipsPosition && !waistCoordinatesLocked)
                 {
                     bodyPositionTracking = true;
-                    var screenCenter = ResolveScreenBody(screenBody, bodyLeanDegrees, out var shoulderWidth);
-                    ApplyHips(pose, screenCenter, shoulderWidth, screenBody.ShoulderMode);
+                    pendingScreenCenter = ResolveScreenBody(
+                        screenBody, bodyLeanDegrees, out pendingShoulderWidth);
+                    pendingShoulderMode = screenBody.ShoulderMode;
+                    hasPendingScreenPosition = true;
                 }
             }
 
@@ -500,14 +529,18 @@ namespace RealtimeBodyTracking
             ApplyRestBoneRoll(HumanBodyBones.UpperChest, bodyLeanDegrees);
             if (enableArms)
             {
-                // Keep clavicles at their local rest pose so they inherit the chest
-                // roll. Resetting their world rotation here cancelled shoulder tilt.
                 ReturnBoneToParentRest(HumanBodyBones.LeftShoulder);
                 ReturnBoneToParentRest(HumanBodyBones.RightShoulder);
+            }
+            if (enableHead) ApplyHead(pose);
+            ApplyFaceExpressions(pose);
+            ApplyFaceZoom(pose, Time.unscaledDeltaTime);
+            if (hasPendingScreenPosition)
+                ApplyHips(pose, pendingScreenCenter, pendingShoulderWidth, pendingShoulderMode);
+            if (enableArms)
+            {
                 var faceObserved = PoseInputMapper.TryReadHeadFacing(pose, InputCoordinatesNeedMirror, headMinConfidence, out _);
                 if (faceObserved) lastReliableFaceTime = Time.unscaledTime;
-                // A hand aimed at the camera commonly occludes an eye or ear. Face
-                // confidence must not disable otherwise valid arm and hand tracking.
                 if (!TryApplyHandContact(pose, upperBody))
                 {
                     ApplyCalibratedIkArm(pose, true, upperBody);
@@ -530,9 +563,6 @@ namespace RealtimeBodyTracking
                         ApplyDirection(chain.bone, to - from, upperBody.Forward);
                     else
                         ReturnBoneToRest(chain.bone);
-            if (enableHead) ApplyHead(pose);
-            ApplyFaceExpressions(pose);
-            ApplyFaceZoom(pose, Time.unscaledDeltaTime);
         }
 
         public void RebaseBodyTracking()
@@ -1714,12 +1744,15 @@ namespace RealtimeBodyTracking
             var initialized = left ? leftResolvedWristInitialized : rightResolvedWristInitialized;
             var previousImage = left ? lastLeftHandWristImage : lastRightHandWristImage;
             var previousWrist = left ? lastLeftResolvedWrist : lastRightResolvedWrist;
-            var imageDeadZone = .002f;
+            var imageDeadZone = .0015f;
             if (pose.TryGetImage("left_shoulder", wristMinConfidence, out var leftShoulderImage) &&
                 pose.TryGetImage("right_shoulder", wristMinConfidence, out var rightShoulderImage))
             {
-                imageDeadZone = Mathf.Max(imageDeadZone,
-                    Vector2.Distance(leftShoulderImage, rightShoulderImage) * .10f);
+                var leftViewport = SourceImageToViewport(
+                    new Vector2(leftShoulderImage.x, leftShoulderImage.y), pose.source_width, pose.source_height);
+                var rightViewport = SourceImageToViewport(
+                    new Vector2(rightShoulderImage.x, rightShoulderImage.y), pose.source_width, pose.source_height);
+                imageDeadZone = Mathf.Clamp(Vector2.Distance(leftViewport, rightViewport) * .012f, .0015f, .004f);
             }
 
             var currentImage = new Vector2(wristImage.x, wristImage.y);
@@ -1989,40 +2022,22 @@ namespace RealtimeBodyTracking
             out Transform shoulderTransform, out Vector3 shoulderViewport, out Vector3 targetViewport)
         {
             shoulderTransform = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
-            var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-            if (shoulderTransform == null || leftShoulder == null || rightShoulder == null ||
-                !pose.TryGetImage("left_shoulder", wristMinConfidence, out var leftShoulderImage) ||
-                !pose.TryGetImage("right_shoulder", wristMinConfidence, out var rightShoulderImage))
+            if (shoulderTransform == null || trackingCamera == null)
             {
                 shoulderViewport = default;
                 targetViewport = default;
                 return false;
             }
             shoulderViewport = trackingCamera.WorldToViewportPoint(shoulderTransform.position);
-            var sourceShoulderName = SourceSide(left) + "_shoulder";
-            if (!pose.TryGetImage(sourceShoulderName, wristMinConfidence, out var sourceShoulderImage))
+            if (shoulderViewport.z <= .05f)
             {
                 targetViewport = default;
                 return false;
             }
-            var leftShoulderViewport = trackingCamera.WorldToViewportPoint(leftShoulder.position);
-            var rightShoulderViewport = trackingCamera.WorldToViewportPoint(rightShoulder.position);
-            var avatarShoulderWidth = Vector2.Distance(leftShoulderViewport, rightShoulderViewport);
-            var sourceShoulderWidth = Vector2.Distance(leftShoulderImage, rightShoulderImage);
-            var sourcePoint = ToPreviewViewport(imagePoint);
-            var sourceShoulder = ToPreviewViewport(sourceShoulderImage);
-            var viewportScale = avatarShoulderWidth / Mathf.Max(sourceShoulderWidth, .03f);
-            // ToPreviewViewport already mirrors camera X. SourceSide handles which physical
-            // hand drives the facing avatar, so applying avatarMirror here would invert motion twice.
-            var dx = sourcePoint.x - sourceShoulder.x;
-            var dy = sourcePoint.y - sourceShoulder.y;
-            var offset = new Vector2(dx * handHorizontalGain, dy * armVerticalGain) * viewportScale;
-            targetViewport = new Vector3(
-                shoulderViewport.x + offset.x,
-                shoulderViewport.y + offset.y,
-                shoulderViewport.z);
-            return shoulderViewport.z > 0f && targetViewport.z > 0f;
+            var sourceViewport = SourceImageToViewport(
+                new Vector2(imagePoint.x, imagePoint.y), pose.source_width, pose.source_height);
+            targetViewport = new Vector3(sourceViewport.x, sourceViewport.y, shoulderViewport.z);
+            return true;
         }
 
         private Vector2 ToPreviewViewport(Vector3 image)
@@ -2571,6 +2586,7 @@ namespace RealtimeBodyTracking
                 new Vector3(sourceViewport.x, sourceViewport.y, depth));
             Vector3 correction;
             Vector3 target;
+            float screenPositionGain = strictScreenLock ? 1f : hipsPositionScale;
             if (lockedPlacement)
             {
                 // Keep the recorded XYZ point as the origin and add only the user's
@@ -2583,12 +2599,12 @@ namespace RealtimeBodyTracking
                     new Vector3(originViewport.x, originViewport.y, depth));
                 correction = desiredAnchor - originAnchor;
                 target = avatarHipOrigin + manualController.PlacementOffset +
-                         correction * hipsPositionScale;
+                         correction * screenPositionGain;
             }
             else
             {
                 correction = desiredAnchor - avatarAnchor;
-                target = root.position + correction * hipsPositionScale;
+                target = root.position + correction * screenPositionGain;
             }
             var cameraRight = trackingCamera.transform.right;
             var cameraUp = trackingCamera.transform.up;
@@ -2778,13 +2794,19 @@ namespace RealtimeBodyTracking
                 return false;
             }
 
-            var left = new Vector2(leftEye.x, 1f - leftEye.y);
-            var right = new Vector2(rightEye.x, 1f - rightEye.y);
+            const float margin = .05f;
+            if (leftEye.x < -margin || leftEye.x > 1f + margin || leftEye.y < -margin || leftEye.y > 1f + margin ||
+                rightEye.x < -margin || rightEye.x > 1f + margin || rightEye.y < -margin || rightEye.y > 1f + margin)
+                return false;
+            var left = SourceImageToViewport(
+                new Vector2(leftEye.x, leftEye.y), pose.source_width, pose.source_height);
+            var right = SourceImageToViewport(
+                new Vector2(rightEye.x, rightEye.y), pose.source_width, pose.source_height);
 
             faceCenter = (left + right) * 0.5f;
             faceWidth = Vector2.Distance(left, right);
 
-            return faceWidth >= 0.015f;
+            return faceWidth >= .012f;
         }
 
         private bool TryReadSourceShoulderWidth(PosePacket pose, out float width)
@@ -2793,16 +2815,16 @@ namespace RealtimeBodyTracking
             if (!pose.TryGetImage("left_shoulder", .55f, out var left) ||
                 !pose.TryGetImage("right_shoulder", .55f, out var right))
                 return false;
-
-            // Match TrackerVideoBackground's centered "cover" transform.
-            var sourceAspect = pose.source_height > 0
-                ? (float)pose.source_width / pose.source_height
-                : 4f / 3f;
-            var viewportScaleX = trackingCamera.aspect < sourceAspect
-                ? sourceAspect / trackingCamera.aspect
-                : 1f;
-            width = Mathf.Abs(right.x - left.x) * viewportScaleX;
-            return width >= .03f;
+            const float margin = .035f;
+            var leftReliable = left.x >= -margin && left.x <= 1f + margin && left.y >= -margin && left.y <= 1f + margin;
+            var rightReliable = right.x >= -margin && right.x <= 1f + margin && right.y >= -margin && right.y <= 1f + margin;
+            if (!leftReliable || !rightReliable) return false;
+            var leftViewport = SourceImageToViewport(
+                new Vector2(left.x, left.y), pose.source_width, pose.source_height);
+            var rightViewport = SourceImageToViewport(
+                new Vector2(right.x, right.y), pose.source_width, pose.source_height);
+            width = Vector2.Distance(leftViewport, rightViewport);
+            return width >= .035f && width <= 1.1f;
         }
 
         private bool TryReadAvatarShoulders(out float width, out Vector3 worldCenter)
@@ -2876,15 +2898,12 @@ namespace RealtimeBodyTracking
                 }
                 if (receivedNewPoseFrame)
                 {
-                    var widthChangeRatio = Mathf.Abs(
-                        rawShoulderWidth - filteredSourceShoulderFramingWidth) /
-                        Mathf.Max(filteredSourceShoulderFramingWidth, .001f);
-                    if (widthChangeRatio >= faceSizeDeadZoneRatio)
-                    {
-                        var measurementT = 1f - Mathf.Exp(-(strictScreenLock ? 14f : 8f) * deltaTime);
-                        filteredSourceShoulderFramingWidth = Mathf.Lerp(
-                            filteredSourceShoulderFramingWidth, rawShoulderWidth, measurementT);
-                    }
+                    var previousWidth = Mathf.Max(filteredSourceShoulderFramingWidth, .001f);
+                    var changeRatio = Mathf.Abs(rawShoulderWidth - previousWidth) / previousWidth;
+                    var response = Mathf.Lerp(14f, 42f, Mathf.InverseLerp(.005f, .20f, changeRatio));
+                    var measurementT = 1f - Mathf.Exp(-response * deltaTime);
+                    filteredSourceShoulderFramingWidth = Mathf.Lerp(
+                        filteredSourceShoulderFramingWidth, rawShoulderWidth, measurementT);
                 }
                 sourceWidth = filteredSourceShoulderFramingWidth;
             }
@@ -2901,7 +2920,10 @@ namespace RealtimeBodyTracking
                 }
                 if (receivedNewPoseFrame)
                 {
-                    var measurementT = 1f - Mathf.Exp(-8f * deltaTime);
+                    var previousWidth = Mathf.Max(filteredSourceFaceWidth, .001f);
+                    var changeRatio = Mathf.Abs(rawSourceFaceWidth - previousWidth) / previousWidth;
+                    var response = Mathf.Lerp(14f, 40f, Mathf.InverseLerp(.005f, .20f, changeRatio));
+                    var measurementT = 1f - Mathf.Exp(-response * deltaTime);
                     filteredSourceFaceWidth = Mathf.Lerp(
                         filteredSourceFaceWidth, rawSourceFaceWidth, measurementT);
                 }
@@ -2920,19 +2942,21 @@ namespace RealtimeBodyTracking
 
             float sizeRatio = avatarWidth / Mathf.Max(sourceWidth, 0.001f);
 
-            if (Mathf.Abs(sizeRatio - 1f) < faceSizeDeadZoneRatio)
+            var sizeError = Mathf.Abs(sizeRatio - 1f);
+            if (sizeError < faceSizeDeadZoneRatio)
             {
                 return;
             }
 
             float targetDistance = Mathf.Clamp(currentDistance * sizeRatio, minimumFaceCameraDistance, maximumFaceCameraDistance);
 
+            var strictSmoothTime = Mathf.Lerp(.085f, .035f, Mathf.InverseLerp(.015f, .25f, sizeError));
             float smoothDistance = Mathf.SmoothDamp(
                 currentDistance,
                 targetDistance,
                 ref cameraDistanceVelocity,
-                strictScreenLock ? .08f : faceZoomSmoothTime,
-                strictScreenLock ? 8f : 5f,
+                strictScreenLock ? strictSmoothTime : faceZoomSmoothTime,
+                strictScreenLock ? 12f : 5f,
                 deltaTime
             );
 
