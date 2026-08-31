@@ -17,6 +17,7 @@ class TrackerSettings:
     face_model_path: Path = Path("models/face_landmarker.task")
     udp_host: str = "127.0.0.1"
     udp_port: int = 39541
+    video_port: int = 39543
     preview: bool = True
     preview_mirror: bool = True
     tracking_mirror: bool = False
