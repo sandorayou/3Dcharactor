@@ -11,7 +11,7 @@ class TrackerSettings:
     height: int = 480
     camera_fps: int = 30
     inference_size: int = 256
-    inference_fps: float = 20.0
+    inference_fps: float = 30.0
     model_path: Path = Path("models/pose_landmarker_lite.task")
     hand_model_path: Path = Path("models/hand_landmarker.task")
     face_model_path: Path = Path("models/face_landmarker.task")

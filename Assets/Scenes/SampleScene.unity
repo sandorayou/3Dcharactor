@@ -356,8 +356,8 @@ MonoBehaviour:
   animeLineSoftness: 0.006
   animeLineStrength: 0.94
   animeLineColor: {r: 0.004, g: 0.005, b: 0.008, a: 1}
-  smoothingSpeed: 30
-  rotationDeadZoneDegrees: 3
+  smoothingSpeed: 60
+  rotationDeadZoneDegrees: 0
   avatarMirror: 1
   enableHipsPosition: 1
   strictScreenLock: 1
@@ -395,10 +395,10 @@ MonoBehaviour:
   maxElbowSpeed: 3
   handHorizontalGain: 0.75
   armAcquireFrames: 2
-  armPointDeadZoneScale: 0.03
+  armPointDeadZoneScale: 0
   armPositionSmoothingCutoff: 2
   armMotionResponsiveness: 0.25
-  armRotationSmoothingSpeed: 14
+  armRotationSmoothingSpeed: 60
   wristHoldTime: 0.15
   maxForearmToUpperArmRatio: 1.8
   armRelaxSpeed: 1.2
@@ -414,7 +414,7 @@ MonoBehaviour:
   neckRotationWeight: 0.65
   mirrorHeadRotation: 1
   headRotationOffsetEuler: {x: 0, y: 0, z: 0}
-  headRotationSmoothing: 14
+  headRotationSmoothing: 40
   enableRollCorrection: 1
   enableAnatomyLimits: 1
   trackingTimeout: 2
