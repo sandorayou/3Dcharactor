@@ -361,6 +361,9 @@ MonoBehaviour:
   avatarMirror: 1
   enableHipsPosition: 1
   strictScreenLock: 1
+  predictiveCenterFollow: 1
+  centerPredictionSeconds: 0.033
+  centerInterpolationSpeed: 30
   hipsPositionScale: 1
   enableFaceZoom: 1
   faceZoomSmoothTime: 0.18
