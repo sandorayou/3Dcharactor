@@ -356,8 +356,8 @@ MonoBehaviour:
   animeLineSoftness: 0.006
   animeLineStrength: 0.94
   animeLineColor: {r: 0.004, g: 0.005, b: 0.008, a: 1}
-  smoothingSpeed: 34
-  rotationDeadZoneDegrees: 0.35
+  smoothingSpeed: 35
+  rotationDeadZoneDegrees: 1.5
   avatarMirror: 1
   enableHipsPosition: 1
   strictScreenLock: 1
@@ -384,19 +384,14 @@ MonoBehaviour:
   positionMeasurementSmoothing: 14
   positionFollowSpeed: 14
   positionMinConfidence: 0.6
-  enableExactScreenRegistration: 1
-  screenCenterDeadZone: 0.0015
-  shoulderWidthJumpLimit: 0.18
-  maximumScreenPrediction: 0.03
-  screenVelocityBlend: 0.55
   bodyLeanDeadZone: 0.5
   maxBodyLean: 40
   bodyLeanSmoothing: 14
   bodyLeanGain: 1
   mirrorShoulderElevation: 1
   enableBodyTurn: 1
-  bodyTurnSpeed: 720
-  bodyTurnDeadZone: 0.5
+  bodyTurnSpeed: 240
+  bodyTurnDeadZone: 25
   avatarFacingOffsetDegrees: 180
   bodyTurnMinConfidence: 0.85
   bodyCollisionRadiusScale: 1
@@ -405,11 +400,11 @@ MonoBehaviour:
   maxElbowSpeed: 3
   handHorizontalGain: 0.75
   armAcquireFrames: 2
-  armPointDeadZoneScale: 0.006
-  armPositionSmoothingCutoff: 5
-  armMotionResponsiveness: 1.1
-  armRotationSmoothingSpeed: 30
-  wristHoldTime: 0.08
+  armPointDeadZoneScale: 0.01
+  armPositionSmoothingCutoff: 2
+  armMotionResponsiveness: 0.25
+  armRotationSmoothingSpeed: 35
+  wristHoldTime: 0.15
   maxForearmToUpperArmRatio: 1.8
   armRelaxSpeed: 1.2
   armRecoverSpeed: 4
@@ -429,7 +424,7 @@ MonoBehaviour:
   enableAnatomyLimits: 1
   trackingTimeout: 2
   returnToRestPose: 1
-  debugLogging: 0
+  debugLogging: 1
   tracking: 0
   latestFrame: -1
   validPoints: 0
