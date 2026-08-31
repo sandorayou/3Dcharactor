@@ -372,7 +372,7 @@ MonoBehaviour:
   minimumFaceCameraDistance: 0.28
   maximumFaceCameraDistance: 8
   faceSizeDeadZoneRatio: 0.025
-  avatarSizeMatchScale: 1.15
+  avatarSizeMatchScale: 0.97
   bodyDepthFromShoulderWidth: 1.2
   maxHipsSpeed: 3
   screenHorizontalRange: 1.2
