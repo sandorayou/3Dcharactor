@@ -2792,6 +2792,22 @@ namespace RealtimeBodyTracking
                 ? sourceAspect / trackingCamera.aspect
                 : 1f;
             width = Mathf.Abs(right.x - left.x) * viewportScaleX;
+
+            // Turning sideways shortens only the projected shoulder span. Use
+            // MediaPipe's world-space shoulder axis to remove that foreshortening
+            // so body yaw is not mistaken for moving farther from the camera.
+            if (pose.TryGet("left_shoulder", .55f, out var leftWorld) &&
+                pose.TryGet("right_shoulder", .55f, out var rightWorld))
+            {
+                var shoulderAxis = rightWorld - leftWorld;
+                var horizontalLength = Mathf.Sqrt(
+                    shoulderAxis.x * shoulderAxis.x + shoulderAxis.z * shoulderAxis.z);
+                if (horizontalLength > .001f)
+                {
+                    var frontalProjection = Mathf.Abs(shoulderAxis.x) / horizontalLength;
+                    width /= Mathf.Max(frontalProjection, .45f);
+                }
+            }
             return width >= .03f;
         }
 
