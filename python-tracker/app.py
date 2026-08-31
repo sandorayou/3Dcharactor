@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from camera import CameraCapture
 from debug_recorder import DebugRecorder, DebugVideoRecorder
@@ -17,6 +18,52 @@ from settings import TrackerSettings
 from udp_sender import UdpPoseSender
 
 PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
+
+
+class FastPersonHider:
+    """Cheap pose-guided clean plate; no segmentation network or full-size inpaint."""
+    def __init__(self) -> None:
+        self._plate = None
+        self._size = (160, 120)
+
+    def apply(self, frame, estimator: PoseEstimator):
+        if not estimator.last_normalized_landmarks:
+            return frame
+        small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
+        mask = np.zeros((self._size[1], self._size[0]), dtype=np.uint8)
+        points = estimator.last_normalized_landmarks
+
+        def point(index):
+            p = points[index]
+            return int(p.x * self._size[0]), int(p.y * self._size[1])
+
+        shoulder_width = max(abs(point(11)[0] - point(12)[0]), 10)
+        body_thickness = max(shoulder_width // 2, 9)
+        limb_thickness = max(shoulder_width // 3, 7)
+        # Torso, head and limbs form a conservative silhouette around the real performer.
+        torso = np.array([point(11), point(12), point(24), point(23)], dtype=np.int32)
+        cv2.fillConvexPoly(mask, torso, 255)
+        cv2.circle(mask, point(0), max(shoulder_width // 2, 9), 255, -1)
+        for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
+            for start, end in zip(chain, chain[1:]):
+                cv2.line(mask, point(start), point(end), 255, limb_thickness)
+            cv2.circle(mask, point(chain[-1]), limb_thickness, 255, -1)
+        for hand in estimator.last_hand_landmarks:
+            hand_points = np.array([
+                (int(p.x * self._size[0]), int(p.y * self._size[1])) for p in hand
+            ], dtype=np.int32)
+            if len(hand_points) >= 3:
+                cv2.fillConvexPoly(mask, cv2.convexHull(hand_points), 255)
+        mask = cv2.dilate(mask, np.ones((7, 7), np.uint8), iterations=1)
+
+        if self._plate is None or self._plate.shape != small.shape:
+            # Inpaint only once, at 160x120. Later frames are simple masked copies.
+            self._plate = cv2.inpaint(small, mask, 3, cv2.INPAINT_TELEA)
+        else:
+            self._plate[mask == 0] = small[mask == 0]
+        hidden = small.copy()
+        hidden[mask != 0] = self._plate[mask != 0]
+        return cv2.resize(hidden, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR)
 
 
 class TrackerFrameServer:
@@ -128,6 +175,7 @@ def main() -> None:
     recorder = DebugRecorder(settings.debug_log_path)
     video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps)
     frame_server = TrackerFrameServer(settings.video_port)
+    person_hider = FastPersonHider()
     camera.start()
     frame_number, last_inference = 0, 0.0
 
@@ -145,8 +193,9 @@ def main() -> None:
                 recorder.write(packet, estimator.last_hand_assignments)
                 # Publish the same captured frame that produced this packet,
                 # with tracker points overlaid for Unity's background.
+                hidden_frame = person_hider.apply(frame, estimator)
                 frame_server.update(draw_preview(
-                    frame, estimator, "", settings.preview_mirror))
+                    hidden_frame, estimator, "", settings.preview_mirror))
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
