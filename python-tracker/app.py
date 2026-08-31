@@ -62,6 +62,23 @@ class FastPersonHider:
         head_radius_y = max(round(head_radius_x * 1.38), round(shoulder_width * .5), 17)
         head_center = (head_x, head_y - round(head_radius_y * .32))
         cv2.ellipse(mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
+
+        # Face Landmarker remains reliable when only one pose ear is visible.
+        # Add its actual profile hull instead of deriving profile width from the
+        # shrinking ear distance. Extend the upper half to include hair/forehead.
+        if estimator.last_face_landmarks:
+            face_points = np.array([
+                (p.x * self._size[0], p.y * self._size[1])
+                for p in estimator.last_face_landmarks
+            ], dtype=np.float32)
+            center = face_points.mean(axis=0)
+            expanded = face_points.copy()
+            expanded[:, 0] = center[0] + (expanded[:, 0] - center[0]) * 1.16
+            above = expanded[:, 1] < center[1]
+            expanded[above, 1] = center[1] + (expanded[above, 1] - center[1]) * 1.5
+            expanded[~above, 1] = center[1] + (expanded[~above, 1] - center[1]) * 1.12
+            face_hull = cv2.convexHull(np.rint(expanded).astype(np.int32))
+            cv2.fillConvexPoly(mask, face_hull, 255)
         for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
             for start, end in zip(chain, chain[1:]):
                 cv2.line(mask, point(start), point(end), 255, limb_thickness)
