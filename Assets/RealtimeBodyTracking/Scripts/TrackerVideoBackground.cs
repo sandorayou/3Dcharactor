@@ -32,9 +32,6 @@ namespace RealtimeBodyTracking
             var shader = Shader.Find("Unlit/Texture");
             backgroundRenderer.material = new Material(shader);
             backgroundRenderer.enabled = false;
-            texture = new Texture2D(2, 2, TextureFormat.RGB24, false);
-            texture.wrapMode = TextureWrapMode.Clamp;
-            backgroundRenderer.material.mainTexture = texture;
             StartCoroutine(PollFrames());
         }
 
@@ -43,14 +40,18 @@ namespace RealtimeBodyTracking
             var wait = new WaitForSecondsRealtime(1f / refreshRate);
             while (true)
             {
-                using (var request = UnityWebRequest.Get(frameUrl + "?t=" + Time.realtimeSinceStartup))
+                using (var request = UnityWebRequestTexture.GetTexture(frameUrl + "?t=" + Time.realtimeSinceStartup))
                 {
                     yield return request.SendWebRequest();
                     if (request.result == UnityWebRequest.Result.Success)
                     {
-                        if (texture.LoadImage(request.downloadHandler.data, false))
+                        var next = DownloadHandlerTexture.GetContent(request);
+                        if (next != null)
                         {
+                            if (texture != null) Destroy(texture);
+                            texture = next;
                             texture.wrapMode = TextureWrapMode.Clamp;
+                            backgroundRenderer.material.mainTexture = texture;
                             backgroundRenderer.material.mainTextureScale =
                                 mirror ? new Vector2(-1f, 1f) : Vector2.one;
                             backgroundRenderer.material.mainTextureOffset =
