@@ -114,7 +114,8 @@ def draw_preview(frame, estimator: PoseEstimator, text: str, mirror: bool):
     if mirror:
         preview = cv2.flip(preview, 1)
 
-    cv2.putText(preview, text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
+    if text:
+        cv2.putText(preview, text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
     return preview
 
 
@@ -145,7 +146,7 @@ def main() -> None:
                 # Publish the same captured frame that produced this packet,
                 # with tracker points overlaid for Unity's background.
                 frame_server.update(draw_preview(
-                    frame, estimator, f"frame {frame_number}", settings.preview_mirror))
+                    frame, estimator, "", settings.preview_mirror))
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
