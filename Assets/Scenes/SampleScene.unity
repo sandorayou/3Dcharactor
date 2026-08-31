@@ -323,7 +323,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   frameUrl: http://127.0.0.1:39543/frame.jpg
   refreshRate: 30
-  mirror: 1
+  mirror: 0
+  backgroundDistance: 100
 --- !u!1 &1316547653 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1029089546570068762, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
