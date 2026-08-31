@@ -30,7 +30,7 @@ class PoseEstimator:
             base_options=mp.tasks.BaseOptions(model_asset_path=str(settings.model_path)),
             running_mode=mp.tasks.vision.RunningMode.VIDEO,
             num_poses=1,
-            output_segmentation_masks=True,
+            output_segmentation_masks=False,
         )
         self._landmarker = mp.tasks.vision.PoseLandmarker.create_from_options(options)
         hand_options = mp.tasks.vision.HandLandmarkerOptions(
@@ -60,7 +60,6 @@ class PoseEstimator:
         self._fps_started = time.perf_counter()
         self._fps_count = 0
         self.last_normalized_landmarks = None
-        self.last_person_mask = None
         self.last_hand_landmarks: list[list[SimpleNamespace]] = []
         self.last_hand_assignments: list[dict] = []
         self._hand_positions: dict[str, tuple[float, float]] = {}
@@ -103,15 +102,6 @@ class PoseEstimator:
             )
             for landmark in result.pose_landmarks[0]
         ] if result.pose_landmarks else None
-        self.last_person_mask = None
-        if result.segmentation_masks:
-            square_mask = np.asarray(result.segmentation_masks[0].numpy_view(), dtype=np.float32)
-            scaled_width = round(frame.shape[1] * scale)
-            scaled_height = round(frame.shape[0] * scale)
-            cropped = square_mask[pad_top:pad_top + scaled_height, pad_left:pad_left + scaled_width]
-            if cropped.size:
-                self.last_person_mask = cv2.resize(
-                    cropped, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR)
         self.last_hand_landmarks = [
             [SimpleNamespace(
                 x=(landmark.x * self._size - pad_left) / (scale * frame.shape[1]),
