@@ -74,11 +74,17 @@ class FastPersonHider:
         # the broad horizontal replacement band seen with the old 7x7 dilation.
         mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
 
+        # The visible replacement stays tight, but the cached clean plate needs a
+        # wider exclusion zone. Otherwise hair, sleeves, and motion edges just
+        # outside the tight mask get copied into the plate and reappear inside the
+        # next replacement patch.
+        plate_guard = cv2.dilate(mask, np.ones((17, 17), np.uint8), iterations=1)
+
         if self._plate is None or self._plate.shape != small.shape:
-            # Inpaint only once, at 160x120. Later frames are simple masked copies.
-            self._plate = cv2.inpaint(small, mask, 3, cv2.INPAINT_TELEA)
+            # Inpaint only once at mask resolution. Later frames are masked copies.
+            self._plate = cv2.inpaint(small, plate_guard, 3, cv2.INPAINT_TELEA)
         else:
-            self._plate[mask == 0] = small[mask == 0]
+            self._plate[plate_guard == 0] = small[plate_guard == 0]
         # Preserve the original full-resolution camera image everywhere except
         # the concealed performer pixels. Only the replacement patch is upscaled.
         full_size = (frame.shape[1], frame.shape[0])
