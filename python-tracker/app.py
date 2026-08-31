@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import cv2
@@ -15,6 +17,40 @@ from settings import TrackerSettings
 from udp_sender import UdpPoseSender
 
 PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
+
+
+class TrackerFrameServer:
+    def __init__(self, port: int) -> None:
+        self._jpeg = b""
+        owner = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                if self.path.split("?", 1)[0] != "/frame.jpg" or not owner._jpeg:
+                    self.send_error(404)
+                    return
+                payload = owner._jpeg
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, *_args) -> None:
+                pass
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        threading.Thread(target=self._server.serve_forever, name="tracker-frame-server", daemon=True).start()
+
+    def update(self, frame) -> None:
+        ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
+        if ok:
+            self._jpeg = encoded.tobytes()
+
+    def close(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
 
 
 def parse_args() -> TrackerSettings:
@@ -90,6 +126,7 @@ def main() -> None:
     sender = UdpPoseSender(settings.udp_host, settings.udp_port)
     recorder = DebugRecorder(settings.debug_log_path)
     video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps)
+    frame_server = TrackerFrameServer(settings.video_port)
     camera.start()
     frame_number, last_inference = 0, 0.0
 
@@ -133,6 +170,7 @@ def main() -> None:
         sender.close()
         recorder.close()
         video_recorder.close()
+        frame_server.close()
         cv2.destroyAllWindows()
     if camera.error:
         raise RuntimeError(camera.error)
