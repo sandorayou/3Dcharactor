@@ -24,12 +24,27 @@ class FastPersonHider:
     """Cheap pose-guided clean plate; no segmentation network or full-size inpaint."""
     def __init__(self) -> None:
         self._size = (320, 240)
+        self._last_face_mask = None
+        self._last_face_fill_color = None
+        self._last_face_seen_at = float("-inf")
+
+    def _fill_mask(self, frame, mask, fill_color):
+        full_size = (frame.shape[1], frame.shape[0])
+        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_LINEAR)
+        alpha = (full_mask.astype(np.float32) / 255.0)[:, :, None]
+        return np.rint(frame * (1.0 - alpha) + fill_color * alpha).astype(np.uint8)
 
     def apply(self, frame, estimator: PoseEstimator):
         if not estimator.last_normalized_landmarks:
+            if (self._last_face_mask is not None and
+                    self._last_face_fill_color is not None and
+                    time.perf_counter() - self._last_face_seen_at <= .1):
+                return self._fill_mask(
+                    frame, self._last_face_mask, self._last_face_fill_color)
             return frame
         small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
         mask = np.zeros((self._size[1], self._size[0]), dtype=np.uint8)
+        face_mask = np.zeros_like(mask)
         points = estimator.last_normalized_landmarks
 
         def point(index):
@@ -61,6 +76,7 @@ class FastPersonHider:
         head_radius_y = max(round(head_radius_x * 1.38), round(shoulder_width * .5), 17)
         head_center = (head_x, head_y - round(head_radius_y * .32))
         cv2.ellipse(mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
+        cv2.ellipse(face_mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
 
         # Face Landmarker remains reliable when only one pose ear is visible.
         # Add its actual profile hull instead of deriving profile width from the
@@ -78,6 +94,7 @@ class FastPersonHider:
             expanded[~above, 1] = center[1] + (expanded[~above, 1] - center[1]) * 1.12
             face_hull = cv2.convexHull(np.rint(expanded).astype(np.int32))
             cv2.fillConvexPoly(mask, face_hull, 255)
+            cv2.fillConvexPoly(face_mask, face_hull, 255)
         for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
             for start, end in zip(chain, chain[1:]):
                 cv2.line(mask, point(start), point(end), 255, limb_thickness)
@@ -91,6 +108,7 @@ class FastPersonHider:
         # Two pixels at mask resolution cover detector jitter without producing
         # the broad horizontal replacement band seen with the old 7x7 dilation.
         mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
+        face_mask = cv2.dilate(face_mask, np.ones((3, 3), np.uint8), iterations=1)
 
         ys, xs = np.nonzero(mask)
         if not len(xs):
@@ -120,10 +138,10 @@ class FastPersonHider:
             else np.median(small.reshape(-1, 3), axis=0).astype(np.uint8)
         )
 
-        full_size = (frame.shape[1], frame.shape[0])
-        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_LINEAR)
-        alpha = (full_mask.astype(np.float32) / 255.0)[:, :, None]
-        return np.rint(frame * (1.0 - alpha) + fill_color * alpha).astype(np.uint8)
+        self._last_face_mask = face_mask.copy()
+        self._last_face_fill_color = fill_color.copy()
+        self._last_face_seen_at = time.perf_counter()
+        return self._fill_mask(frame, mask, fill_color)
 
 
 class TrackerFrameServer:
