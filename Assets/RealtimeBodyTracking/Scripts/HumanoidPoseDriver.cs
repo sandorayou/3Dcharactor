@@ -49,6 +49,12 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.5f, 30f)] private float positionMeasurementSmoothing = 6f;
         [SerializeField, Range(.5f, 30f)] private float positionFollowSpeed = 5f;
         [SerializeField, Range(0f, 1f)] private float positionMinConfidence = .6f;
+        [Header("Exact Screen Registration")]
+        [SerializeField] private bool enableExactScreenRegistration = true;
+        [SerializeField, Range(0f, .01f)] private float screenCenterDeadZone = .0015f;
+        [SerializeField, Range(0f, .5f)] private float shoulderWidthJumpLimit = .18f;
+        [SerializeField, Range(0f, .05f)] private float maximumScreenPrediction = .030f;
+        [SerializeField, Range(0f, 1f)] private float screenVelocityBlend = .55f;
         [SerializeField, Range(0f, 10f)] private float bodyLeanDeadZone = .5f;
         [SerializeField, Range(0f, 45f)] private float maxBodyLean = 40f;
         [SerializeField, Range(.5f, 30f)] private float bodyLeanSmoothing = 14f;
@@ -73,13 +79,13 @@ namespace RealtimeBodyTracking
         [SerializeField, Min(0f)] private float maxWristSpeed = 2.5f;
         [SerializeField, Min(0f)] private float maxElbowSpeed = 3f;
         [SerializeField, Range(.25f, 1.5f)] private float handHorizontalGain = 1f;
-        [SerializeField, Range(.5f, 2f)] private float armVerticalGain = 1.5f;
+        [SerializeField, Range(.5f, 2f)] private float armVerticalGain = 1f;
         [SerializeField, Range(1, 5)] private int armAcquireFrames = 2;
-        [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .03f;
-        [SerializeField, Range(.5f, 5f)] private float armPositionSmoothingCutoff = 2f;
-        [SerializeField, Range(0f, 2f)] private float armMotionResponsiveness = .25f;
-        [SerializeField, Range(1f, 60f)] private float armRotationSmoothingSpeed = 14f;
-        [SerializeField, Min(0f)] private float wristHoldTime = .15f;
+        [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .006f;
+        [SerializeField, Range(.5f, 12f)] private float armPositionSmoothingCutoff = 5f;
+        [SerializeField, Range(0f, 4f)] private float armMotionResponsiveness = 1.1f;
+        [SerializeField, Range(1f, 60f)] private float armRotationSmoothingSpeed = 30f;
+        [SerializeField, Min(0f)] private float wristHoldTime = .08f;
         [SerializeField, Range(0.5f, 3f)] private float maxForearmToUpperArmRatio = 1.8f;
         [SerializeField, Range(.1f, 5f)] private float armRelaxSpeed = 1.2f;
         [SerializeField, Range(.1f, 10f)] private float armRecoverSpeed = 4f;
@@ -95,9 +101,9 @@ namespace RealtimeBodyTracking
         [SerializeField] private float torsoExtendedWristTrackerZ = -.38f;
         [SerializeField, Range(0f, .5f)] private float torsoChestDepthShoulderWidths = .22f;
         [SerializeField, Range(0f, 100f)] private float maxForearmTwistDegrees = 85f;
-        [SerializeField, Range(.5f, 30f)] private float handOrientationSmoothing = 8f;
-        [SerializeField, Range(.5f, 30f)] private float fingerSmoothingSpeed = 9f;
-        [SerializeField, Range(0f, 10f)] private float fingerRotationDeadZoneDegrees = 2f;
+        [SerializeField, Range(.5f, 30f)] private float handOrientationSmoothing = 14f;
+        [SerializeField, Range(.5f, 30f)] private float fingerSmoothingSpeed = 16f;
+        [SerializeField, Range(0f, 10f)] private float fingerRotationDeadZoneDegrees = .7f;
         [SerializeField, Range(0f, .5f)] private float fingerTrackingHoldTime = .2f;
         [SerializeField] private bool enableHead = true;
         [SerializeField] private bool enableArms = true;
@@ -226,6 +232,12 @@ namespace RealtimeBodyTracking
         private bool rightShoulderLeanInitialized;
         private int lastBodyShoulderMode = 99;
         private bool hipsInitialized;
+        private bool screenRegistrationInitialized;
+        private Vector2 lastMeasuredShoulderCenter;
+        private Vector2 filteredShoulderVelocity;
+        private float lastMeasuredShoulderWidth;
+        private float filteredShoulderWidthVelocity;
+        private float lastScreenRegistrationTime;
         private Vector3 avatarRootOriginPosition;
         private Quaternion avatarRootOriginRotation;
         private Quaternion rootRotationDelta = Quaternion.identity;
@@ -448,7 +460,6 @@ namespace RealtimeBodyTracking
                 if (returnToRestPose && !waistCoordinatesLocked) ReturnToRest();
                 if (enableHead) ApplyHead(pose);
                 ApplyFaceExpressions(pose);
-                ApplyFaceZoom(pose, Time.unscaledDeltaTime);
                 return;
             }
             var hipsVisible = upperBody.HipsTracked;
@@ -482,12 +493,6 @@ namespace RealtimeBodyTracking
             if (hasScreenBody)
             {
                 bodyLeanDegrees = ResolveBodyLean(screenBody);
-                if (enableHipsPosition && !waistCoordinatesLocked)
-                {
-                    bodyPositionTracking = true;
-                    var screenCenter = ResolveScreenBody(screenBody, bodyLeanDegrees, out var shoulderWidth);
-                    ApplyHips(pose, screenCenter, shoulderWidth, screenBody.ShoulderMode);
-                }
             }
 
             ApplyBodyTurn(upperBody);
@@ -498,6 +503,11 @@ namespace RealtimeBodyTracking
             ApplyDirection(HumanBodyBones.Spine, upperBody.Torso, upperBody.Forward, bodyLeanDegrees * .55f);
             ApplyRestBoneRoll(HumanBodyBones.Chest, bodyLeanDegrees * .8f);
             ApplyRestBoneRoll(HumanBodyBones.UpperChest, bodyLeanDegrees);
+            if (hasScreenBody && enableHipsPosition && !waistCoordinatesLocked)
+            {
+                bodyPositionTracking = true;
+                ApplyScreenRegistration(pose);
+            }
             if (enableArms)
             {
                 // Keep clavicles at their local rest pose so they inherit the chest
@@ -532,7 +542,6 @@ namespace RealtimeBodyTracking
                         ReturnBoneToRest(chain.bone);
             if (enableHead) ApplyHead(pose);
             ApplyFaceExpressions(pose);
-            ApplyFaceZoom(pose, Time.unscaledDeltaTime);
         }
 
         public void RebaseBodyTracking()
@@ -1989,39 +1998,16 @@ namespace RealtimeBodyTracking
             out Transform shoulderTransform, out Vector3 shoulderViewport, out Vector3 targetViewport)
         {
             shoulderTransform = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
-            var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-            if (shoulderTransform == null || leftShoulder == null || rightShoulder == null ||
-                !pose.TryGetImage("left_shoulder", wristMinConfidence, out var leftShoulderImage) ||
-                !pose.TryGetImage("right_shoulder", wristMinConfidence, out var rightShoulderImage))
+            if (shoulderTransform == null)
             {
                 shoulderViewport = default;
                 targetViewport = default;
                 return false;
             }
             shoulderViewport = trackingCamera.WorldToViewportPoint(shoulderTransform.position);
-            var sourceShoulderName = SourceSide(left) + "_shoulder";
-            if (!pose.TryGetImage(sourceShoulderName, wristMinConfidence, out var sourceShoulderImage))
-            {
-                targetViewport = default;
-                return false;
-            }
-            var leftShoulderViewport = trackingCamera.WorldToViewportPoint(leftShoulder.position);
-            var rightShoulderViewport = trackingCamera.WorldToViewportPoint(rightShoulder.position);
-            var avatarShoulderWidth = Vector2.Distance(leftShoulderViewport, rightShoulderViewport);
-            var sourceShoulderWidth = Vector2.Distance(leftShoulderImage, rightShoulderImage);
-            var sourcePoint = ToPreviewViewport(imagePoint);
-            var sourceShoulder = ToPreviewViewport(sourceShoulderImage);
-            var viewportScale = avatarShoulderWidth / Mathf.Max(sourceShoulderWidth, .03f);
-            // ToPreviewViewport already mirrors camera X. SourceSide handles which physical
-            // hand drives the facing avatar, so applying avatarMirror here would invert motion twice.
-            var dx = sourcePoint.x - sourceShoulder.x;
-            var dy = sourcePoint.y - sourceShoulder.y;
-            var offset = new Vector2(dx * handHorizontalGain, dy * armVerticalGain) * viewportScale;
-            targetViewport = new Vector3(
-                shoulderViewport.x + offset.x,
-                shoulderViewport.y + offset.y,
-                shoulderViewport.z);
+            var sourcePoint = SourceImageToViewport(new Vector2(imagePoint.x, imagePoint.y),
+                pose.source_width, pose.source_height);
+            targetViewport = new Vector3(sourcePoint.x, sourcePoint.y, shoulderViewport.z);
             return shoulderViewport.z > 0f && targetViewport.z > 0f;
         }
 
@@ -2453,6 +2439,85 @@ namespace RealtimeBodyTracking
             if (Mathf.Abs(delta) > bodyLeanDeadZone)
                 stableBodyLean += Mathf.Sign(delta) * (Mathf.Abs(delta) - bodyLeanDeadZone);
             return Mathf.Clamp(stableBodyLean, -maxBodyLean, maxBodyLean);
+        }
+
+        private bool TryGetSourceShoulderViewport(PosePacket pose, out Vector2 left, out Vector2 right)
+        {
+            left = default;
+            right = default;
+            if (!pose.TryGetImage("left_shoulder", positionMinConfidence, out var leftImage) ||
+                !pose.TryGetImage("right_shoulder", positionMinConfidence, out var rightImage))
+                return false;
+            left = SourceImageToViewport(new Vector2(leftImage.x, leftImage.y), pose.source_width, pose.source_height);
+            right = SourceImageToViewport(new Vector2(rightImage.x, rightImage.y), pose.source_width, pose.source_height);
+            return true;
+        }
+
+        private void ApplyScreenRegistration(PosePacket pose)
+        {
+            if (!enableExactScreenRegistration || trackingCamera == null || targetAnimator == null ||
+                !TryGetSourceShoulderViewport(pose, out var sourceLeft, out var sourceRight)) return;
+            var avatarLeft = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var avatarRight = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            if (avatarLeft == null || avatarRight == null) return;
+
+            var measuredCenter = (sourceLeft + sourceRight) * .5f;
+            var measuredWidth = Vector2.Distance(sourceLeft, sourceRight);
+            if (measuredWidth < .025f) return;
+            var now = Time.unscaledTime;
+            if (!screenRegistrationInitialized)
+            {
+                lastMeasuredShoulderCenter = measuredCenter;
+                lastMeasuredShoulderWidth = measuredWidth;
+                filteredShoulderVelocity = Vector2.zero;
+                filteredShoulderWidthVelocity = 0f;
+                lastScreenRegistrationTime = now;
+                screenRegistrationInitialized = true;
+            }
+            else if (receivedNewPoseFrame)
+            {
+                var dt = Mathf.Clamp(now - lastScreenRegistrationTime, .001f, .1f);
+                var movement = measuredCenter - lastMeasuredShoulderCenter;
+                if (movement.magnitude < screenCenterDeadZone) measuredCenter = lastMeasuredShoulderCenter;
+                var measuredVelocity = (measuredCenter - lastMeasuredShoulderCenter) / dt;
+                filteredShoulderVelocity = Vector2.Lerp(filteredShoulderVelocity, measuredVelocity, screenVelocityBlend);
+                var widthRatio = measuredWidth / Mathf.Max(lastMeasuredShoulderWidth, .001f);
+                if (Mathf.Abs(widthRatio - 1f) < shoulderWidthJumpLimit)
+                {
+                    var widthVelocity = (measuredWidth - lastMeasuredShoulderWidth) / dt;
+                    filteredShoulderWidthVelocity = Mathf.Lerp(filteredShoulderWidthVelocity, widthVelocity, .4f);
+                    lastMeasuredShoulderWidth = measuredWidth;
+                }
+                lastMeasuredShoulderCenter = measuredCenter;
+                lastScreenRegistrationTime = now;
+            }
+
+            var predictionTime = pose.version >= 5
+                ? Mathf.Clamp(pose.processing_ms * .001f * .7f + .005f, 0f, maximumScreenPrediction)
+                : maximumScreenPrediction;
+            var targetCenter = lastMeasuredShoulderCenter + filteredShoulderVelocity * predictionTime;
+            var targetWidth = Mathf.Max(lastMeasuredShoulderWidth + filteredShoulderWidthVelocity * predictionTime, .025f);
+            var root = targetAnimator.transform;
+            var avatarCenterWorld = (avatarLeft.position + avatarRight.position) * .5f;
+            var avatarLeftViewport = trackingCamera.WorldToViewportPoint(avatarLeft.position);
+            var avatarRightViewport = trackingCamera.WorldToViewportPoint(avatarRight.position);
+            var avatarWidth = Vector2.Distance(avatarLeftViewport, avatarRightViewport);
+            var currentDepth = Vector3.Dot(avatarCenterWorld - trackingCamera.transform.position,
+                trackingCamera.transform.forward);
+            if (currentDepth <= .05f || avatarWidth <= .001f) return;
+            var desiredDepth = Mathf.Clamp(currentDepth * avatarWidth / targetWidth,
+                minimumFaceCameraDistance, maximumFaceCameraDistance);
+            root.position += trackingCamera.transform.forward * (desiredDepth - currentDepth);
+
+            avatarCenterWorld = (avatarLeft.position + avatarRight.position) * .5f;
+            currentDepth = Vector3.Dot(avatarCenterWorld - trackingCamera.transform.position,
+                trackingCamera.transform.forward);
+            targetCenter.y += avatarViewportVerticalOffset;
+            var desiredWorld = trackingCamera.ViewportToWorldPoint(
+                new Vector3(targetCenter.x, targetCenter.y, currentDepth));
+            var translation = desiredWorld - avatarCenterWorld;
+            root.position += trackingCamera.transform.right * Vector3.Dot(translation, trackingCamera.transform.right) +
+                             trackingCamera.transform.up * Vector3.Dot(translation, trackingCamera.transform.up);
         }
 
         private void ApplyHips(PosePacket pose, Vector2 screenCenter, float sourceShoulderWidth, int shoulderMode)
@@ -2965,6 +3030,12 @@ namespace RealtimeBodyTracking
             centerInterpolationStartedAt = 0f;
             centerSampleInterval = 1f / 30f;
             predictiveCenterInitialized = false;
+            screenRegistrationInitialized = false;
+            lastMeasuredShoulderCenter = Vector2.zero;
+            filteredShoulderVelocity = Vector2.zero;
+            lastMeasuredShoulderWidth = 0f;
+            filteredShoulderWidthVelocity = 0f;
+            lastScreenRegistrationTime = 0f;
             filteredShoulderWidth = 0f;
             stableShoulderWidth = 0f;
         }

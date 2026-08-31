@@ -168,6 +168,7 @@ def parse_args() -> TrackerSettings:
     parser.add_argument("--port", type=int, default=39540)
     parser.add_argument("--no-preview", action="store_true")
     parser.add_argument("--tracking-mirror", action="store_true")
+    parser.add_argument("--debug", action="store_true")
     parser.add_argument("--debug-log", type=Path, default=Path("debug/tracker-latest.jsonl"))
     parser.add_argument("--debug-video", type=Path, default=Path("debug/tracker-preview-latest.avi"))
     args = parser.parse_args()
@@ -184,6 +185,7 @@ def parse_args() -> TrackerSettings:
         udp_port=args.port,
         preview=not args.no_preview,
         tracking_mirror=args.tracking_mirror,
+        debug=args.debug,
         debug_log_path=args.debug_log,
         debug_video_path=args.debug_video,
     )
@@ -226,8 +228,8 @@ def main() -> None:
     camera = CameraCapture(settings, frames)
     estimator = PoseEstimator(settings)
     sender = UdpPoseSender(settings.udp_host, settings.udp_port)
-    recorder = DebugRecorder(settings.debug_log_path)
-    video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps)
+    recorder = DebugRecorder(settings.debug_log_path) if settings.debug else None
+    video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps) if settings.debug else None
     frame_server = TrackerFrameServer(settings.video_port)
     person_hider = FastPersonHider()
     camera.start()
@@ -244,12 +246,13 @@ def main() -> None:
                 frame_number += 1
                 packet = estimator.estimate(frame, timestamp_ms, frame_number)
                 sender.send(packet)
-                recorder.write(packet, estimator.last_hand_assignments)
+                if recorder is not None:
+                    recorder.write(packet, estimator.last_hand_assignments)
                 # Publish the same captured frame that produced this packet,
                 # with tracker points overlaid for Unity's background.
                 hidden_frame = person_hider.apply(frame, estimator)
-                frame_server.update(draw_preview(
-                    hidden_frame, estimator, "", settings.preview_mirror))
+                output_frame = cv2.flip(hidden_frame, 1) if settings.preview_mirror else hidden_frame
+                frame_server.update(output_frame)
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
@@ -259,7 +262,8 @@ def main() -> None:
                     f"cam {camera.camera_fps:.1f} | pose {estimator.inference_fps:.1f} fps | {estimator.inference_ms:.0f} ms | sent {sender.sent_packets} | drop {frames.dropped_frames} | latency {latency if item else '-'} ms",
                     settings.preview_mirror,
                 )
-                video_recorder.write(preview)
+                if video_recorder is not None:
+                    video_recorder.write(preview)
                 cv2.imshow(PREVIEW_WINDOW, preview)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("q"), 27):
@@ -272,8 +276,10 @@ def main() -> None:
         camera.stop()
         estimator.close()
         sender.close()
-        recorder.close()
-        video_recorder.close()
+        if recorder is not None:
+            recorder.close()
+        if video_recorder is not None:
+            video_recorder.close()
         frame_server.close()
         cv2.destroyAllWindows()
     if camera.error:

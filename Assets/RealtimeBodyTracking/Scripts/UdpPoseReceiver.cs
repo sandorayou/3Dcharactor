@@ -15,7 +15,7 @@ namespace RealtimeBodyTracking
     {
         [SerializeField] private int port = 39542;
         [SerializeField] private bool logMalformedPackets;
-        [SerializeField] private bool recordIncomingPackets = true;
+        [SerializeField] private bool recordIncomingPackets;
         [SerializeField, Min(1)] private int maximumRecordingMegabytes = 16;
         [SerializeField, Tooltip("Live diagnostics; updated by the receiver thread.")] private long latestReceivedFrame = -1;
         [SerializeField, Tooltip("Live diagnostics; updated by the receiver thread.")] private bool latestTracking;
@@ -125,7 +125,7 @@ namespace RealtimeBodyTracking
                         $"{{\"received_at\":\"{receivedLocal:yyyy-MM-dd'T'HH:mm:ss.fffK}\"," +
                         $"\"received_utc\":\"{receivedUtc:yyyy-MM-dd'T'HH:mm:ss.fff'Z'}\",\"packet\":{json}}}");
                     var packet = JsonUtility.FromJson<PosePacket>(json);
-                    if (packet == null || packet.version < 1 || packet.version > 4 || packet.frame < 0) throw new FormatException();
+                    if (packet == null || packet.version < 1 || packet.version > 5 || packet.frame < 0) throw new FormatException();
                     lock (sync)
                     {
                         if (packet.frame <= latestFrame)
