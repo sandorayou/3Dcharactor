@@ -2526,11 +2526,20 @@ namespace RealtimeBodyTracking
 
         private Vector2 SourceImageToViewport(Vector2 imagePoint, int sourceWidth, int sourceHeight)
         {
-            // Python already removes the square inference letterbox and reports
-            // coordinates normalized to the original camera image. Map 0..1 directly
-            // to Unity so the camera and game-view edges line up.
             var x = 1f - imagePoint.x;
             var y = 1f - imagePoint.y;
+            if (trackingCamera != null && sourceWidth > 0 && sourceHeight > 0)
+            {
+                // TrackerVideoBackground uses a centered "cover" fit. Apply the
+                // identical crop transform to landmarks so avatar anchors remain
+                // registered to the visible points after the side bars are removed.
+                var sourceAspect = (float)sourceWidth / sourceHeight;
+                var viewportAspect = trackingCamera.aspect;
+                if (sourceAspect < viewportAspect)
+                    y = .5f + (y - .5f) * (viewportAspect / sourceAspect);
+                else if (sourceAspect > viewportAspect)
+                    x = .5f + (x - .5f) * (sourceAspect / viewportAspect);
+            }
             return new Vector2(x, y);
         }
 
@@ -2701,13 +2710,11 @@ namespace RealtimeBodyTracking
                 !pose.TryGetImage("right_shoulder", .55f, out var right))
                 return false;
 
-            // Keep the size calculation used by tracker-video-avatar-overlay: the
-            // camera image occupies only part of a wider Unity viewport, so compare
-            // shoulder widths in that fitted viewport rather than raw image space.
+            // Match TrackerVideoBackground's centered "cover" transform.
             var sourceAspect = pose.source_height > 0
                 ? (float)pose.source_width / pose.source_height
                 : 4f / 3f;
-            var viewportScaleX = trackingCamera.aspect > sourceAspect
+            var viewportScaleX = trackingCamera.aspect < sourceAspect
                 ? sourceAspect / trackingCamera.aspect
                 : 1f;
             width = Mathf.Abs(right.x - left.x) * viewportScaleX;

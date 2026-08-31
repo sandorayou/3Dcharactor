@@ -71,9 +71,11 @@ namespace RealtimeBodyTracking
                                Mathf.Tan(targetCamera.fieldOfView * Mathf.Deg2Rad * .5f);
             float viewWidth = viewHeight * targetCamera.aspect;
             float sourceAspect = (float)width / Mathf.Max(height, 1);
+            // Cover the game view. Aspect differences are cropped symmetrically,
+            // so no camera-clear bars remain at the sides or top/bottom.
             float fittedWidth;
             float fittedHeight;
-            if (sourceAspect > targetCamera.aspect)
+            if (sourceAspect < targetCamera.aspect)
             {
                 fittedWidth = viewWidth;
                 fittedHeight = viewWidth / sourceAspect;
