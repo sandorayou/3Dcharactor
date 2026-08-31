@@ -32,6 +32,9 @@ namespace RealtimeBodyTracking
         [SerializeField] private bool avatarMirror = true;
         [SerializeField] private bool enableHipsPosition = true;
         [SerializeField] private bool strictScreenLock = true;
+        [SerializeField] private bool predictiveCenterFollow = true;
+        [SerializeField, Range(0f, .1f)] private float centerPredictionSeconds = .033f;
+        [SerializeField, Range(1f, 60f)] private float centerInterpolationSpeed = 30f;
         [SerializeField, Range(0f, 5f)] private float hipsPositionScale = .25f;
         [SerializeField, Range(0f, 3f)] private float bodyDepthFromShoulderWidth = 1.2f;
         [SerializeField, Min(0f)] private float maxHipsSpeed = .8f;
@@ -196,6 +199,11 @@ namespace RealtimeBodyTracking
         private Vector2 sourceScreenOrigin;
         private Vector2 filteredScreenCenter;
         private Vector2 stableScreenCenter;
+        private Vector2 predictedScreenCenter;
+        private Vector2 measuredScreenVelocity;
+        private Vector2 previousMeasuredScreenCenter;
+        private float previousScreenMeasurementTime = float.NegativeInfinity;
+        private bool predictiveCenterInitialized;
         private Vector3 avatarHipOrigin;
         private float sourceShoulderWidthOrigin;
         private float sourceCameraDistanceOrigin;
@@ -2464,9 +2472,39 @@ namespace RealtimeBodyTracking
             }
 
             var measurementT = 1f - Mathf.Exp(-positionMeasurementSmoothing * Time.deltaTime);
-            filteredScreenCenter = strictScreenLock
-                ? screenCenter
-                : Vector2.Lerp(filteredScreenCenter, screenCenter, measurementT);
+            if (strictScreenLock && predictiveCenterFollow)
+            {
+                var now = Time.unscaledTime;
+                if (!predictiveCenterInitialized)
+                {
+                    predictedScreenCenter = screenCenter;
+                    previousMeasuredScreenCenter = screenCenter;
+                    previousScreenMeasurementTime = now;
+                    measuredScreenVelocity = Vector2.zero;
+                    predictiveCenterInitialized = true;
+                }
+                else if (receivedNewPoseFrame)
+                {
+                    var sampleDelta = Mathf.Clamp(now - previousScreenMeasurementTime, .001f, .15f);
+                    var rawVelocity = (screenCenter - previousMeasuredScreenCenter) / sampleDelta;
+                    measuredScreenVelocity = Vector2.Lerp(measuredScreenVelocity, rawVelocity, .65f);
+                    previousMeasuredScreenCenter = screenCenter;
+                    previousScreenMeasurementTime = now;
+                }
+
+                var sampleAge = Mathf.Clamp(now - previousScreenMeasurementTime, 0f, centerPredictionSeconds);
+                var predictedTarget = previousMeasuredScreenCenter +
+                                      measuredScreenVelocity * (sampleAge + centerPredictionSeconds);
+                var interpolation = 1f - Mathf.Exp(-centerInterpolationSpeed * Time.unscaledDeltaTime);
+                predictedScreenCenter = Vector2.Lerp(predictedScreenCenter, predictedTarget, interpolation);
+                filteredScreenCenter = predictedScreenCenter;
+            }
+            else
+            {
+                filteredScreenCenter = strictScreenLock
+                    ? screenCenter
+                    : Vector2.Lerp(filteredScreenCenter, screenCenter, measurementT);
+            }
             stableScreenCenter.x = strictScreenLock
                 ? filteredScreenCenter.x
                 : FollowOutsideDeadZone(stableScreenCenter.x, filteredScreenCenter.x, horizontalPositionDeadZone);
@@ -2883,6 +2921,11 @@ namespace RealtimeBodyTracking
 
             filteredScreenCenter = Vector2.zero;
             stableScreenCenter = Vector2.zero;
+            predictedScreenCenter = Vector2.zero;
+            measuredScreenVelocity = Vector2.zero;
+            previousMeasuredScreenCenter = Vector2.zero;
+            previousScreenMeasurementTime = float.NegativeInfinity;
+            predictiveCenterInitialized = false;
             filteredShoulderWidth = 0f;
             stableShoulderWidth = 0f;
         }
