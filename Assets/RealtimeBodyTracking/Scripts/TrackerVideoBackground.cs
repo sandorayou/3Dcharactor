@@ -17,6 +17,8 @@ namespace RealtimeBodyTracking
         private Transform background;
         private MeshRenderer backgroundRenderer;
         private Texture2D texture;
+        private int fittedTextureWidth = -1;
+        private int fittedTextureHeight = -1;
 
         private void Awake()
         {
@@ -31,6 +33,13 @@ namespace RealtimeBodyTracking
             backgroundRenderer = quad.GetComponent<MeshRenderer>();
             var shader = Shader.Find("Unlit/Texture");
             backgroundRenderer.material = new Material(shader);
+            texture = new Texture2D(2, 2, TextureFormat.RGB24, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            backgroundRenderer.material.mainTexture = texture;
+            backgroundRenderer.material.mainTextureScale =
+                mirror ? new Vector2(-1f, 1f) : Vector2.one;
+            backgroundRenderer.material.mainTextureOffset =
+                mirror ? new Vector2(1f, 0f) : Vector2.zero;
             backgroundRenderer.enabled = false;
             StartCoroutine(PollFrames());
         }
@@ -40,23 +49,22 @@ namespace RealtimeBodyTracking
             var wait = new WaitForSecondsRealtime(1f / refreshRate);
             while (true)
             {
-                using (var request = UnityWebRequestTexture.GetTexture(frameUrl + "?t=" + Time.realtimeSinceStartup))
+                using (var request = UnityWebRequest.Get(frameUrl + "?t=" + Time.realtimeSinceStartup))
                 {
                     yield return request.SendWebRequest();
                     if (request.result == UnityWebRequest.Result.Success)
                     {
-                        var next = DownloadHandlerTexture.GetContent(request);
-                        if (next != null)
+                        var bytes = request.downloadHandler.data;
+                        if (bytes != null && bytes.Length > 0 &&
+                            ImageConversion.LoadImage(texture, bytes, false))
                         {
-                            if (texture != null) Destroy(texture);
-                            texture = next;
                             texture.wrapMode = TextureWrapMode.Clamp;
-                            backgroundRenderer.material.mainTexture = texture;
-                            backgroundRenderer.material.mainTextureScale =
-                                mirror ? new Vector2(-1f, 1f) : Vector2.one;
-                            backgroundRenderer.material.mainTextureOffset =
-                                mirror ? new Vector2(1f, 0f) : Vector2.zero;
-                            FitToSource(texture.width, texture.height);
+                            if (texture.width != fittedTextureWidth || texture.height != fittedTextureHeight)
+                            {
+                                fittedTextureWidth = texture.width;
+                                fittedTextureHeight = texture.height;
+                                FitToSource(texture.width, texture.height);
+                            }
                             backgroundRenderer.enabled = true;
                         }
                     }

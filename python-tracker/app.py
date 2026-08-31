@@ -25,10 +25,17 @@ class FastPersonHider:
     def __init__(self) -> None:
         self._plate = None
         self._size = (320, 240)
+        self._last_mask = None
+        self._last_safe_frame = None
+        self._lost_frames = 0
 
     def apply(self, frame, estimator: PoseEstimator):
         if not estimator.last_normalized_landmarks:
-            return frame
+            self._lost_frames += 1
+            if self._last_safe_frame is not None:
+                return self._last_safe_frame.copy()
+            return np.zeros_like(frame)
+        self._lost_frames = 0
         small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
         mask = np.zeros((self._size[1], self._size[0]), dtype=np.uint8)
         points = estimator.last_normalized_landmarks
@@ -92,6 +99,10 @@ class FastPersonHider:
         # Two pixels at mask resolution cover detector jitter without producing
         # the broad horizontal replacement band seen with the old 7x7 dilation.
         mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
+        if self._last_mask is not None:
+            previous_guard = cv2.dilate(
+                self._last_mask, np.ones((5, 5), np.uint8), iterations=1)
+            mask = cv2.max(mask, previous_guard)
 
         # The visible replacement stays tight, but the cached clean plate needs a
         # wider exclusion zone. Otherwise hair, sleeves, and motion edges just
@@ -117,6 +128,8 @@ class FastPersonHider:
         full_plate = cv2.resize(self._plate, full_size, interpolation=cv2.INTER_LINEAR)
         hidden = frame.copy()
         hidden[full_mask != 0] = full_plate[full_mask != 0]
+        self._last_mask = mask.copy()
+        self._last_safe_frame = hidden.copy()
         return hidden
 
 
@@ -168,6 +181,7 @@ def parse_args() -> TrackerSettings:
     parser.add_argument("--port", type=int, default=39540)
     parser.add_argument("--no-preview", action="store_true")
     parser.add_argument("--tracking-mirror", action="store_true")
+    parser.add_argument("--debug", action="store_true")
     parser.add_argument("--debug-log", type=Path, default=Path("debug/tracker-latest.jsonl"))
     parser.add_argument("--debug-video", type=Path, default=Path("debug/tracker-preview-latest.avi"))
     args = parser.parse_args()
@@ -184,6 +198,7 @@ def parse_args() -> TrackerSettings:
         udp_port=args.port,
         preview=not args.no_preview,
         tracking_mirror=args.tracking_mirror,
+        debug=args.debug,
         debug_log_path=args.debug_log,
         debug_video_path=args.debug_video,
     )
@@ -226,8 +241,8 @@ def main() -> None:
     camera = CameraCapture(settings, frames)
     estimator = PoseEstimator(settings)
     sender = UdpPoseSender(settings.udp_host, settings.udp_port)
-    recorder = DebugRecorder(settings.debug_log_path)
-    video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps)
+    recorder = DebugRecorder(settings.debug_log_path) if settings.debug else None
+    video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps) if settings.debug else None
     frame_server = TrackerFrameServer(settings.video_port)
     person_hider = FastPersonHider()
     camera.start()
@@ -244,12 +259,13 @@ def main() -> None:
                 frame_number += 1
                 packet = estimator.estimate(frame, timestamp_ms, frame_number)
                 sender.send(packet)
-                recorder.write(packet, estimator.last_hand_assignments)
+                if recorder is not None:
+                    recorder.write(packet, estimator.last_hand_assignments)
                 # Publish the same captured frame that produced this packet,
                 # with tracker points overlaid for Unity's background.
                 hidden_frame = person_hider.apply(frame, estimator)
-                frame_server.update(draw_preview(
-                    hidden_frame, estimator, "", settings.preview_mirror))
+                unity_background = cv2.flip(hidden_frame, 1) if settings.preview_mirror else hidden_frame
+                frame_server.update(unity_background)
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
@@ -259,7 +275,8 @@ def main() -> None:
                     f"cam {camera.camera_fps:.1f} | pose {estimator.inference_fps:.1f} fps | {estimator.inference_ms:.0f} ms | sent {sender.sent_packets} | drop {frames.dropped_frames} | latency {latency if item else '-'} ms",
                     settings.preview_mirror,
                 )
-                video_recorder.write(preview)
+                if video_recorder is not None:
+                    video_recorder.write(preview)
                 cv2.imshow(PREVIEW_WINDOW, preview)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("q"), 27):
@@ -272,8 +289,10 @@ def main() -> None:
         camera.stop()
         estimator.close()
         sender.close()
-        recorder.close()
-        video_recorder.close()
+        if recorder is not None:
+            recorder.close()
+        if video_recorder is not None:
+            video_recorder.close()
         frame_server.close()
         cv2.destroyAllWindows()
     if camera.error:
