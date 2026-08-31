@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from camera import CameraCapture
 from debug_recorder import DebugRecorder, DebugVideoRecorder
@@ -91,6 +92,13 @@ def parse_args() -> TrackerSettings:
 def draw_preview(frame, estimator: PoseEstimator, text: str, mirror: bool):
     preview = frame.copy()
     h, w = preview.shape[:2]
+
+    # Remove the segmented performer before Unity composites the avatar.
+    # Dilation covers motion/segmentation edges so the real person cannot leak.
+    if estimator.last_person_mask is not None:
+        person_mask = (estimator.last_person_mask > .12).astype("uint8") * 255
+        person_mask = cv2.dilate(person_mask, np.ones((17, 17), np.uint8), iterations=1)
+        preview = cv2.inpaint(preview, person_mask, 5, cv2.INPAINT_TELEA)
 
     # Draw body pose landmarks (Green circles)
     if estimator.last_normalized_landmarks:

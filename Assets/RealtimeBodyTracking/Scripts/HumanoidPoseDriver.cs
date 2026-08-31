@@ -31,6 +31,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 10f)] private float rotationDeadZoneDegrees = 3f;
         [SerializeField] private bool avatarMirror = true;
         [SerializeField] private bool enableHipsPosition = true;
+        [SerializeField] private bool strictScreenLock = true;
         [SerializeField, Range(0f, 5f)] private float hipsPositionScale = .25f;
         [SerializeField, Range(0f, 3f)] private float bodyDepthFromShoulderWidth = 1.2f;
         [SerializeField, Min(0f)] private float maxHipsSpeed = .8f;
@@ -2463,9 +2464,15 @@ namespace RealtimeBodyTracking
             }
 
             var measurementT = 1f - Mathf.Exp(-positionMeasurementSmoothing * Time.deltaTime);
-            filteredScreenCenter = Vector2.Lerp(filteredScreenCenter, screenCenter, measurementT);
-            stableScreenCenter.x = FollowOutsideDeadZone(stableScreenCenter.x, filteredScreenCenter.x, horizontalPositionDeadZone);
-            stableScreenCenter.y = FollowOutsideDeadZone(stableScreenCenter.y, filteredScreenCenter.y, verticalPositionDeadZone);
+            filteredScreenCenter = strictScreenLock
+                ? screenCenter
+                : Vector2.Lerp(filteredScreenCenter, screenCenter, measurementT);
+            stableScreenCenter.x = strictScreenLock
+                ? filteredScreenCenter.x
+                : FollowOutsideDeadZone(stableScreenCenter.x, filteredScreenCenter.x, horizontalPositionDeadZone);
+            stableScreenCenter.y = strictScreenLock
+                ? filteredScreenCenter.y
+                : FollowOutsideDeadZone(stableScreenCenter.y, filteredScreenCenter.y, verticalPositionDeadZone);
             if (shoulderMode != 2 && sourceShoulderWidth > .001f)
             {
                 filteredShoulderWidth = Mathf.Lerp(filteredShoulderWidth, sourceShoulderWidth, measurementT);
@@ -2519,9 +2526,16 @@ namespace RealtimeBodyTracking
                 cameraRight * Vector3.Dot(correction, cameraRight) +
                 cameraUp * Vector3.Dot(correction, cameraUp);
 
-            var t = 1f - Mathf.Exp(-positionFollowSpeed * Time.deltaTime);
-            var maxStep = maxHipsSpeed > 0f ? maxHipsSpeed * Time.deltaTime : float.PositiveInfinity;
-            root.position = Vector3.MoveTowards(root.position, Vector3.Lerp(root.position, target, t), maxStep);
+            if (strictScreenLock)
+            {
+                root.position = target;
+            }
+            else
+            {
+                var t = 1f - Mathf.Exp(-positionFollowSpeed * Time.deltaTime);
+                var maxStep = maxHipsSpeed > 0f ? maxHipsSpeed * Time.deltaTime : float.PositiveInfinity;
+                root.position = Vector3.MoveTowards(root.position, Vector3.Lerp(root.position, target, t), maxStep);
+            }
         }
 
         private Vector2 SourceImageToViewport(Vector2 imagePoint, int sourceWidth, int sourceHeight)
@@ -2793,8 +2807,9 @@ namespace RealtimeBodyTracking
                 if (receivedNewPoseFrame)
                 {
                     var measurementT = 1f - Mathf.Exp(-8f * deltaTime);
-                    filteredSourceShoulderFramingWidth = Mathf.Lerp(
-                        filteredSourceShoulderFramingWidth, rawShoulderWidth, measurementT);
+                    filteredSourceShoulderFramingWidth = strictScreenLock
+                        ? rawShoulderWidth
+                        : Mathf.Lerp(filteredSourceShoulderFramingWidth, rawShoulderWidth, measurementT);
                 }
                 sourceWidth = filteredSourceShoulderFramingWidth;
             }
@@ -2837,14 +2852,16 @@ namespace RealtimeBodyTracking
 
             float targetDistance = Mathf.Clamp(currentDistance * sizeRatio, minimumFaceCameraDistance, maximumFaceCameraDistance);
 
-            float smoothDistance = Mathf.SmoothDamp(
-                currentDistance,
-                targetDistance,
-                ref cameraDistanceVelocity,
-                faceZoomSmoothTime,
-                5f,
-                deltaTime
-            );
+            float smoothDistance = strictScreenLock
+                ? targetDistance
+                : Mathf.SmoothDamp(
+                    currentDistance,
+                    targetDistance,
+                    ref cameraDistanceVelocity,
+                    faceZoomSmoothTime,
+                    5f,
+                    deltaTime
+                );
 
             // Zoom only along the existing view axis. Rebuilding the camera position
             // from the face center also changed X/Y, which pulled the camera up to the

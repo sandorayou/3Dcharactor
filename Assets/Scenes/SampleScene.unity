@@ -360,6 +360,7 @@ MonoBehaviour:
   rotationDeadZoneDegrees: 3
   avatarMirror: 1
   enableHipsPosition: 1
+  strictScreenLock: 1
   hipsPositionScale: 1
   enableFaceZoom: 1
   faceZoomSmoothTime: 0.18
