@@ -52,6 +52,7 @@ class PosePacket:
     version: int
     frame: int
     timestamp_ms: int
+    processing_ms: float
     source_width: int
     source_height: int
     tracking: bool

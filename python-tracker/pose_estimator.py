@@ -194,7 +194,8 @@ class PoseEstimator:
                 if category.category_name in tracked_shapes
             ]
         return PosePacket(
-            version=4, frame=frame_number, timestamp_ms=timestamp_ms,
+            version=5, frame=frame_number, timestamp_ms=timestamp_ms,
+            processing_ms=max(0.0, time.monotonic_ns() / 1_000_000 - timestamp_ms),
             source_width=frame.shape[1], source_height=frame.shape[0],
             tracking=bool(points), head_rotation=head_rotation,
             face_blendshapes=face_blendshapes, points=points,

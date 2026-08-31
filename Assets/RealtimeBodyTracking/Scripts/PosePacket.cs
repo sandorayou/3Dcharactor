@@ -44,6 +44,7 @@ namespace RealtimeBodyTracking
         public int version;
         public long frame;
         public long timestamp_ms;
+        public float processing_ms;
         public int source_width;
         public int source_height;
         public bool tracking;
