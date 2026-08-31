@@ -2853,6 +2853,10 @@ namespace RealtimeBodyTracking
             if (TryReadSourceShoulderWidth(pose, out var rawShoulderWidth) &&
                 TryReadAvatarShoulders(out avatarWidth, out avatarWorldCenter))
             {
+                // Projected shoulder width collapses when the performer turns
+                // sideways. Do not interpret that yaw as moving away from camera.
+                if (sourceShoulderWidthOrigin > .001f)
+                    rawShoulderWidth = Mathf.Max(rawShoulderWidth, sourceShoulderWidthOrigin * .9f);
                 if (!shoulderZoomInitialized)
                 {
                     filteredSourceShoulderFramingWidth = rawShoulderWidth;
