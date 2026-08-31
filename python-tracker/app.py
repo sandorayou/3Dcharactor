@@ -61,9 +61,14 @@ class FastPersonHider:
             self._plate = cv2.inpaint(small, mask, 3, cv2.INPAINT_TELEA)
         else:
             self._plate[mask == 0] = small[mask == 0]
-        hidden = small.copy()
-        hidden[mask != 0] = self._plate[mask != 0]
-        return cv2.resize(hidden, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR)
+        # Preserve the original full-resolution camera image everywhere except
+        # the concealed performer pixels. Only the replacement patch is upscaled.
+        full_size = (frame.shape[1], frame.shape[0])
+        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_NEAREST)
+        full_plate = cv2.resize(self._plate, full_size, interpolation=cv2.INTER_LINEAR)
+        hidden = frame.copy()
+        hidden[full_mask != 0] = full_plate[full_mask != 0]
+        return hidden
 
 
 class TrackerFrameServer:
