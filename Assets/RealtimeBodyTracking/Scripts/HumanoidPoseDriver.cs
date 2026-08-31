@@ -203,6 +203,10 @@ namespace RealtimeBodyTracking
         private Vector2 measuredScreenVelocity;
         private Vector2 previousMeasuredScreenCenter;
         private float previousScreenMeasurementTime = float.NegativeInfinity;
+        private Vector2 centerInterpolationStart;
+        private Vector2 centerInterpolationTarget;
+        private float centerInterpolationStartedAt;
+        private float centerSampleInterval = 1f / 30f;
         private bool predictiveCenterInitialized;
         private Vector3 avatarHipOrigin;
         private float sourceShoulderWidthOrigin;
@@ -2478,6 +2482,9 @@ namespace RealtimeBodyTracking
                 if (!predictiveCenterInitialized)
                 {
                     predictedScreenCenter = screenCenter;
+                    centerInterpolationStart = screenCenter;
+                    centerInterpolationTarget = screenCenter;
+                    centerInterpolationStartedAt = now;
                     previousMeasuredScreenCenter = screenCenter;
                     previousScreenMeasurementTime = now;
                     measuredScreenVelocity = Vector2.zero;
@@ -2488,15 +2495,24 @@ namespace RealtimeBodyTracking
                     var sampleDelta = Mathf.Clamp(now - previousScreenMeasurementTime, .001f, .15f);
                     var rawVelocity = (screenCenter - previousMeasuredScreenCenter) / sampleDelta;
                     measuredScreenVelocity = Vector2.Lerp(measuredScreenVelocity, rawVelocity, .65f);
+                    centerSampleInterval = Mathf.Lerp(centerSampleInterval, sampleDelta, .5f);
+                    centerInterpolationStart = predictedScreenCenter;
+                    centerInterpolationTarget = screenCenter +
+                                                measuredScreenVelocity * centerPredictionSeconds;
+                    centerInterpolationStartedAt = now;
                     previousMeasuredScreenCenter = screenCenter;
                     previousScreenMeasurementTime = now;
                 }
 
-                var sampleAge = Mathf.Clamp(now - previousScreenMeasurementTime, 0f, centerPredictionSeconds);
-                var predictedTarget = previousMeasuredScreenCenter +
-                                      measuredScreenVelocity * (sampleAge + centerPredictionSeconds);
-                var interpolation = 1f - Mathf.Exp(-centerInterpolationSpeed * Time.unscaledDeltaTime);
-                predictedScreenCenter = Vector2.Lerp(predictedScreenCenter, predictedTarget, interpolation);
+                // A 30 Hz tracker normally supplies two Unity frames per sample.
+                // Move through the missing midpoint instead of jumping directly
+                // to each new center measurement. The target includes one short
+                // velocity projection so the interpolation does not add a full
+                // tracker-frame of visible lag.
+                var duration = Mathf.Max(1f / centerInterpolationSpeed, centerSampleInterval);
+                var phase = Mathf.Clamp01((now - centerInterpolationStartedAt) / duration);
+                predictedScreenCenter = Vector2.Lerp(
+                    centerInterpolationStart, centerInterpolationTarget, phase);
                 filteredScreenCenter = predictedScreenCenter;
             }
             else
@@ -2925,6 +2941,10 @@ namespace RealtimeBodyTracking
             measuredScreenVelocity = Vector2.zero;
             previousMeasuredScreenCenter = Vector2.zero;
             previousScreenMeasurementTime = float.NegativeInfinity;
+            centerInterpolationStart = Vector2.zero;
+            centerInterpolationTarget = Vector2.zero;
+            centerInterpolationStartedAt = 0f;
+            centerSampleInterval = 1f / 30f;
             predictiveCenterInitialized = false;
             filteredShoulderWidth = 0f;
             stableShoulderWidth = 0f;
