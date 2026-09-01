@@ -23,6 +23,7 @@ namespace RealtimeBodyTracking
             targetCamera = GetComponent<Camera>() ?? Camera.main;
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Tracker Video Background";
+            quad.layer = 31;
             background = quad.transform;
             background.SetParent(targetCamera.transform, false);
             background.localPosition = Vector3.forward * backgroundDistance;

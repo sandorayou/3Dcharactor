@@ -269,11 +269,9 @@ def main() -> None:
                 packet = estimator.estimate(frame, timestamp_ms, frame_number)
                 sender.send(packet)
                 recorder.write(packet, estimator.last_hand_assignments)
-                # Publish the same captured frame that produced this packet,
-                # with tracker points overlaid for Unity's background.
                 hidden_frame = person_hider.apply(frame, estimator)
-                frame_server.update(draw_preview(
-                    hidden_frame, estimator, "", settings.preview_mirror))
+                unity_background = cv2.flip(hidden_frame, 1) if settings.preview_mirror else hidden_frame
+                frame_server.update(unity_background)
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
