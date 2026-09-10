@@ -340,8 +340,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cbcd470018d1c3c43bc9960f8da75c01, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   targetAnimator: {fileID: 0}
   udpReceiver: {fileID: 0}
   trackingCamera: {fileID: 0}
@@ -356,10 +356,14 @@ MonoBehaviour:
   animeLineSoftness: 0.006
   animeLineStrength: 0.94
   animeLineColor: {r: 0.004, g: 0.005, b: 0.008, a: 1}
-  smoothingSpeed: 30
-  rotationDeadZoneDegrees: 3
+  smoothingSpeed: 60
+  rotationDeadZoneDegrees: 0
   avatarMirror: 1
   enableHipsPosition: 1
+  strictScreenLock: 1
+  predictiveCenterFollow: 1
+  centerPredictionSeconds: 0.033
+  centerInterpolationSpeed: 30
   hipsPositionScale: 1
   enableFaceZoom: 1
   faceZoomSmoothTime: 0.18
@@ -394,10 +398,10 @@ MonoBehaviour:
   maxElbowSpeed: 3
   handHorizontalGain: 0.75
   armAcquireFrames: 2
-  armPointDeadZoneScale: 0.03
+  armPointDeadZoneScale: 0
   armPositionSmoothingCutoff: 2
   armMotionResponsiveness: 0.25
-  armRotationSmoothingSpeed: 14
+  armRotationSmoothingSpeed: 60
   wristHoldTime: 0.15
   maxForearmToUpperArmRatio: 1.8
   armRelaxSpeed: 1.2
@@ -413,7 +417,7 @@ MonoBehaviour:
   neckRotationWeight: 0.65
   mirrorHeadRotation: 1
   headRotationOffsetEuler: {x: 0, y: 0, z: 0}
-  headRotationSmoothing: 14
+  headRotationSmoothing: 40
   enableRollCorrection: 1
   enableAnatomyLimits: 1
   trackingTimeout: 2
@@ -428,7 +432,7 @@ MonoBehaviour:
   headPitchDegrees: 0
   headRollDegrees: 0
   anatomyClampCount: 0
-  lastAnatomyClamp:
+  lastAnatomyClamp: 
   handContactTracking: 0
   wristSeparationRatio: 0
   bodyPositionTracking: 0
