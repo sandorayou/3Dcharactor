@@ -41,12 +41,13 @@ final class UnityLivePublisher {
                 var video = VideoCodecSettings()
                 video.width = width
                 video.height = height
-                video.bitrate = videoKbps * 1000
+                video.bitRate = videoKbps * 1000
+                video.videoSize = CGSize(width: width, height: height)
                 video.maxKeyFrameIntervalDuration = 2
-                await stream.setVideoSettings(video)
+                try await stream.setVideoSettings(video)
                 var audioSettings = AudioCodecSettings()
-                audioSettings.bitrate = audioKbps * 1000
-                await stream.setAudioSettings(audioSettings)
+                audioSettings.bitRate = audioKbps * 1000
+                try await stream.setAudioSettings(audioSettings)
                 connection.connect(url)
                 stream.publish(key)
             } catch { self.stop() }
@@ -77,7 +78,12 @@ final class UnityLivePublisher {
 
     func setMuted(_ muted: Bool) {
 #if canImport(RTMPHaishinKit)
-        stream?.audioMixerSettings.isMuted = muted
+        guard let mixer else { return }
+        Task { @MainActor in
+            var settings = mixer.audioMixerSettings
+            settings.isMuted = muted
+            await mixer.setAudioMixerSettings(settings)
+        }
 #endif
     }
 }
