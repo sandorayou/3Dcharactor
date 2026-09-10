@@ -171,16 +171,6 @@ class PoseEstimator:
                     f"{side}_hand_palm", palm_world_x, palm_world_y, palm_world_z, score,
                     palm_image_x, palm_image_y, palm_image_z,
                 ))
-        if face_result.face_landmarks:
-            face = face_result.face_landmarks[0]
-            for name, index in (("face_top", 10), ("face_chin", 152)):
-                landmark = face[index]
-                points.append(PosePoint(
-                    name, 0.0, 0.0, 0.0, 1.0,
-                    (landmark.x * self._size - pad_left) / (scale * frame.shape[1]),
-                    (landmark.y * self._size - pad_top) / (scale * frame.shape[0]),
-                    landmark.z,
-                ))
         head_rotation = None
         if face_result.facial_transformation_matrixes:
             head_rotation = self._head_rotation(face_result.facial_transformation_matrixes[0])
