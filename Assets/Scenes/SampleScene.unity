@@ -227,7 +227,6 @@ GameObject:
   - component: {fileID: 963194228}
   - component: {fileID: 963194227}
   - component: {fileID: 963194229}
-  - component: {fileID: 963194230}
   - component: {fileID: 963194226}
   m_Layer: 0
   m_Name: Main Camera
@@ -326,21 +325,6 @@ MonoBehaviour:
   refreshRate: 30
   mirror: 0
   backgroundDistance: 100
---- !u!114 &963194230
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 963194225}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4c6f7a92df4f4dd6a1f79664ee97b201, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  width: 1280
-  height: 720
-  frameRate: 30
 --- !u!1 &1316547653 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1029089546570068762, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
@@ -372,16 +356,14 @@ MonoBehaviour:
   animeLineSoftness: 0.006
   animeLineStrength: 0.94
   animeLineColor: {r: 0.004, g: 0.005, b: 0.008, a: 1}
-  smoothingSpeed: 35
-  rotationDeadZoneDegrees: 1.5
+  smoothingSpeed: 60
+  rotationDeadZoneDegrees: 0
   avatarMirror: 1
   enableHipsPosition: 1
   strictScreenLock: 1
   predictiveCenterFollow: 1
   centerPredictionSeconds: 0.033
   centerInterpolationSpeed: 30
-  centerJitterDeadZone: 0.004
-  centerPredictionVelocityThreshold: 0.06
   hipsPositionScale: 1
   enableFaceZoom: 1
   faceZoomSmoothTime: 0.18
@@ -416,10 +398,10 @@ MonoBehaviour:
   maxElbowSpeed: 3
   handHorizontalGain: 0.75
   armAcquireFrames: 2
-  armPointDeadZoneScale: 0.01
+  armPointDeadZoneScale: 0
   armPositionSmoothingCutoff: 2
   armMotionResponsiveness: 0.25
-  armRotationSmoothingSpeed: 35
+  armRotationSmoothingSpeed: 60
   wristHoldTime: 0.15
   maxForearmToUpperArmRatio: 1.8
   armRelaxSpeed: 1.2
@@ -435,7 +417,7 @@ MonoBehaviour:
   neckRotationWeight: 0.65
   mirrorHeadRotation: 1
   headRotationOffsetEuler: {x: 0, y: 0, z: 0}
-  headRotationSmoothing: 24
+  headRotationSmoothing: 40
   enableRollCorrection: 1
   enableAnatomyLimits: 1
   trackingTimeout: 2

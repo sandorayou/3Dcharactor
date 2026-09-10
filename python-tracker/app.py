@@ -8,7 +8,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 from camera import CameraCapture
 from debug_recorder import DebugRecorder, DebugVideoRecorder
@@ -18,135 +17,6 @@ from settings import TrackerSettings
 from udp_sender import UdpPoseSender
 
 PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
-
-
-class FastPersonHider:
-    """Fast pose-guided mosaic that leaves unmasked background pixels untouched."""
-    def __init__(self) -> None:
-        self._size = (320, 240)
-        self._last_face_mask = None
-        self._last_face_seen_at = float("-inf")
-        self._mosaic_block = 16
-
-    def _apply_mosaic(self, frame, mask):
-        full_size = (frame.shape[1], frame.shape[0])
-        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_NEAREST)
-        block = max(self._mosaic_block, 2)
-        mosaic_size = (
-            max(1, (frame.shape[1] + block - 1) // block),
-            max(1, (frame.shape[0] + block - 1) // block),
-        )
-        pixelated = cv2.resize(frame, mosaic_size, interpolation=cv2.INTER_AREA)
-        pixelated = cv2.resize(pixelated, full_size, interpolation=cv2.INTER_NEAREST)
-        full_mask = cv2.GaussianBlur(full_mask, (5, 5), 0)
-        alpha = (full_mask.astype(np.float32) / 255.0)[:, :, None]
-        return np.rint(frame * (1.0 - alpha) + pixelated * alpha).astype(np.uint8)
-
-    def apply(self, frame, estimator: PoseEstimator):
-        if not estimator.last_normalized_landmarks:
-            if (self._last_face_mask is not None and
-                    time.perf_counter() - self._last_face_seen_at <= .1):
-                return self._apply_mosaic(frame, self._last_face_mask)
-            return frame
-        small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
-        mask = np.zeros((self._size[1], self._size[0]), dtype=np.uint8)
-        face_mask = np.zeros_like(mask)
-        skin_candidate = None
-        points = estimator.last_normalized_landmarks
-
-        def point(index):
-            p = points[index]
-            return int(p.x * self._size[0]), int(p.y * self._size[1])
-
-        shoulder_width = max(abs(point(11)[0] - point(12)[0]), 10)
-        limb_thickness = max(round(shoulder_width * .18), 7)
-        # Keep the torso close to the measured outline instead of expanding it
-        # sideways with one large body-width brush.
-        torso = np.array([point(11), point(12), point(24), point(23)], dtype=np.int32)
-        cv2.fillConvexPoly(mask, torso, 255)
-
-        # A shoulder-based circle was too wide at the sides and still missed hair
-        # above the nose. Derive a vertically biased head ellipse from ears/eyes.
-        left_ear, right_ear = point(7), point(8)
-        ear_span = abs(left_ear[0] - right_ear[0])
-        if ear_span < 8:
-            left_eye, right_eye = point(2), point(5)
-            ear_span = max(round(abs(left_eye[0] - right_eye[0]) * 2.2), 10)
-            head_x = (left_eye[0] + right_eye[0]) // 2
-            head_y = (left_eye[1] + right_eye[1]) // 2
-        else:
-            head_x = (left_ear[0] + right_ear[0]) // 2
-            head_y = (left_ear[1] + right_ear[1]) // 2
-        # Ears are often detected too close together during yaw. Keep the mask
-        # tied to shoulder scale so a turned head cannot escape it.
-        head_radius_x = max(round(ear_span * .68), round(shoulder_width * .38), 12)
-        head_radius_y = max(round(head_radius_x * 1.38), round(shoulder_width * .5), 17)
-        head_center = (head_x, head_y - round(head_radius_y * .32))
-        cv2.ellipse(mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
-        cv2.ellipse(face_mask, head_center, (head_radius_x, head_radius_y), 0, 0, 360, 255, -1)
-
-        # Face Landmarker remains reliable when only one pose ear is visible.
-        # Add its actual profile hull instead of deriving profile width from the
-        # shrinking ear distance. Extend the upper half to include hair/forehead.
-        if estimator.last_face_landmarks:
-            face_points = np.array([
-                (p.x * self._size[0], p.y * self._size[1])
-                for p in estimator.last_face_landmarks
-            ], dtype=np.float32)
-            center = face_points.mean(axis=0)
-            expanded = face_points.copy()
-            expanded[:, 0] = center[0] + (expanded[:, 0] - center[0]) * 1.16
-            above = expanded[:, 1] < center[1]
-            expanded[above, 1] = center[1] + (expanded[above, 1] - center[1]) * 1.5
-            expanded[~above, 1] = center[1] + (expanded[~above, 1] - center[1]) * 1.12
-            face_hull = cv2.convexHull(np.rint(expanded).astype(np.int32))
-            cv2.fillConvexPoly(mask, face_hull, 255)
-            cv2.fillConvexPoly(face_mask, face_hull, 255)
-
-            # Add pixels matching the observed face colour near the tracked
-            # person. This catches skin that can sit outside the pose strokes
-            # (profile cheek, neck and fast-moving hands) without degrading the
-            # rest of the camera image.
-            face_core = np.zeros_like(mask)
-            cv2.fillConvexPoly(face_core, cv2.convexHull(
-                np.rint(face_points).astype(np.int32)), 255)
-            face_pixels = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb)[face_core > 0]
-            if len(face_pixels):
-                skin_center = np.median(face_pixels[:, 1:3], axis=0)
-                ycrcb = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb)
-                chroma_delta = ycrcb[:, :, 1:3].astype(np.float32) - skin_center
-                skin_candidate = (
-                    np.sum(chroma_delta * chroma_delta, axis=2) <= 18.0 ** 2
-                ).astype(np.uint8) * 255
-        for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
-            for start, end in zip(chain, chain[1:]):
-                cv2.line(mask, point(start), point(end), 255, limb_thickness)
-            cv2.circle(mask, point(chain[-1]), limb_thickness, 255, -1)
-        for hand in estimator.last_hand_landmarks:
-            hand_points = np.array([
-                (int(p.x * self._size[0]), int(p.y * self._size[1])) for p in hand
-            ], dtype=np.int32)
-            if len(hand_points) >= 3:
-                cv2.fillConvexPoly(mask, cv2.convexHull(hand_points), 255)
-        if skin_candidate is not None:
-            person_roi = cv2.dilate(mask, np.ones((19, 19), np.uint8), iterations=1)
-            skin = cv2.bitwise_and(skin_candidate, person_roi)
-            skin = cv2.morphologyEx(skin, cv2.MORPH_CLOSE,
-                                    np.ones((5, 5), np.uint8))
-            face_roi = cv2.dilate(face_mask, np.ones((19, 19), np.uint8), iterations=1)
-            mask = cv2.bitwise_or(mask, skin)
-            face_mask = cv2.bitwise_or(face_mask, cv2.bitwise_and(skin, face_roi))
-        # Two pixels at mask resolution cover detector jitter without producing
-        # the broad horizontal replacement band seen with the old 7x7 dilation.
-        mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
-        face_mask = cv2.dilate(face_mask, np.ones((3, 3), np.uint8), iterations=1)
-
-        if not np.any(mask):
-            return frame
-
-        self._last_face_mask = face_mask.copy()
-        self._last_face_seen_at = time.perf_counter()
-        return self._apply_mosaic(frame, mask)
 
 
 class TrackerFrameServer:
@@ -258,7 +128,6 @@ def main() -> None:
     recorder = DebugRecorder(settings.debug_log_path)
     video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps)
     frame_server = TrackerFrameServer(settings.video_port)
-    person_hider = FastPersonHider()
     camera.start()
     frame_number, last_inference = 0, 0.0
 
@@ -274,9 +143,10 @@ def main() -> None:
                 packet = estimator.estimate(frame, timestamp_ms, frame_number)
                 sender.send(packet)
                 recorder.write(packet, estimator.last_hand_assignments)
-                hidden_frame = person_hider.apply(frame, estimator)
-                unity_background = cv2.flip(hidden_frame, 1) if settings.preview_mirror else hidden_frame
-                frame_server.update(unity_background)
+                # Publish the same captured frame that produced this packet,
+                # with tracker points overlaid for Unity's background.
+                frame_server.update(draw_preview(
+                    frame, estimator, "", settings.preview_mirror))
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
