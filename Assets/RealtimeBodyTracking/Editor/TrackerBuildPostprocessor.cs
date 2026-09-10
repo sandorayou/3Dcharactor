@@ -74,6 +74,20 @@ namespace RealtimeBodyTracking.Editor
                     }
                 }
 
+                if (!content.Contains("<key>UIBackgroundModes</key>"))
+                {
+                    string backgroundEntry = "    <key>UIBackgroundModes</key>\n    <array>\n        <string>audio</string>\n    </array>\n";
+                    int insertIndex = content.IndexOf("<dict>");
+                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + backgroundEntry); modified = true; }
+                }
+
+                if (!content.Contains("myproject5"))
+                {
+                    string urlEntry = "    <key>CFBundleURLTypes</key>\n    <array>\n        <dict>\n            <key>CFBundleURLSchemes</key>\n            <array><string>myproject5</string></array>\n        </dict>\n    </array>\n";
+                    int insertIndex = content.IndexOf("<dict>");
+                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + urlEntry); modified = true; }
+                }
+
                 if (modified)
                 {
                     File.WriteAllText(plistPath, content);
