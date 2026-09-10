@@ -37,7 +37,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             AddButton(panel.transform, "配信停止", Stop);
         }
 
-        private void Select(LiveStreamProvider provider) { selected = provider; if (status) status.text = "配信先: " + provider + " / 待機中"; }
+        private void Select(LiveStreamProvider provider) { selected = provider; controller?.LoadSavedAccount(provider); if (status) status.text = "配信先: " + provider + " / 待機中"; }
         private void LinkSelected() { if (selected == LiveStreamProvider.Twitch) accountLink?.LinkTwitch(); else if (selected == LiveStreamProvider.YouTube) accountLink?.LinkYouTube(); }
         private void Start() { if (controller != null && controller.StartStreaming() && status) status.text = "配信先: " + selected + " / 配信中"; }
         private void Stop() { controller?.StopStreaming(); if (status) status.text = "配信先: " + selected + " / 停止"; }
