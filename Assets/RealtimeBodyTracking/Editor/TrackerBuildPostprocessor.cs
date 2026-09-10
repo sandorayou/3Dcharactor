@@ -12,15 +12,78 @@ namespace RealtimeBodyTracking.Editor
 
         public void OnPostprocessBuild(BuildReport report)
         {
-            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            var source = Path.Combine(projectRoot, "python-tracker");
-            var buildDirectory = Path.GetDirectoryName(report.summary.outputPath);
-            if (!Directory.Exists(source) || string.IsNullOrEmpty(buildDirectory))
-                throw new BuildFailedException($"Python tracker was not found: {source}");
+            if (report.summary.platform == BuildTarget.iOS)
+            {
+                ConfigureIosBuild(report.summary.outputPath);
+                return;
+            }
 
-            var destination = Path.Combine(buildDirectory, "python-tracker");
-            CopyDirectory(source, destination);
-            Debug.Log($"[TrackerBuildPostprocessor] Copied camera tracker to {destination}");
+            if (report.summary.platform == BuildTarget.StandaloneWindows ||
+                report.summary.platform == BuildTarget.StandaloneWindows64)
+            {
+                var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                var source = Path.Combine(projectRoot, "python-tracker");
+                var buildDirectory = Path.GetDirectoryName(report.summary.outputPath);
+                if (!Directory.Exists(source) || string.IsNullOrEmpty(buildDirectory))
+                    throw new BuildFailedException($"Python tracker was not found: {source}");
+
+                var destination = Path.Combine(buildDirectory, "python-tracker");
+                CopyDirectory(source, destination);
+                Debug.Log($"[TrackerBuildPostprocessor] Copied camera tracker to {destination}");
+            }
+        }
+
+        private static void ConfigureIosBuild(string pathToBuiltProject)
+        {
+            string plistPath = Path.Combine(pathToBuiltProject, "Info.plist");
+            if (!File.Exists(plistPath)) return;
+
+            try
+            {
+                string content = File.ReadAllText(plistPath);
+                bool modified = false;
+
+                if (!content.Contains("<key>NSCameraUsageDescription</key>"))
+                {
+                    string cameraEntry = "    <key>NSCameraUsageDescription</key>\n    <string>リアルタイム身体・背景トラッキングのためにカメラを使用します。</string>\n";
+                    int insertIndex = content.IndexOf("<dict>");
+                    if (insertIndex >= 0)
+                    {
+                        insertIndex += "<dict>".Length;
+                        content = content.Insert(insertIndex, "\n" + cameraEntry);
+                        modified = true;
+                    }
+                }
+
+                if (!content.Contains("<key>NSMicrophoneUsageDescription</key>"))
+                {
+                    string microphoneEntry = "    <key>NSMicrophoneUsageDescription</key>\n    <string>ライブ配信の音声を送信するためにマイクを使用します。</string>\n";
+                    int insertIndex = content.IndexOf("<dict>");
+                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + microphoneEntry); modified = true; }
+                }
+
+                if (!content.Contains("<key>NSLocalNetworkUsageDescription</key>"))
+                {
+                    string networkEntry = "    <key>NSLocalNetworkUsageDescription</key>\n    <string>PCからの姿勢トラッキングデータを受信するためにローカルネットワークを使用します。</string>\n";
+                    int insertIndex = content.IndexOf("<dict>");
+                    if (insertIndex >= 0)
+                    {
+                        insertIndex += "<dict>".Length;
+                        content = content.Insert(insertIndex, "\n" + networkEntry);
+                        modified = true;
+                    }
+                }
+
+                if (modified)
+                {
+                    File.WriteAllText(plistPath, content);
+                    Debug.Log("[TrackerBuildPostprocessor] Added iOS Privacy descriptions to Info.plist.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[TrackerBuildPostprocessor] Failed to update Info.plist: {ex.Message}");
+            }
         }
 
         private static void CopyDirectory(string source, string destination)
