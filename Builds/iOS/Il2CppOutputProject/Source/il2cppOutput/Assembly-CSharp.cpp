@@ -708,7 +708,6 @@ struct HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427  : public Mo
 	float ___bodyLeanSmoothing;
 	float ___bodyLeanGain;
 	bool ___mirrorShoulderElevation;
-	bool ___calibrateBodyLeanOrigin;
 	bool ___enableFaceZoom;
 	float ___avatarFaceHeightMeters;
 	float ___faceZoomSmoothTime;
@@ -1634,6 +1633,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR float Camera_get_fieldOfView_m9A93F17BBF89F49
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR float Camera_get_aspect_m48BF8820EA2D55BE0D154BC5546819FB65BE257D (Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* __this, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 HumanoidPoseDriver_FindAvatarVisualTop_m59484B63C821E86CE5DAB05F88D259C053B2F0D6 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 ___0_shoulderCenter, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 Transform_get_up_mE47A9D9D96422224DD0539AA5524DA5440145BB2 (Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* __this, const RuntimeMethod* method) ;
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR float Mathf_Max_m870B77F6A5225EC21D9778043F987B9B17D08F6B_inline (SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* ___0_values, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 Transform_get_right_mC6DC057C23313802E2186A9E0DB760D795A758A4 (Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* __this, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void Transform_set_position_mA1A817124BB41B685043DED2A9BA48CDF37C4156 (Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* __this, Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 ___0_value, const RuntimeMethod* method) ;
 inline RendererU5BU5D_t32FDD782F67917B2291EA4FF242719877440A02A* Component_GetComponentsInChildren_TisRenderer_t320575F223BCB177A982E5DDB5DB19FAA89E7FBF_m28EB00D8747BD14E8E8EC3BFDB9D79F689CB0293 (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, bool ___0_includeInactive, const RuntimeMethod* method)
@@ -16577,6 +16577,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_TryCalibrateCameraFra
 	{
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&_stringLiteral20FCD81CCA1F8D55C7F76379DEDFE01F5EC6D1C2);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&_stringLiteral79030E73521BD8E82E56A2A95D81D3132D5E26C9);
@@ -16603,13 +16604,12 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_TryCalibrateCameraFra
 	float V_15 = 0.0f;
 	float V_16 = 0.0f;
 	float V_17 = 0.0f;
-	float V_18 = 0.0f;
-	Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 V_19;
+	Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 V_18;
+	memset((&V_18), 0, sizeof(V_18));
+	Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 V_19;
 	memset((&V_19), 0, sizeof(V_19));
 	Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 V_20;
 	memset((&V_20), 0, sizeof(V_20));
-	Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 V_21;
-	memset((&V_21), 0, sizeof(V_21));
 	{
 		bool L_0 = __this->___autoFrameCamera;
 		if (!L_0)
@@ -16850,30 +16850,33 @@ IL_0131:
 		float L_85 = V_13;
 		float L_86 = V_7;
 		V_14 = ((float)(L_81/((float)il2cpp_codegen_multiply(((float)il2cpp_codegen_multiply((2.0f), L_85)), L_86))));
-		float L_87 = __this->___avatarSizeMatchScale;
-		float L_88;
-		L_88 = Mathf_Max_mF5379E63D2BBAC76D090748695D833934F8AD051_inline(L_87, (0.100000001f), NULL);
-		V_15 = L_88;
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_87 = (SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C*)(SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C*)SZArrayNew(SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C_il2cpp_TypeInfo_var, (uint32_t)3);
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_88 = L_87;
 		float L_89 = V_9;
-		float L_90 = V_14;
-		float L_91;
-		L_91 = Mathf_Max_mF5379E63D2BBAC76D090748695D833934F8AD051_inline(L_89, L_90, NULL);
-		float L_92 = V_15;
+		NullCheck(L_88);
+		(L_88)->SetAt(static_cast<il2cpp_array_size_t>(0), (float)L_89);
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_90 = L_88;
+		float L_91 = V_14;
+		NullCheck(L_90);
+		(L_90)->SetAt(static_cast<il2cpp_array_size_t>(1), (float)L_91);
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_92 = L_90;
 		float L_93 = __this->___cameraMinimumDistance;
+		NullCheck(L_92);
+		(L_92)->SetAt(static_cast<il2cpp_array_size_t>(2), (float)L_93);
 		float L_94;
-		L_94 = Mathf_Max_mF5379E63D2BBAC76D090748695D833934F8AD051_inline(((float)(L_91/L_92)), L_93, NULL);
-		V_16 = L_94;
-		float L_95 = V_16;
+		L_94 = Mathf_Max_m870B77F6A5225EC21D9778043F987B9B17D08F6B_inline(L_92, NULL);
+		V_15 = L_94;
+		float L_95 = V_15;
 		float L_96 = V_7;
-		V_17 = ((float)il2cpp_codegen_multiply(L_95, L_96));
-		float L_97 = V_16;
+		V_16 = ((float)il2cpp_codegen_multiply(L_95, L_96));
+		float L_97 = V_15;
 		float L_98 = V_8;
-		V_18 = ((float)il2cpp_codegen_multiply(L_97, L_98));
+		V_17 = ((float)il2cpp_codegen_multiply(L_97, L_98));
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7* L_99 = (Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7*)(&__this->___cameraCalibrationCenter);
 		float L_100 = L_99->___x;
 		float L_101 = V_10;
 		float L_102 = __this->___cameraCalibrationHeadTopY;
-		Vector2__ctor_m9525B79969AFFE3254B303A40997A56DEEB6F548_inline((&V_19), L_100, ((float)il2cpp_codegen_multiply(((float)il2cpp_codegen_add(L_101, L_102)), (0.5f))), NULL);
+		Vector2__ctor_m9525B79969AFFE3254B303A40997A56DEEB6F548_inline((&V_18), L_100, ((float)il2cpp_codegen_multiply(((float)il2cpp_codegen_add(L_101, L_102)), (0.5f))), NULL);
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_103 = V_5;
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_104 = V_12;
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_105;
@@ -16887,9 +16890,9 @@ IL_0131:
 		NullCheck(L_108);
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_109;
 		L_109 = Transform_get_right_mC6DC057C23313802E2186A9E0DB760D795A758A4(L_108, NULL);
-		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_110 = V_19;
+		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_110 = V_18;
 		float L_111 = L_110.___x;
-		float L_112 = V_18;
+		float L_112 = V_17;
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_113;
 		L_113 = Vector3_op_Multiply_m87BA7C578F96C8E49BB07088DAAC4649F83B0353_inline(L_109, ((float)il2cpp_codegen_multiply(((float)il2cpp_codegen_multiply(((float)il2cpp_codegen_subtract(L_111, (0.5f))), (2.0f))), L_112)), NULL);
 		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_114 = __this->___trackingCamera;
@@ -16899,23 +16902,23 @@ IL_0131:
 		NullCheck(L_115);
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_116;
 		L_116 = Transform_get_up_mE47A9D9D96422224DD0539AA5524DA5440145BB2(L_115, NULL);
-		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_117 = V_19;
+		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_117 = V_18;
 		float L_118 = L_117.___y;
-		float L_119 = V_17;
+		float L_119 = V_16;
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_120;
 		L_120 = Vector3_op_Multiply_m87BA7C578F96C8E49BB07088DAAC4649F83B0353_inline(L_116, ((float)il2cpp_codegen_multiply(((float)il2cpp_codegen_multiply(((float)il2cpp_codegen_subtract(L_118, (0.5f))), (2.0f))), L_119)), NULL);
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_121;
 		L_121 = Vector3_op_Addition_m78C0EC70CB66E8DCAC225743D82B268DAEE92067_inline(L_113, L_120, NULL);
-		V_20 = L_121;
-		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_122 = V_20;
+		V_19 = L_121;
+		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_122 = V_19;
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_123;
 		L_123 = Vector3_op_Subtraction_mE42023FF80067CB44A1D4A27EB7CF2B24CABB828_inline(L_106, L_122, NULL);
-		V_21 = L_123;
+		V_20 = L_123;
 		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_124 = __this->___trackingCamera;
 		NullCheck(L_124);
 		Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* L_125;
 		L_125 = Component_get_transform_m2919A1D81931E6932C7F06D4C2F0AB8DDA9A5371(L_124, NULL);
-		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_126 = V_21;
+		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_126 = V_20;
 		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_127 = __this->___trackingCamera;
 		NullCheck(L_127);
 		Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* L_128;
@@ -16923,16 +16926,16 @@ IL_0131:
 		NullCheck(L_128);
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_129;
 		L_129 = Transform_get_forward_mFCFACF7165FDAB21E80E384C494DF278386CEE2F(L_128, NULL);
-		float L_130 = V_16;
+		float L_130 = V_15;
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_131;
 		L_131 = Vector3_op_Multiply_m87BA7C578F96C8E49BB07088DAAC4649F83B0353_inline(L_129, L_130, NULL);
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_132;
 		L_132 = Vector3_op_Subtraction_mE42023FF80067CB44A1D4A27EB7CF2B24CABB828_inline(L_126, L_131, NULL);
 		NullCheck(L_125);
 		Transform_set_position_mA1A817124BB41B685043DED2A9BA48CDF37C4156(L_125, L_132, NULL);
-		float L_133 = V_18;
+		float L_133 = V_17;
 		__this->___screenHorizontalRange = ((float)il2cpp_codegen_multiply(L_133, (2.0f)));
-		float L_134 = V_17;
+		float L_134 = V_16;
 		__this->___screenVerticalRange = ((float)il2cpp_codegen_multiply(L_134, (2.0f)));
 		__this->___cameraFramingReady = (bool)1;
 		float L_135 = V_10;
@@ -16966,7 +16969,7 @@ IL_0131:
 		ArrayElementTypeCheck (L_151, L_154);
 		(L_151)->SetAt(static_cast<il2cpp_array_size_t>(2), (RuntimeObject*)L_154);
 		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_155 = L_151;
-		float L_156 = V_16;
+		float L_156 = V_15;
 		float L_157 = L_156;
 		RuntimeObject* L_158 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_157);
 		NullCheck(L_155);
@@ -17370,210 +17373,194 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR float HumanoidPoseDriver_ResolveBodyLean_m404
 		int32_t L_3 = L_2.___ShoulderMode;
 		if (L_3)
 		{
-			goto IL_0063;
+			goto IL_0048;
 		}
 	}
 	{
-		bool L_4 = __this->___calibrateBodyLeanOrigin;
-		if (!L_4)
+		bool L_4 = __this->___bodyLeanOriginInitialized;
+		if (L_4)
 		{
-			goto IL_0050;
+			goto IL_002a;
 		}
 	}
 	{
-		bool L_5 = __this->___bodyLeanOriginInitialized;
-		if (L_5)
-		{
-			goto IL_0032;
-		}
-	}
-	{
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_6 = ___0_body;
-		float L_7 = L_6.___LeanSignal;
-		__this->___bodyLeanOrigin = L_7;
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_5 = ___0_body;
+		float L_6 = L_5.___LeanSignal;
+		__this->___bodyLeanOrigin = L_6;
 		__this->___bodyLeanOriginInitialized = (bool)1;
 	}
 
-IL_0032:
+IL_002a:
 	{
-		float L_8 = __this->___bodyLeanOrigin;
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_9 = ___0_body;
-		float L_10 = L_9.___LeanSignal;
-		float L_11;
-		L_11 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_8, L_10, NULL);
-		float L_12 = __this->___bodyLeanGain;
-		V_0 = ((float)il2cpp_codegen_multiply(L_11, L_12));
-		goto IL_00fb;
+		float L_7 = __this->___bodyLeanOrigin;
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_8 = ___0_body;
+		float L_9 = L_8.___LeanSignal;
+		float L_10;
+		L_10 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_7, L_9, NULL);
+		float L_11 = __this->___bodyLeanGain;
+		V_0 = ((float)il2cpp_codegen_multiply(L_10, L_11));
+		goto IL_00e0;
 	}
 
-IL_0050:
+IL_0048:
 	{
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_13 = ___0_body;
-		float L_14 = L_13.___LeanSignal;
-		float L_15 = __this->___bodyLeanGain;
-		V_0 = ((float)il2cpp_codegen_multiply(L_14, L_15));
-		goto IL_00fb;
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_12 = ___0_body;
+		int32_t L_13 = L_12.___ShoulderMode;
+		if ((((int32_t)L_13) >= ((int32_t)0)))
+		{
+			goto IL_0095;
+		}
 	}
-
-IL_0063:
 	{
+		bool L_14 = __this->___leftShoulderLeanInitialized;
+		if (!L_14)
+		{
+			goto IL_0067;
+		}
+	}
+	{
+		int32_t L_15 = __this->___lastBodyShoulderMode;
 		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_16 = ___0_body;
 		int32_t L_17 = L_16.___ShoulderMode;
-		if ((((int32_t)L_17) >= ((int32_t)0)))
+		if ((((int32_t)L_15) == ((int32_t)L_17)))
 		{
-			goto IL_00b0;
-		}
-	}
-	{
-		bool L_18 = __this->___leftShoulderLeanInitialized;
-		if (!L_18)
-		{
-			goto IL_0082;
-		}
-	}
-	{
-		int32_t L_19 = __this->___lastBodyShoulderMode;
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_20 = ___0_body;
-		int32_t L_21 = L_20.___ShoulderMode;
-		if ((((int32_t)L_19) == ((int32_t)L_21)))
-		{
-			goto IL_009c;
+			goto IL_0081;
 		}
 	}
 
-IL_0082:
+IL_0067:
 	{
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_22 = ___0_body;
-		float L_23 = L_22.___LeanSignal;
-		float L_24 = __this->___filteredBodyLean;
-		__this->___leftShoulderLeanOrigin = ((float)il2cpp_codegen_subtract(L_23, L_24));
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_18 = ___0_body;
+		float L_19 = L_18.___LeanSignal;
+		float L_20 = __this->___filteredBodyLean;
+		__this->___leftShoulderLeanOrigin = ((float)il2cpp_codegen_subtract(L_19, L_20));
 		__this->___leftShoulderLeanInitialized = (bool)1;
 	}
 
-IL_009c:
+IL_0081:
 	{
-		float L_25 = __this->___leftShoulderLeanOrigin;
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_26 = ___0_body;
-		float L_27 = L_26.___LeanSignal;
-		float L_28;
-		L_28 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_25, L_27, NULL);
-		V_0 = L_28;
-		goto IL_00fb;
+		float L_21 = __this->___leftShoulderLeanOrigin;
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_22 = ___0_body;
+		float L_23 = L_22.___LeanSignal;
+		float L_24;
+		L_24 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_21, L_23, NULL);
+		V_0 = L_24;
+		goto IL_00e0;
 	}
 
-IL_00b0:
+IL_0095:
 	{
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_25 = ___0_body;
+		int32_t L_26 = L_25.___ShoulderMode;
+		if ((((int32_t)L_26) <= ((int32_t)0)))
+		{
+			goto IL_00e0;
+		}
+	}
+	{
+		bool L_27 = __this->___rightShoulderLeanInitialized;
+		if (!L_27)
+		{
+			goto IL_00b4;
+		}
+	}
+	{
+		int32_t L_28 = __this->___lastBodyShoulderMode;
 		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_29 = ___0_body;
 		int32_t L_30 = L_29.___ShoulderMode;
-		if ((((int32_t)L_30) <= ((int32_t)0)))
+		if ((((int32_t)L_28) == ((int32_t)L_30)))
 		{
-			goto IL_00fb;
-		}
-	}
-	{
-		bool L_31 = __this->___rightShoulderLeanInitialized;
-		if (!L_31)
-		{
-			goto IL_00cf;
-		}
-	}
-	{
-		int32_t L_32 = __this->___lastBodyShoulderMode;
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_33 = ___0_body;
-		int32_t L_34 = L_33.___ShoulderMode;
-		if ((((int32_t)L_32) == ((int32_t)L_34)))
-		{
-			goto IL_00e9;
+			goto IL_00ce;
 		}
 	}
 
-IL_00cf:
+IL_00b4:
 	{
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_35 = ___0_body;
-		float L_36 = L_35.___LeanSignal;
-		float L_37 = __this->___filteredBodyLean;
-		__this->___rightShoulderLeanOrigin = ((float)il2cpp_codegen_subtract(L_36, L_37));
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_31 = ___0_body;
+		float L_32 = L_31.___LeanSignal;
+		float L_33 = __this->___filteredBodyLean;
+		__this->___rightShoulderLeanOrigin = ((float)il2cpp_codegen_subtract(L_32, L_33));
 		__this->___rightShoulderLeanInitialized = (bool)1;
 	}
 
-IL_00e9:
+IL_00ce:
 	{
-		float L_38 = __this->___rightShoulderLeanOrigin;
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_39 = ___0_body;
-		float L_40 = L_39.___LeanSignal;
-		float L_41;
-		L_41 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_38, L_40, NULL);
-		V_0 = L_41;
+		float L_34 = __this->___rightShoulderLeanOrigin;
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_35 = ___0_body;
+		float L_36 = L_35.___LeanSignal;
+		float L_37;
+		L_37 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_34, L_36, NULL);
+		V_0 = L_37;
 	}
 
-IL_00fb:
+IL_00e0:
 	{
-		bool L_42 = __this->___mirrorShoulderElevation;
-		if (!L_42)
+		bool L_38 = __this->___mirrorShoulderElevation;
+		if (!L_38)
 		{
-			goto IL_0106;
+			goto IL_00eb;
 		}
 	}
 	{
-		float L_43 = V_0;
-		V_0 = ((-L_43));
+		float L_39 = V_0;
+		V_0 = ((-L_39));
 	}
 
-IL_0106:
+IL_00eb:
 	{
-		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_44 = ___0_body;
-		int32_t L_45 = L_44.___ShoulderMode;
-		__this->___lastBodyShoulderMode = L_45;
-		float L_46 = __this->___bodyLeanSmoothing;
-		float L_47;
-		L_47 = Time_get_deltaTime_mC3195000401F0FD167DD2F948FD2BC58330D0865(NULL);
-		float L_48;
-		L_48 = expf(((float)il2cpp_codegen_multiply(((-L_46)), L_47)));
-		V_1 = ((float)il2cpp_codegen_subtract((1.0f), L_48));
-		float L_49 = __this->___filteredBodyLean;
-		float L_50 = V_0;
-		float L_51 = __this->___maxBodyLean;
-		float L_52 = __this->___maxBodyLean;
-		float L_53;
-		L_53 = Mathf_Clamp_mEB9AEA827D27D20FCC787F7375156AF46BB12BBF_inline(L_50, ((-L_51)), L_52, NULL);
-		float L_54 = V_1;
-		float L_55;
-		L_55 = Mathf_LerpAngle_m0653422E15193C2E4A4E5AF05236B6315C789C23_inline(L_49, L_53, L_54, NULL);
-		__this->___filteredBodyLean = L_55;
-		float L_56 = __this->___stableBodyLean;
-		float L_57 = __this->___filteredBodyLean;
-		float L_58;
-		L_58 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_56, L_57, NULL);
-		V_2 = L_58;
+		ScreenBodyPose_t60C349D5EF137B491F3FF6FC8C2CF8B82A77386D L_40 = ___0_body;
+		int32_t L_41 = L_40.___ShoulderMode;
+		__this->___lastBodyShoulderMode = L_41;
+		float L_42 = __this->___bodyLeanSmoothing;
+		float L_43;
+		L_43 = Time_get_deltaTime_mC3195000401F0FD167DD2F948FD2BC58330D0865(NULL);
+		float L_44;
+		L_44 = expf(((float)il2cpp_codegen_multiply(((-L_42)), L_43)));
+		V_1 = ((float)il2cpp_codegen_subtract((1.0f), L_44));
+		float L_45 = __this->___filteredBodyLean;
+		float L_46 = V_0;
+		float L_47 = __this->___maxBodyLean;
+		float L_48 = __this->___maxBodyLean;
+		float L_49;
+		L_49 = Mathf_Clamp_mEB9AEA827D27D20FCC787F7375156AF46BB12BBF_inline(L_46, ((-L_47)), L_48, NULL);
+		float L_50 = V_1;
+		float L_51;
+		L_51 = Mathf_LerpAngle_m0653422E15193C2E4A4E5AF05236B6315C789C23_inline(L_45, L_49, L_50, NULL);
+		__this->___filteredBodyLean = L_51;
+		float L_52 = __this->___stableBodyLean;
+		float L_53 = __this->___filteredBodyLean;
+		float L_54;
+		L_54 = Mathf_DeltaAngle_mCBA858CE5C1BEEBE375812325A50E434FF66D6D4_inline(L_52, L_53, NULL);
+		V_2 = L_54;
+		float L_55 = V_2;
+		float L_56;
+		L_56 = fabsf(L_55);
+		float L_57 = __this->___bodyLeanDeadZone;
+		if ((!(((float)L_56) > ((float)L_57))))
+		{
+			goto IL_0176;
+		}
+	}
+	{
+		float L_58 = __this->___stableBodyLean;
 		float L_59 = V_2;
 		float L_60;
-		L_60 = fabsf(L_59);
-		float L_61 = __this->___bodyLeanDeadZone;
-		if ((!(((float)L_60) > ((float)L_61))))
-		{
-			goto IL_0191;
-		}
-	}
-	{
-		float L_62 = __this->___stableBodyLean;
-		float L_63 = V_2;
-		float L_64;
-		L_64 = Mathf_Sign_m42EE1F0BC041AF14F89DED7F762BE996E2C50D8A_inline(L_63, NULL);
-		float L_65 = V_2;
-		float L_66;
-		L_66 = fabsf(L_65);
-		float L_67 = __this->___bodyLeanDeadZone;
-		__this->___stableBodyLean = ((float)il2cpp_codegen_add(L_62, ((float)il2cpp_codegen_multiply(L_64, ((float)il2cpp_codegen_subtract(L_66, L_67))))));
+		L_60 = Mathf_Sign_m42EE1F0BC041AF14F89DED7F762BE996E2C50D8A_inline(L_59, NULL);
+		float L_61 = V_2;
+		float L_62;
+		L_62 = fabsf(L_61);
+		float L_63 = __this->___bodyLeanDeadZone;
+		__this->___stableBodyLean = ((float)il2cpp_codegen_add(L_58, ((float)il2cpp_codegen_multiply(L_60, ((float)il2cpp_codegen_subtract(L_62, L_63))))));
 	}
 
-IL_0191:
+IL_0176:
 	{
-		float L_68 = __this->___stableBodyLean;
-		float L_69 = __this->___maxBodyLean;
-		float L_70 = __this->___maxBodyLean;
-		float L_71;
-		L_71 = Mathf_Clamp_mEB9AEA827D27D20FCC787F7375156AF46BB12BBF_inline(L_68, ((-L_69)), L_70, NULL);
-		return L_71;
+		float L_64 = __this->___stableBodyLean;
+		float L_65 = __this->___maxBodyLean;
+		float L_66 = __this->___maxBodyLean;
+		float L_67;
+		L_67 = Mathf_Clamp_mEB9AEA827D27D20FCC787F7375156AF46BB12BBF_inline(L_64, ((-L_65)), L_66, NULL);
+		return L_67;
 	}
 }
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_ApplyHips_mCD05B04C2A02C91169D8856610B4AF4E85463BD1 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* ___0_pose, Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 ___1_screenCenter, float ___2_sourceShoulderWidth, int32_t ___3_shoulderMode, const RuntimeMethod* method) 
@@ -21178,7 +21165,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver__ctor_mE22950296680E2
 		__this->___minimumFaceCameraDistance = (0.280000001f);
 		__this->___maximumFaceCameraDistance = (8.0f);
 		__this->___faceSizeDeadZoneRatio = (0.0250000004f);
-		__this->___avatarSizeMatchScale = (1.07000005f);
+		__this->___avatarSizeMatchScale = (0.970000029f);
 		__this->___enableBodyTurn = (bool)1;
 		__this->___bodyTurnSpeed = (360.0f);
 		__this->___bodyTurnDeadZone = (2.0f);
@@ -23338,6 +23325,96 @@ IL_003d:
 	{
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_17 = V_0;
 		return L_17;
+	}
+}
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR float Mathf_Max_m870B77F6A5225EC21D9778043F987B9B17D08F6B_inline (SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* ___0_values, const RuntimeMethod* method) 
+{
+	int32_t V_0 = 0;
+	float V_1 = 0.0f;
+	bool V_2 = false;
+	float V_3 = 0.0f;
+	int32_t V_4 = 0;
+	bool V_5 = false;
+	bool V_6 = false;
+	{
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_0 = ___0_values;
+		NullCheck(L_0);
+		V_0 = ((int32_t)(((RuntimeArray*)L_0)->max_length));
+		int32_t L_1 = V_0;
+		V_2 = (bool)((((int32_t)L_1) == ((int32_t)0))? 1 : 0);
+		bool L_2 = V_2;
+		if (!L_2)
+		{
+			goto IL_0015;
+		}
+	}
+	{
+		V_3 = (0.0f);
+		goto IL_0047;
+	}
+
+IL_0015:
+	{
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_3 = ___0_values;
+		NullCheck(L_3);
+		int32_t L_4 = 0;
+		float L_5 = (L_3)->GetAt(static_cast<il2cpp_array_size_t>(L_4));
+		V_1 = L_5;
+		V_4 = 1;
+		goto IL_0038;
+	}
+
+IL_001e:
+	{
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_6 = ___0_values;
+		int32_t L_7 = V_4;
+		NullCheck(L_6);
+		int32_t L_8 = L_7;
+		float L_9 = (L_6)->GetAt(static_cast<il2cpp_array_size_t>(L_8));
+		float L_10 = V_1;
+		V_5 = (bool)((((float)L_9) > ((float)L_10))? 1 : 0);
+		bool L_11 = V_5;
+		if (!L_11)
+		{
+			goto IL_0031;
+		}
+	}
+	{
+		SingleU5BU5D_t89DEFE97BCEDB5857010E79ECE0F52CF6E93B87C* L_12 = ___0_values;
+		int32_t L_13 = V_4;
+		NullCheck(L_12);
+		int32_t L_14 = L_13;
+		float L_15 = (L_12)->GetAt(static_cast<il2cpp_array_size_t>(L_14));
+		V_1 = L_15;
+	}
+
+IL_0031:
+	{
+		int32_t L_16 = V_4;
+		V_4 = ((int32_t)il2cpp_codegen_add(L_16, 1));
+	}
+
+IL_0038:
+	{
+		int32_t L_17 = V_4;
+		int32_t L_18 = V_0;
+		V_6 = (bool)((((int32_t)L_17) < ((int32_t)L_18))? 1 : 0);
+		bool L_19 = V_6;
+		if (L_19)
+		{
+			goto IL_001e;
+		}
+	}
+	{
+		float L_20 = V_1;
+		V_3 = L_20;
+		goto IL_0047;
+	}
+
+IL_0047:
+	{
+		float L_21 = V_3;
+		return L_21;
 	}
 }
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 Bounds_get_center_m5B05F81CB835EB6DD8628FDA24B638F477984DC3_inline (Bounds_t367E830C64BBF235ED8C3B2F8CF6254FDCAD39C3* __this, const RuntimeMethod* method) 

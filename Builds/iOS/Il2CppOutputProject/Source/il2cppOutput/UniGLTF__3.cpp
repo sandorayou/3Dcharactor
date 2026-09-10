@@ -24620,7 +24620,7 @@ IL_0053_2:
 						int32_t L_28 = V_6;
 						NullCheck(L_25);
 						int32_t L_29;
-						L_29 = VirtualFuncInvoker3< int32_t, ByteU5BU5D_tA6237BF417AE52AD70CFB4EF24A7A82613DF9031*, int32_t, int32_t >::Invoke(21, L_25, L_26, L_27, L_28);
+						L_29 = VirtualFuncInvoker3< int32_t, ByteU5BU5D_tA6237BF417AE52AD70CFB4EF24A7A82613DF9031*, int32_t, int32_t >::Invoke(25, L_25, L_26, L_27, L_28);
 						V_7 = L_29;
 						int32_t L_30 = V_5;
 						int32_t L_31 = V_7;

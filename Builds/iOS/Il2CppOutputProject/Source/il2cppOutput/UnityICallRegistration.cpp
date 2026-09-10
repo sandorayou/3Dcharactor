@@ -1126,6 +1126,10 @@ void RegisterAllStrippedInternalCalls()
 		void Register_UnityEngine_GameObject_CreatePrimitive();
 		Register_UnityEngine_GameObject_CreatePrimitive();
 
+		//UnityEngine.GameObject UnityEngine.GameObject::Find(System.String)
+		void Register_UnityEngine_GameObject_Find();
+		Register_UnityEngine_GameObject_Find();
+
 		//UnityEngine.Transform UnityEngine.GameObject::get_transform()
 		void Register_UnityEngine_GameObject_get_transform();
 		Register_UnityEngine_GameObject_get_transform();
@@ -4011,26 +4015,6 @@ void RegisterAllStrippedInternalCalls()
 		Register_UnityEngine_Vector3_Slerp_Injected();
 
 	//End Registrations for type : UnityEngine.Vector3
-
-	//Start Registrations for type : UnityEngine.WebCamTexture
-
-		//System.Void UnityEngine.WebCamTexture::Internal_CreateWebCamTexture(UnityEngine.WebCamTexture,System.String,System.Int32,System.Int32,System.Int32)
-		void Register_UnityEngine_WebCamTexture_Internal_CreateWebCamTexture();
-		Register_UnityEngine_WebCamTexture_Internal_CreateWebCamTexture();
-
-		//System.Void UnityEngine.WebCamTexture::Play()
-		void Register_UnityEngine_WebCamTexture_Play();
-		Register_UnityEngine_WebCamTexture_Play();
-
-		//System.Void UnityEngine.WebCamTexture::Stop()
-		void Register_UnityEngine_WebCamTexture_Stop();
-		Register_UnityEngine_WebCamTexture_Stop();
-
-		//UnityEngine.WebCamDevice[] UnityEngine.WebCamTexture::get_devices()
-		void Register_UnityEngine_WebCamTexture_get_devices();
-		Register_UnityEngine_WebCamTexture_get_devices();
-
-	//End Registrations for type : UnityEngine.WebCamTexture
 
 	//Start Registrations for type : UnityEngine.Yoga.Native
 

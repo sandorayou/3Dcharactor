@@ -15,9 +15,6 @@
         <string>audio</string>
     </array>
 
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>PCからの姿勢トラッキングデータを受信するためにローカルネットワークを使用します。</string>
-
     <key>CADisableMinimumFrameDuration</key>
     <false />
     <key>CADisableMinimumFrameDurationOnPhone</key>
@@ -46,6 +43,8 @@
     <true />
     <key>NSCameraUsageDescription</key>
     <string>MyProject5 Live Streamingがカメラを配信映像に使用します。</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>PCからの姿勢トラッキングデータを受信するためにローカルネットワークを使用します。</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>MyProject5 Live Streamingがマイク音声を配信に使用します。</string>
     <key>UILaunchStoryboardName</key>
