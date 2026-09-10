@@ -11,6 +11,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         [SerializeField] private LiveStreamAccountLinkController accountLink;
         [SerializeField] private YouTubeAccountLinkController youtubeLink;
         [SerializeField] private LiveStreamSettingsController settingsController;
+        [SerializeField] private LocalAvatarVisibilityController avatarVisibility;
         private Text status;
         private InputField ingestUrl;
         private InputField streamKey;
@@ -22,6 +23,8 @@ namespace RealtimeBodyTracking.LiveStreaming
             accountLink ??= GetComponent<LiveStreamAccountLinkController>();
             youtubeLink ??= GetComponent<YouTubeAccountLinkController>();
             settingsController ??= GetComponent<LiveStreamSettingsController>();
+            avatarVisibility ??= GetComponent<LocalAvatarVisibilityController>();
+            if (avatarVisibility == null) avatarVisibility = gameObject.AddComponent<LocalAvatarVisibilityController>();
             var canvasObject = new GameObject("LiveStreamControlCanvas");
             canvasObject.transform.SetParent(transform, false);
             var canvas = canvasObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 9999;
@@ -44,6 +47,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             AddButton(panel.transform, "配信開始", Start);
             AddButton(panel.transform, "ミュート／解除", () => controller?.ToggleMute());
             AddButton(panel.transform, "カメラ切替", () => controller?.ToggleCamera());
+            AddButton(panel.transform, "キャラ表示／非表示", ToggleAvatarVisibility);
             AddButton(panel.transform, "配信停止", Stop);
         }
 
@@ -52,6 +56,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         private void SaveManualAccount() { if (settingsController == null || ingestUrl == null || streamKey == null) return; settingsController.SaveAccount(selected, selected.ToString(), ingestUrl.text, streamKey.text); controller?.Configure(selected, ingestUrl.text, streamKey.text); if (status) status.text = "配信先: " + selected + " / 保存済み"; }
         private void Start() { if (controller != null && controller.StartStreaming() && status) status.text = "配信先: " + selected + " / 配信中"; }
         private void Stop() { controller?.StopStreaming(); if (status) status.text = "配信先: " + selected + " / 停止"; }
+        private void ToggleAvatarVisibility() { avatarVisibility?.ToggleVisibility(); if (status) status.text = avatarVisibility != null && avatarVisibility.IsVisible ? "キャラ: 表示" : "キャラ: 非表示"; }
 
         private static Text AddLabel(Transform parent, string value, int size) { var text = new GameObject("Status").AddComponent<Text>(); text.transform.SetParent(parent, false); text.text = value; text.fontSize = size; text.color = Color.white; text.alignment = TextAnchor.MiddleLeft; text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); return text; }
         private static InputField AddInput(Transform parent, string placeholder) { var obj = new GameObject(placeholder); obj.transform.SetParent(parent, false); obj.AddComponent<LayoutElement>().preferredHeight = 42; obj.AddComponent<Image>().color = Color.white; var input = obj.AddComponent<InputField>(); var text = new GameObject("Text").AddComponent<Text>(); text.transform.SetParent(obj.transform, false); text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.color = Color.black; text.fontSize = 18; text.rectTransform.anchorMin = Vector2.zero; text.rectTransform.anchorMax = Vector2.one; text.rectTransform.offsetMin = new Vector2(10, 0); text.rectTransform.offsetMax = new Vector2(-10, 0); input.textComponent = text; input.placeholder = AddLabel(obj.transform, placeholder, 18); input.placeholder.color = Color.gray; return input; }
