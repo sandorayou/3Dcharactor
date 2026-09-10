@@ -60,7 +60,6 @@ class PoseEstimator:
         self._fps_started = time.perf_counter()
         self._fps_count = 0
         self.last_normalized_landmarks = None
-        self.last_face_landmarks: list[SimpleNamespace] = []
         self.last_hand_landmarks: list[list[SimpleNamespace]] = []
         self.last_hand_assignments: list[dict] = []
         self._hand_positions: dict[str, tuple[float, float]] = {}
@@ -109,13 +108,6 @@ class PoseEstimator:
                 y=(landmark.y * self._size - pad_top) / (scale * frame.shape[0]),
             ) for landmark in hand]
             for hand in hand_result.hand_landmarks
-        ]
-        self.last_face_landmarks = [
-            SimpleNamespace(
-                x=(landmark.x * self._size - pad_left) / (scale * frame.shape[1]),
-                y=(landmark.y * self._size - pad_top) / (scale * frame.shape[0]),
-            )
-            for landmark in (face_result.face_landmarks[0] if face_result.face_landmarks else [])
         ]
         points: list[PosePoint] = []
         if result.pose_world_landmarks:
