@@ -68,7 +68,6 @@ namespace RealtimeBodyTracking
         [SerializeField, Min(0f)] private float maxWristSpeed = 2.5f;
         [SerializeField, Min(0f)] private float maxElbowSpeed = 3f;
         [SerializeField, Range(.25f, 1.5f)] private float handHorizontalGain = 1f;
-        [SerializeField, Range(1f, 1.3f)] private float outerHandHorizontalGain = 1.08f;
         [SerializeField, Range(.5f, 2f)] private float armVerticalGain = 1.5f;
         [SerializeField, Range(1, 5)] private int armAcquireFrames = 2;
         [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .03f;
@@ -940,6 +939,34 @@ namespace RealtimeBodyTracking
         // occluded at the chest, the anatomical pole and the previous solution
         // keep the hinge stable instead of moving the hand target.
         private void ApplyCalibratedIkArm(PosePacket pose, bool left, UpperBodyPose upperBody)
+        {
+            var side = SourceSide(left);
+            var outerBlend = 0f;
+            if (pose.TryGetImage(side + "_hand_wrist", .35f, out var wrist) &&
+                pose.TryGetImage(side + "_shoulder", wristMinConfidence, out var shoulder) &&
+                pose.TryGetImage("left_shoulder", wristMinConfidence, out var ls) &&
+                pose.TryGetImage("right_shoulder", wristMinConfidence, out var rs))
+            {
+                var outward = (wrist.x - shoulder.x) * Mathf.Sign(shoulder.x - (ls.x + rs.x) * .5f);
+                outerBlend = Mathf.SmoothStep(0f, 1f,
+                    Mathf.Clamp01(outward / Mathf.Max(Mathf.Abs(ls.x - rs.x) * .15f, .02f)));
+            }
+            var savedSpeed = armRotationSmoothingSpeed;
+            var savedDeadZone = armPointDeadZoneScale;
+            try
+            {
+                armRotationSmoothingSpeed = Mathf.Lerp(savedSpeed, 60f, outerBlend);
+                armPointDeadZoneScale = Mathf.Lerp(savedDeadZone, 0f, outerBlend);
+                ApplyCalibratedIkArmCore(pose, left, upperBody);
+            }
+            finally
+            {
+                armRotationSmoothingSpeed = savedSpeed;
+                armPointDeadZoneScale = savedDeadZone;
+            }
+        }
+
+        private void ApplyCalibratedIkArmCore(PosePacket pose, bool left, UpperBodyPose upperBody)
         {
             // Mirroring is a coordinate transform, not an anatomical side swap.
             // MediaPipe's left/right labels remain tied to the performer.
@@ -2022,17 +2049,6 @@ namespace RealtimeBodyTracking
             // hand drives the facing avatar, so applying avatarMirror here would invert motion twice.
             var dx = sourcePoint.x - sourceShoulder.x;
             var dy = sourcePoint.y - sourceShoulder.y;
-            var shoulderCenterX = (ToPreviewViewport(leftShoulderImage).x +
-                                   ToPreviewViewport(rightShoulderImage).x) * .5f;
-            var outwardSign = Mathf.Sign(sourceShoulder.x - shoulderCenterX);
-            var outwardDistance = dx * outwardSign;
-            if (outwardDistance > 0f)
-            {
-                // Fade in outside the shoulder to avoid a jump across its boundary.
-                var blend = Mathf.SmoothStep(0f, 1f,
-                    outwardDistance / Mathf.Max(sourceShoulderWidth * .25f, .02f));
-                dx *= Mathf.Lerp(1f, outerHandHorizontalGain, blend);
-            }
             var offset = new Vector2(dx * handHorizontalGain, dy * armVerticalGain) * viewportScale;
             targetViewport = new Vector3(
                 shoulderViewport.x + offset.x,
