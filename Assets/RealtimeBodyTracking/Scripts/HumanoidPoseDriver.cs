@@ -52,9 +52,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.5f, 3f)] private float bodyLeanGain = 1f;
         [SerializeField] private bool mirrorShoulderElevation = true;
         [Header("Face Zoom")]
-        // Use forehead-to-chin height instead of projected shoulder width.
         [SerializeField] private bool enableFaceZoom = true;
-        [SerializeField, Min(.01f)] private float avatarFaceHeightMeters = .22f;
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
         [SerializeField, Min(0.15f)] private float minimumFaceCameraDistance = 0.28f;
         [SerializeField, Min(1f)] private float maximumFaceCameraDistance = 8f;
@@ -2847,20 +2845,29 @@ namespace RealtimeBodyTracking
             float sourceWidth;
             float avatarWidth;
             Vector3 avatarWorldCenter;
-            if (!pose.TryGetImage("face_top", .55f, out var top) ||
-                !pose.TryGetImage("face_chin", .55f, out var chin) ||
-                !TryReadAvatarFace(out _, out _, out avatarWorldCenter)) return;
-            var topViewport = SourceImageToViewport(new Vector2(top.x, top.y), pose.source_width, pose.source_height);
-            var chinViewport = SourceImageToViewport(new Vector2(chin.x, chin.y), pose.source_width, pose.source_height);
-            var difference = topViewport - chinViewport;
-            difference.x *= trackingCamera.aspect;
-            var rawSourceFaceWidth = difference.magnitude;
-            if (rawSourceFaceWidth < .02f) return;
-            var height = avatarFaceHeightMeters * Mathf.Abs(targetAnimator.transform.lossyScale.y);
-            var avatarTop = trackingCamera.WorldToViewportPoint(avatarWorldCenter + trackingCamera.transform.up * height * .5f);
-            var avatarBottom = trackingCamera.WorldToViewportPoint(avatarWorldCenter - trackingCamera.transform.up * height * .5f);
-            avatarWidth = Mathf.Abs(avatarTop.y - avatarBottom.y);
+            if (TryReadSourceShoulderWidth(pose, out var rawShoulderWidth) &&
+                TryReadAvatarShoulders(out avatarWidth, out avatarWorldCenter))
             {
+                if (!shoulderZoomInitialized)
+                {
+                    filteredSourceShoulderFramingWidth = rawShoulderWidth;
+                    shoulderZoomInitialized = true;
+                }
+                if (receivedNewPoseFrame)
+                {
+                    var measurementT = 1f - Mathf.Exp(-8f * deltaTime);
+                    filteredSourceShoulderFramingWidth = strictScreenLock
+                        ? rawShoulderWidth
+                        : Mathf.Lerp(filteredSourceShoulderFramingWidth, rawShoulderWidth, measurementT);
+                }
+                sourceWidth = filteredSourceShoulderFramingWidth;
+            }
+            else
+            {
+                if (!TryReadSourceFace(pose, out _, out var rawSourceFaceWidth) ||
+                    !TryReadAvatarFace(out _, out avatarWidth, out avatarWorldCenter))
+                    return;
+
                 if (!faceZoomInitialized)
                 {
                     filteredSourceFaceWidth = rawSourceFaceWidth;
@@ -2889,12 +2896,14 @@ namespace RealtimeBodyTracking
 
             if (Mathf.Abs(sizeRatio - 1f) < faceSizeDeadZoneRatio)
             {
-                sizeRatio = 1f;
+                return;
             }
 
             float targetDistance = Mathf.Clamp(currentDistance * sizeRatio, minimumFaceCameraDistance, maximumFaceCameraDistance);
 
-            float smoothDistance = Mathf.SmoothDamp(
+            float smoothDistance = strictScreenLock
+                ? targetDistance
+                : Mathf.SmoothDamp(
                     currentDistance,
                     targetDistance,
                     ref cameraDistanceVelocity,
@@ -2908,14 +2917,6 @@ namespace RealtimeBodyTracking
             // avatar's eyes and produced an unintended close-up.
             trackingCamera.transform.position =
                 cameraPosition + cameraForward * (currentDistance - smoothDistance);
-            // Forehead/chin midpoint is slightly below the avatar eye line.
-            var sourceCenter = (topViewport + chinViewport) * .5f;
-            var avatarCenter = avatarWorldCenter - trackingCamera.transform.up * height * .12f;
-            var centerDepth = Vector3.Dot(avatarCenter - trackingCamera.transform.position, cameraForward);
-            var desiredCenter = trackingCamera.ViewportToWorldPoint(
-                new Vector3(sourceCenter.x, sourceCenter.y, centerDepth));
-            targetAnimator.transform.position += Vector3.ProjectOnPlane(
-                desiredCenter - avatarCenter, cameraForward);
         }
 
         private void ResetTrackingFiltersOnly()
