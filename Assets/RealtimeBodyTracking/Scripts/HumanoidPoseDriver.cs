@@ -2800,6 +2800,17 @@ namespace RealtimeBodyTracking
             var topViewport = SourceImageToViewport(new Vector2(top.x, top.y), pose.source_width, pose.source_height);
             var chinViewport = SourceImageToViewport(new Vector2(chin.x, chin.y), pose.source_width, pose.source_height);
             var difference = topViewport - chinViewport;
+            // Match TrackerVideoBackground's centred cover fit. Only adjust the
+            // head-size measurement; keep the existing body/hand mapping intact.
+            if (pose.source_width > 0 && pose.source_height > 0)
+            {
+                var sourceAspect = (float)pose.source_width / pose.source_height;
+                var viewportAspect = trackingCamera.aspect;
+                if (sourceAspect < viewportAspect)
+                    difference.y *= viewportAspect / sourceAspect;
+                else if (sourceAspect > viewportAspect)
+                    difference.x *= sourceAspect / viewportAspect;
+            }
             difference.x *= trackingCamera.aspect;
             var rawSourceFaceWidth = difference.magnitude;
             if (rawSourceFaceWidth < .02f) return;
