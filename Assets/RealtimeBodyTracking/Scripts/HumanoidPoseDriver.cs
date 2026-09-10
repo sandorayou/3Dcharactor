@@ -68,6 +68,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Min(0f)] private float maxWristSpeed = 2.5f;
         [SerializeField, Min(0f)] private float maxElbowSpeed = 3f;
         [SerializeField, Range(.25f, 1.5f)] private float handHorizontalGain = 1f;
+        [SerializeField, Range(1f, 1.3f)] private float outerHandHorizontalGain = 1.08f;
         [SerializeField, Range(.5f, 2f)] private float armVerticalGain = 1.5f;
         [SerializeField, Range(1, 5)] private int armAcquireFrames = 2;
         [SerializeField, Range(0f, .3f)] private float armPointDeadZoneScale = .03f;
@@ -2021,6 +2022,17 @@ namespace RealtimeBodyTracking
             // hand drives the facing avatar, so applying avatarMirror here would invert motion twice.
             var dx = sourcePoint.x - sourceShoulder.x;
             var dy = sourcePoint.y - sourceShoulder.y;
+            var shoulderCenterX = (ToPreviewViewport(leftShoulderImage).x +
+                                   ToPreviewViewport(rightShoulderImage).x) * .5f;
+            var outwardSign = Mathf.Sign(sourceShoulder.x - shoulderCenterX);
+            var outwardDistance = dx * outwardSign;
+            if (outwardDistance > 0f)
+            {
+                // Fade in outside the shoulder to avoid a jump across its boundary.
+                var blend = Mathf.SmoothStep(0f, 1f,
+                    outwardDistance / Mathf.Max(sourceShoulderWidth * .25f, .02f));
+                dx *= Mathf.Lerp(1f, outerHandHorizontalGain, blend);
+            }
             var offset = new Vector2(dx * handHorizontalGain, dy * armVerticalGain) * viewportScale;
             targetViewport = new Vector3(
                 shoulderViewport.x + offset.x,
