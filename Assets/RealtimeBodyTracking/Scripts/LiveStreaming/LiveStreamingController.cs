@@ -10,6 +10,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         [SerializeField] private LiveStreamSettings settings = new LiveStreamSettings();
         [SerializeField] private bool useFrontCamera = true;
         public bool IsStreaming { get; private set; }
+        public bool IsMuted { get; private set; }
         public LiveStreamProvider CurrentProvider => settings.provider;
         public LiveStreamOrientation CurrentOrientation => settings.orientation;
 
@@ -59,6 +60,14 @@ namespace RealtimeBodyTracking.LiveStreaming
             if (!IsStreaming) return;
             NativeStop();
             IsStreaming = false;
+            IsMuted = false;
+        }
+
+        public void ToggleMute()
+        {
+            if (!IsStreaming) return;
+            IsMuted = !IsMuted;
+            NativeSetMuted(IsMuted ? 1 : 0);
         }
 
         private static void SetFrontCamera(bool front)
@@ -72,10 +81,12 @@ namespace RealtimeBodyTracking.LiveStreaming
         [DllImport("__Internal")] private static extern int NativeStart(string url, string key, int width, int height, int fps, int videoKbps, int audioKbps);
         [DllImport("__Internal")] private static extern void NativeStop();
         [DllImport("__Internal")] private static extern void NativeSetCamera(int front);
+        [DllImport("__Internal")] private static extern void NativeSetMuted(int muted);
 #else
         private static int NativeStart(string url, string key, int width, int height, int fps, int videoKbps, int audioKbps) => -1;
         private static void NativeStop() { }
         private static void NativeSetCamera(int front) { }
+        private static void NativeSetMuted(int muted) { }
 #endif
     }
 }

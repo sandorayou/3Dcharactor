@@ -67,6 +67,12 @@ final class UnityLivePublisher {
         }
 #endif
     }
+
+    func setMuted(_ muted: Bool) {
+#if canImport(RTMPHaishinKit)
+        stream?.audioMixerSettings.isMuted = muted
+#endif
+    }
 }
 
 @_cdecl("NativeStart")
@@ -79,4 +85,7 @@ public func nativeStart(_ url: UnsafePointer<CChar>, _ key: UnsafePointer<CChar>
 @_cdecl("NativeStop") public func nativeStop() { UnityLivePublisher.shared.stop() }
 @_cdecl("NativeSetCamera") public func nativeSetCamera(_ front: Int32) {
     UnityLivePublisher.shared.setCamera(front: front != 0)
+}
+@_cdecl("NativeSetMuted") public func nativeSetMuted(_ muted: Int32) {
+    UnityLivePublisher.shared.setMuted(muted != 0)
 }
