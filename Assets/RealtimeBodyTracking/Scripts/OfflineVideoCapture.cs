@@ -25,6 +25,9 @@ namespace RealtimeBodyTracking
         private bool recording;
         private float nextFrameTime;
         private string outputDirectory;
+        private string ffmpegPath;
+        private string maskedOutputPath;
+        private string avatarOutputPath;
 
         private void Awake()
         {
@@ -45,8 +48,8 @@ namespace RealtimeBodyTracking
 
         private void StartRecording()
         {
-            var ffmpeg = ResolveFfmpeg();
-            if (string.IsNullOrEmpty(ffmpeg))
+            ffmpegPath = ResolveFfmpeg();
+            if (string.IsNullOrEmpty(ffmpegPath))
             {
                 Debug.LogError("ffmpeg.exe が見つからないため録画を開始できません。", this);
                 return;
@@ -54,9 +57,11 @@ namespace RealtimeBodyTracking
             var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
             outputDirectory = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Output", "Captures", stamp);
             Directory.CreateDirectory(outputDirectory);
+            maskedOutputPath = Path.Combine(outputDirectory, "masked-real.mp4");
+            avatarOutputPath = Path.Combine(outputDirectory, "avatar-alpha.mov");
             SetupCameras();
-            maskedEncoder = StartEncoder(ffmpeg, Path.Combine(outputDirectory, "masked-real.mp4"), false);
-            avatarEncoder = StartEncoder(ffmpeg, Path.Combine(outputDirectory, "avatar-alpha.mov"), true);
+            maskedEncoder = StartEncoder(ffmpegPath, maskedOutputPath, false);
+            avatarEncoder = StartEncoder(ffmpegPath, avatarOutputPath, true);
             recording = maskedEncoder != null && avatarEncoder != null;
             nextFrameTime = Time.unscaledTime;
             if (recording) StartCoroutine(CaptureLoop()); else StopRecording();
@@ -137,6 +142,7 @@ namespace RealtimeBodyTracking
             CloseEncoder(avatarEncoder);
             maskedEncoder = null;
             avatarEncoder = null;
+            CreateComposite();
             if (maskedCamera != null) Destroy(maskedCamera.gameObject);
             if (avatarCamera != null) Destroy(avatarCamera.gameObject);
             if (maskedTarget != null) Destroy(maskedTarget);
@@ -144,6 +150,29 @@ namespace RealtimeBodyTracking
             if (readback != null) Destroy(readback);
             if (!string.IsNullOrEmpty(outputDirectory))
                 Debug.Log($"録画を保存しました: {outputDirectory}", this);
+        }
+
+        private void CreateComposite()
+        {
+            if (string.IsNullOrEmpty(ffmpegPath) || !File.Exists(maskedOutputPath) ||
+                !File.Exists(avatarOutputPath)) return;
+            var output = Path.Combine(outputDirectory, "composited.mp4");
+            var arguments = $"-y -loglevel error -i \"{maskedOutputPath}\" -i \"{avatarOutputPath}\" " +
+                $"-filter_complex \"[0:v][1:v]overlay=0:0:format=auto\" -c:v libx264 " +
+                $"-preset veryfast -crf 18 -pix_fmt yuv420p -shortest \"{output}\"";
+            using (var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            }))
+            {
+                process?.WaitForExit();
+                if (process != null && process.ExitCode != 0)
+                    Debug.LogError("合成動画の生成に失敗しました。", this);
+            }
         }
 
         private static void CloseEncoder(Process process)

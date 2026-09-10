@@ -21,30 +21,37 @@ PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
 
 
 class FastPersonHider:
-    """Cheap pose-guided clean plate; no segmentation network or full-size inpaint."""
+    """Fast pose-guided mosaic that leaves unmasked background pixels untouched."""
     def __init__(self) -> None:
         self._size = (320, 240)
         self._last_face_mask = None
-        self._last_face_fill_color = None
         self._last_face_seen_at = float("-inf")
+        self._mosaic_block = 16
 
-    def _fill_mask(self, frame, mask, fill_color):
+    def _apply_mosaic(self, frame, mask):
         full_size = (frame.shape[1], frame.shape[0])
-        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_LINEAR)
+        full_mask = cv2.resize(mask, full_size, interpolation=cv2.INTER_NEAREST)
+        block = max(self._mosaic_block, 2)
+        mosaic_size = (
+            max(1, (frame.shape[1] + block - 1) // block),
+            max(1, (frame.shape[0] + block - 1) // block),
+        )
+        pixelated = cv2.resize(frame, mosaic_size, interpolation=cv2.INTER_AREA)
+        pixelated = cv2.resize(pixelated, full_size, interpolation=cv2.INTER_NEAREST)
+        full_mask = cv2.GaussianBlur(full_mask, (5, 5), 0)
         alpha = (full_mask.astype(np.float32) / 255.0)[:, :, None]
-        return np.rint(frame * (1.0 - alpha) + fill_color * alpha).astype(np.uint8)
+        return np.rint(frame * (1.0 - alpha) + pixelated * alpha).astype(np.uint8)
 
     def apply(self, frame, estimator: PoseEstimator):
         if not estimator.last_normalized_landmarks:
             if (self._last_face_mask is not None and
-                    self._last_face_fill_color is not None and
                     time.perf_counter() - self._last_face_seen_at <= .1):
-                return self._fill_mask(
-                    frame, self._last_face_mask, self._last_face_fill_color)
+                return self._apply_mosaic(frame, self._last_face_mask)
             return frame
         small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
         mask = np.zeros((self._size[1], self._size[0]), dtype=np.uint8)
         face_mask = np.zeros_like(mask)
+        skin_candidate = None
         points = estimator.last_normalized_landmarks
 
         def point(index):
@@ -95,6 +102,22 @@ class FastPersonHider:
             face_hull = cv2.convexHull(np.rint(expanded).astype(np.int32))
             cv2.fillConvexPoly(mask, face_hull, 255)
             cv2.fillConvexPoly(face_mask, face_hull, 255)
+
+            # Add pixels matching the observed face colour near the tracked
+            # person. This catches skin that can sit outside the pose strokes
+            # (profile cheek, neck and fast-moving hands) without degrading the
+            # rest of the camera image.
+            face_core = np.zeros_like(mask)
+            cv2.fillConvexPoly(face_core, cv2.convexHull(
+                np.rint(face_points).astype(np.int32)), 255)
+            face_pixels = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb)[face_core > 0]
+            if len(face_pixels):
+                skin_center = np.median(face_pixels[:, 1:3], axis=0)
+                ycrcb = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb)
+                chroma_delta = ycrcb[:, :, 1:3].astype(np.float32) - skin_center
+                skin_candidate = (
+                    np.sum(chroma_delta * chroma_delta, axis=2) <= 18.0 ** 2
+                ).astype(np.uint8) * 255
         for chain in ((11, 13, 15), (12, 14, 16), (23, 25, 27), (24, 26, 28)):
             for start, end in zip(chain, chain[1:]):
                 cv2.line(mask, point(start), point(end), 255, limb_thickness)
@@ -105,43 +128,25 @@ class FastPersonHider:
             ], dtype=np.int32)
             if len(hand_points) >= 3:
                 cv2.fillConvexPoly(mask, cv2.convexHull(hand_points), 255)
+        if skin_candidate is not None:
+            person_roi = cv2.dilate(mask, np.ones((19, 19), np.uint8), iterations=1)
+            skin = cv2.bitwise_and(skin_candidate, person_roi)
+            skin = cv2.morphologyEx(skin, cv2.MORPH_CLOSE,
+                                    np.ones((5, 5), np.uint8))
+            face_roi = cv2.dilate(face_mask, np.ones((19, 19), np.uint8), iterations=1)
+            mask = cv2.bitwise_or(mask, skin)
+            face_mask = cv2.bitwise_or(face_mask, cv2.bitwise_and(skin, face_roi))
         # Two pixels at mask resolution cover detector jitter without producing
         # the broad horizontal replacement band seen with the old 7x7 dilation.
         mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
         face_mask = cv2.dilate(face_mask, np.ones((3, 3), np.uint8), iterations=1)
 
-        ys, xs = np.nonzero(mask)
-        if not len(xs):
+        if not np.any(mask):
             return frame
-        min_x, max_x = int(xs.min()), int(xs.max())
-        min_y, max_y = int(ys.min()), int(ys.max())
-        sample_xs = (min_x - 5, max_x + 5)
-        sample_ys = (
-            min_y + (max_y - min_y) // 4,
-            min_y + (max_y - min_y) // 2,
-            min_y + (max_y - min_y) * 3 // 4,
-        )
-        samples = []
-        for sample_x in sample_xs:
-            if sample_x < 1 or sample_x >= self._size[0] - 1:
-                continue
-            for sample_y in sample_ys:
-                sample_y = int(np.clip(sample_y, 1, self._size[1] - 2))
-                patch = small[sample_y - 1:sample_y + 2, sample_x - 1:sample_x + 2]
-                patch_mask = mask[sample_y - 1:sample_y + 2, sample_x - 1:sample_x + 2]
-                safe_pixels = patch[patch_mask == 0]
-                if len(safe_pixels):
-                    samples.append(safe_pixels)
-        fill_color = (
-            np.median(np.concatenate(samples, axis=0), axis=0).astype(np.uint8)
-            if samples
-            else np.median(small.reshape(-1, 3), axis=0).astype(np.uint8)
-        )
 
         self._last_face_mask = face_mask.copy()
-        self._last_face_fill_color = fill_color.copy()
         self._last_face_seen_at = time.perf_counter()
-        return self._fill_mask(frame, mask, fill_color)
+        return self._apply_mosaic(frame, mask)
 
 
 class TrackerFrameServer:
