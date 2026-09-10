@@ -30,7 +30,12 @@ jobs:
           echo "scheme=Unity-iPhone" >> $GITHUB_OUTPUT
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || true
+        run: |
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name 'Xcode*.app' -print | sort -V | tail -n 1)
+          if [ -z "$XCODE_PATH" ]; then echo "::error::No Xcode installation found"; exit 1; fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E 'iphoneos|iPhoneOS'
 
       - name: Add HaishinKit Swift Package
         run: |
