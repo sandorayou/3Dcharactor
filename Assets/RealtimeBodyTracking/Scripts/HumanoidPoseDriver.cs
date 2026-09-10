@@ -360,6 +360,24 @@ namespace RealtimeBodyTracking
 
         private void LateUpdate()
         {
+            UpdateTrackingPose();
+            // Eye rotations must remain relative to the moving head. A world-space
+            // rest rotation (including after tracking loss) makes the eyes counter-
+            // rotate against head pitch and appear to look upward.
+            if (targetAnimator == null || solver == null) return;
+            RestoreNeutralEye(HumanBodyBones.LeftEye);
+            RestoreNeutralEye(HumanBodyBones.RightEye);
+        }
+
+        private void RestoreNeutralEye(HumanBodyBones bone)
+        {
+            var eye = targetAnimator.GetBoneTransform(bone);
+            if (eye != null && solver.TryGetRestLocalRotation(bone, out var rest))
+                eye.localRotation = rest;
+        }
+
+        private void UpdateTrackingPose()
+        {
             receivedNewPoseFrame = false;
             receivedTrackedPoseFrame = false;
             if (udpReceiver != null && udpReceiver.TryTakeLatest(out var packet))
