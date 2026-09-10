@@ -36,7 +36,6 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, .1f)] private float centerPredictionSeconds = .033f;
         [SerializeField, Range(1f, 60f)] private float centerInterpolationSpeed = 30f;
         [SerializeField, Range(0f, 5f)] private float hipsPositionScale = .25f;
-        [SerializeField, Range(0f, 3f)] private float bodyDepthFromShoulderWidth = 1.2f;
         [SerializeField, Min(0f)] private float maxHipsSpeed = .8f;
         [SerializeField, Min(0f)] private float screenHorizontalRange = 1.2f;
         [SerializeField, Min(0f)] private float screenVerticalRange = .8f;
@@ -210,7 +209,6 @@ namespace RealtimeBodyTracking
         private bool predictiveCenterInitialized;
         private Vector3 avatarHipOrigin;
         private float sourceShoulderWidthOrigin;
-        private float sourceCameraDistanceOrigin;
         private float filteredShoulderWidth;
         private float stableShoulderWidth;
         private float shoulderScreenDirection = -1f;
@@ -2469,9 +2467,6 @@ namespace RealtimeBodyTracking
                     stableShoulderWidth = sourceShoulderWidthOrigin;
                 }
                 avatarHipOrigin = root.position;
-                sourceCameraDistanceOrigin = trackingCamera != null
-                    ? Mathf.Max(Vector3.Dot(avatarHipOrigin - trackingCamera.transform.position, trackingCamera.transform.forward), cameraMinimumDistance)
-                    : Mathf.Max(bodyDepthFromShoulderWidth, cameraMinimumDistance);
                 hipsInitialized = true;
             }
 
