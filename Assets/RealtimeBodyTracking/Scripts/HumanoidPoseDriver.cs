@@ -52,7 +52,9 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.5f, 3f)] private float bodyLeanGain = 1f;
         [SerializeField] private bool mirrorShoulderElevation = true;
         [Header("Face Zoom")]
-        [SerializeField] private bool enableFaceZoom = true;
+        // Keep camera distance stable when turning; projected shoulder/face
+        // width alone cannot distinguish rotation from movement in depth.
+        [SerializeField] private bool enableFaceZoom = false;
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
         [SerializeField, Min(0.15f)] private float minimumFaceCameraDistance = 0.28f;
         [SerializeField, Min(1f)] private float maximumFaceCameraDistance = 8f;
