@@ -11,7 +11,7 @@ namespace RealtimeBodyTracking.LiveStreaming
     public sealed class LiveStreamAccountLinkController : MonoBehaviour
     {
         [SerializeField] private string twitchClientId = "7sh6f19iuva2ep5b5eyedbf1mvphiw";
-        [SerializeField] private string youtubeClientId;
+        [SerializeField] private string youtubeClientId = "619136214643-6hsflt2isot3prrices9tu5nn5nvq355.apps.googleusercontent.com";
         [SerializeField] private string callbackScheme = "myproject5";
 
         public void LinkTwitch()
