@@ -23,5 +23,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             accounts.Add(new LiveStreamAccount { provider = provider, displayName = displayName, ingestUrl = ingestUrl, streamKey = streamKey });
             store.Save(accounts);
         }
+
+        public bool HasAccount(LiveStreamProvider provider) => store.Load().Exists(x => x.provider == provider);
     }
 }
