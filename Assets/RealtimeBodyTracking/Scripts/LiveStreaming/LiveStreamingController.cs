@@ -46,6 +46,12 @@ namespace RealtimeBodyTracking.LiveStreaming
         {
             if (IsStreaming) return;
             settings.orientation = orientation;
+            Screen.autorotateToPortrait = orientation == LiveStreamOrientation.Portrait;
+            Screen.autorotateToPortraitUpsideDown = orientation == LiveStreamOrientation.Portrait;
+            Screen.autorotateToLandscapeLeft = orientation == LiveStreamOrientation.Landscape;
+            Screen.autorotateToLandscapeRight = orientation == LiveStreamOrientation.Landscape;
+            Screen.orientation = orientation == LiveStreamOrientation.Portrait
+                ? ScreenOrientation.Portrait : ScreenOrientation.LandscapeLeft;
         }
 
         public void ToggleCamera()
