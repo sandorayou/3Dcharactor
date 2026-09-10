@@ -51,7 +51,7 @@ def main() -> int:
     target_match = re.search(r"isa = PBXNativeTarget;[\s\S]*?name = \"Unity-iPhone\";", text)
     if not target_match:
         raise SystemExit("Unity-iPhone PBXNativeTarget not found")
-    target_end = text.find("name = \"Unity-iPhone\";", target_match.end())
+    target_end = text.find("name = \"Unity-iPhone\";", target_match.start())
     dependency = "\n\t\t\tpackageProductDependencies = (\n\t\t\t\t%s /* XCSwiftPackageProductDependency %s */,\n\t\t\t);" % (product_id, PRODUCT)
     text = text[:target_end] + dependency + "\n\t\t\t" + text[target_end:]
     pbx.write_text(text, encoding="utf-8")

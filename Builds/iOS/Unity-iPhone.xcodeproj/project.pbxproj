@@ -1170,6 +1170,10 @@
 			dependencies = (
 				9D25ABA3213FB47800354C27 /* PBXTargetDependency */,
 			);
+			
+			packageProductDependencies = (
+				BBE76BFC3A8B4D4D8945ECF2 /* XCSwiftPackageProductDependency RTMPHaishinKit */,
+			);
 			name = "Unity-iPhone";
 			productName = "iPhone-target";
 			productReference = 1D6058910D05DD3D006BFB54 /* Unity-Target-New.app */;
@@ -1275,7 +1279,7 @@
 			mainGroup = 29B97314FDCFA39411CA2CEA /* CustomTemplate */;
 			
 			packageReferences = (
-				E0919FFAFF504F7F8B6AE5F7 /* XCRemoteSwiftPackageReference \"HaishinKit.swift\" */,
+				15D89A2D27ED47E2BF1B3713 /* XCRemoteSwiftPackageReference \"HaishinKit.swift\" */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
@@ -2462,7 +2466,3 @@
 	};
 	rootObject = 29B97313FDCFA39411CA2CEA /* Project object */;
 }
-			packageProductDependencies = (
-				325313378AB84CD88DD270CF /* XCSwiftPackageProductDependency RTMPHaishinKit */,
-			);
-			
