@@ -31,11 +31,8 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 10f)] private float rotationDeadZoneDegrees = 3f;
         [SerializeField] private bool avatarMirror = true;
         [SerializeField] private bool enableHipsPosition = true;
-        [SerializeField] private bool strictScreenLock = true;
-        [SerializeField] private bool predictiveCenterFollow = true;
-        [SerializeField, Range(0f, .1f)] private float centerPredictionSeconds = .033f;
-        [SerializeField, Range(1f, 60f)] private float centerInterpolationSpeed = 30f;
         [SerializeField, Range(0f, 5f)] private float hipsPositionScale = .25f;
+        [SerializeField, Range(0f, 3f)] private float bodyDepthFromShoulderWidth = 1.2f;
         [SerializeField, Min(0f)] private float maxHipsSpeed = .8f;
         [SerializeField, Min(0f)] private float screenHorizontalRange = 1.2f;
         [SerializeField, Min(0f)] private float screenVerticalRange = .8f;
@@ -52,17 +49,8 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(.5f, 3f)] private float bodyLeanGain = 1f;
         [SerializeField] private bool mirrorShoulderElevation = true;
         [Header("Face Zoom")]
-        // Use forehead-to-chin height instead of projected shoulder width.
         [SerializeField] private bool enableFaceZoom = true;
         [SerializeField, Min(.01f)] private float avatarFaceHeightMeters = .22f;
-        [SerializeField] private Transform leftEarAnchor;
-        [SerializeField] private Transform rightEarAnchor;
-        [SerializeField, Min(0f)] private float palmChestClearance = .06f;
-        [SerializeField, Min(.01f)] private float palmChestDepthSmoothTime = .10f;
-        private readonly bool[] palmChestActive = new bool[2];
-        private readonly float[] palmChestDepth = new float[2];
-        private readonly float[] palmChestVelocity = new float[2];
-        private readonly float[] palmChestLastSeen = { float.NegativeInfinity, float.NegativeInfinity };
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
         [SerializeField, Min(0.15f)] private float minimumFaceCameraDistance = 0.28f;
         [SerializeField, Min(1f)] private float maximumFaceCameraDistance = 8f;
@@ -208,17 +196,9 @@ namespace RealtimeBodyTracking
         private Vector2 sourceScreenOrigin;
         private Vector2 filteredScreenCenter;
         private Vector2 stableScreenCenter;
-        private Vector2 predictedScreenCenter;
-        private Vector2 measuredScreenVelocity;
-        private Vector2 previousMeasuredScreenCenter;
-        private float previousScreenMeasurementTime = float.NegativeInfinity;
-        private Vector2 centerInterpolationStart;
-        private Vector2 centerInterpolationTarget;
-        private float centerInterpolationStartedAt;
-        private float centerSampleInterval = 1f / 30f;
-        private bool predictiveCenterInitialized;
         private Vector3 avatarHipOrigin;
         private float sourceShoulderWidthOrigin;
+        private float sourceCameraDistanceOrigin;
         private float filteredShoulderWidth;
         private float stableShoulderWidth;
         private float shoulderScreenDirection = -1f;
@@ -380,6 +360,24 @@ namespace RealtimeBodyTracking
         }
 
         private void LateUpdate()
+        {
+            UpdateTrackingPose();
+            // Eye rotations must remain relative to the moving head. A world-space
+            // rest rotation (including after tracking loss) makes the eyes counter-
+            // rotate against head pitch and appear to look upward.
+            if (targetAnimator == null || solver == null) return;
+            RestoreNeutralEye(HumanBodyBones.LeftEye);
+            RestoreNeutralEye(HumanBodyBones.RightEye);
+        }
+
+        private void RestoreNeutralEye(HumanBodyBones bone)
+        {
+            var eye = targetAnimator.GetBoneTransform(bone);
+            if (eye != null && solver.TryGetRestLocalRotation(bone, out var rest))
+                eye.localRotation = rest;
+        }
+
+        private void UpdateTrackingPose()
         {
             receivedNewPoseFrame = false;
             receivedTrackedPoseFrame = false;
@@ -1310,35 +1308,13 @@ namespace RealtimeBodyTracking
                 var chestHeight = Mathf.Max(Vector3.Distance(
                     chest.position,
                     targetAnimator.GetBoneTransform(HumanBodyBones.Hips)?.position ?? chest.position), .001f);
-                var sideIndex = left ? 0 : 1;
-                if (Time.unscaledTime - palmChestLastSeen[sideIndex] > .2f)
-                    palmChestActive[sideIndex] = false;
-                var lateral = Quaternion.Inverse(facingOffset) * targetAnimator.transform.right;
-                var up = Quaternion.Inverse(facingOffset) * targetAnimator.transform.up;
-                // Hysteresis avoids repeatedly entering/leaving at the chest edge.
-                var padding = palmChestActive[sideIndex] ? .035f : 0f;
-                if (Mathf.Abs(Vector3.Dot(rel, lateral)) <= torsoRadii.x + padding &&
-                    Mathf.Abs(Vector3.Dot(rel, up)) <= chestHeight * .55f + padding)
+                if (Mathf.Abs(rel.x) <= torsoRadii.x && Mathf.Abs(rel.y) <= chestHeight * .55f)
                 {
-                    var frontSurface = Mathf.Max(torsoRadii.y, .001f) + palmChestClearance;
+                    var frontSurface = Mathf.Max(torsoRadii.y, .001f);
                     var signedDepth = Vector3.Dot(rel, front);
-                    var desiredDepth = Mathf.Max(signedDepth, frontSurface);
-                    if (!palmChestActive[sideIndex])
-                    {
-                        palmChestDepth[sideIndex] = desiredDepth;
-                        palmChestVelocity[sideIndex] = 0f;
-                    }
-                    // Filter only chest-relative depth; preserve measured planar motion.
-                    var smoothTime = Mathf.Abs(desiredDepth - palmChestDepth[sideIndex]) > .08f
-                        ? palmChestDepthSmoothTime * .4f : palmChestDepthSmoothTime;
-                    palmChestDepth[sideIndex] = Mathf.Max(frontSurface, Mathf.SmoothDamp(
-                        palmChestDepth[sideIndex], desiredDepth, ref palmChestVelocity[sideIndex],
-                        smoothTime, Mathf.Infinity, Time.unscaledDeltaTime));
-                    palmTarget += front * (palmChestDepth[sideIndex] - signedDepth);
-                    palmChestActive[sideIndex] = true;
-                    palmChestLastSeen[sideIndex] = Time.unscaledTime;
+                    if (signedDepth < frontSurface)
+                        palmTarget += front * (frontSurface - signedDepth);
                 }
-                else palmChestActive[sideIndex] = false;
             }
             wristTarget = palmTarget - avatarPalmOffset;
             return true;
@@ -2499,61 +2475,16 @@ namespace RealtimeBodyTracking
                     stableShoulderWidth = sourceShoulderWidthOrigin;
                 }
                 avatarHipOrigin = root.position;
+                sourceCameraDistanceOrigin = trackingCamera != null
+                    ? Mathf.Max(Vector3.Dot(avatarHipOrigin - trackingCamera.transform.position, trackingCamera.transform.forward), cameraMinimumDistance)
+                    : Mathf.Max(bodyDepthFromShoulderWidth, cameraMinimumDistance);
                 hipsInitialized = true;
             }
 
             var measurementT = 1f - Mathf.Exp(-positionMeasurementSmoothing * Time.deltaTime);
-            if (strictScreenLock && predictiveCenterFollow)
-            {
-                var now = Time.unscaledTime;
-                if (!predictiveCenterInitialized)
-                {
-                    predictedScreenCenter = screenCenter;
-                    centerInterpolationStart = screenCenter;
-                    centerInterpolationTarget = screenCenter;
-                    centerInterpolationStartedAt = now;
-                    previousMeasuredScreenCenter = screenCenter;
-                    previousScreenMeasurementTime = now;
-                    measuredScreenVelocity = Vector2.zero;
-                    predictiveCenterInitialized = true;
-                }
-                else if (receivedNewPoseFrame)
-                {
-                    var sampleDelta = Mathf.Clamp(now - previousScreenMeasurementTime, .001f, .15f);
-                    var rawVelocity = (screenCenter - previousMeasuredScreenCenter) / sampleDelta;
-                    measuredScreenVelocity = Vector2.Lerp(measuredScreenVelocity, rawVelocity, .65f);
-                    centerSampleInterval = Mathf.Lerp(centerSampleInterval, sampleDelta, .5f);
-                    centerInterpolationStart = predictedScreenCenter;
-                    centerInterpolationTarget = screenCenter +
-                                                measuredScreenVelocity * centerPredictionSeconds;
-                    centerInterpolationStartedAt = now;
-                    previousMeasuredScreenCenter = screenCenter;
-                    previousScreenMeasurementTime = now;
-                }
-
-                // A 30 Hz tracker normally supplies two Unity frames per sample.
-                // Move through the missing midpoint instead of jumping directly
-                // to each new center measurement. The target includes one short
-                // velocity projection so the interpolation does not add a full
-                // tracker-frame of visible lag.
-                var duration = Mathf.Max(1f / centerInterpolationSpeed, centerSampleInterval);
-                var phase = Mathf.Clamp01((now - centerInterpolationStartedAt) / duration);
-                predictedScreenCenter = Vector2.Lerp(
-                    centerInterpolationStart, centerInterpolationTarget, phase);
-                filteredScreenCenter = predictedScreenCenter;
-            }
-            else
-            {
-                filteredScreenCenter = strictScreenLock
-                    ? screenCenter
-                    : Vector2.Lerp(filteredScreenCenter, screenCenter, measurementT);
-            }
-            stableScreenCenter.x = strictScreenLock
-                ? filteredScreenCenter.x
-                : FollowOutsideDeadZone(stableScreenCenter.x, filteredScreenCenter.x, horizontalPositionDeadZone);
-            stableScreenCenter.y = strictScreenLock
-                ? filteredScreenCenter.y
-                : FollowOutsideDeadZone(stableScreenCenter.y, filteredScreenCenter.y, verticalPositionDeadZone);
+            filteredScreenCenter = Vector2.Lerp(filteredScreenCenter, screenCenter, measurementT);
+            stableScreenCenter.x = FollowOutsideDeadZone(stableScreenCenter.x, filteredScreenCenter.x, horizontalPositionDeadZone);
+            stableScreenCenter.y = FollowOutsideDeadZone(stableScreenCenter.y, filteredScreenCenter.y, verticalPositionDeadZone);
             if (shoulderMode != 2 && sourceShoulderWidth > .001f)
             {
                 filteredShoulderWidth = Mathf.Lerp(filteredShoulderWidth, sourceShoulderWidth, measurementT);
@@ -2607,34 +2538,18 @@ namespace RealtimeBodyTracking
                 cameraRight * Vector3.Dot(correction, cameraRight) +
                 cameraUp * Vector3.Dot(correction, cameraUp);
 
-            if (strictScreenLock)
-            {
-                root.position = target;
-            }
-            else
-            {
-                var t = 1f - Mathf.Exp(-positionFollowSpeed * Time.deltaTime);
-                var maxStep = maxHipsSpeed > 0f ? maxHipsSpeed * Time.deltaTime : float.PositiveInfinity;
-                root.position = Vector3.MoveTowards(root.position, Vector3.Lerp(root.position, target, t), maxStep);
-            }
+            var t = 1f - Mathf.Exp(-positionFollowSpeed * Time.deltaTime);
+            var maxStep = maxHipsSpeed > 0f ? maxHipsSpeed * Time.deltaTime : float.PositiveInfinity;
+            root.position = Vector3.MoveTowards(root.position, Vector3.Lerp(root.position, target, t), maxStep);
         }
 
         private Vector2 SourceImageToViewport(Vector2 imagePoint, int sourceWidth, int sourceHeight)
         {
+            // Python already removes the square inference letterbox and reports
+            // coordinates normalized to the original camera image. Map 0..1 directly
+            // to Unity so the camera and game-view edges line up.
             var x = 1f - imagePoint.x;
             var y = 1f - imagePoint.y;
-            if (trackingCamera != null && sourceWidth > 0 && sourceHeight > 0)
-            {
-                // TrackerVideoBackground uses a centered "cover" fit. Apply the
-                // identical crop transform to landmarks so avatar anchors remain
-                // registered to the visible points after the side bars are removed.
-                var sourceAspect = (float)sourceWidth / sourceHeight;
-                var viewportAspect = trackingCamera.aspect;
-                if (sourceAspect < viewportAspect)
-                    y = .5f + (y - .5f) * (viewportAspect / sourceAspect);
-                else if (sourceAspect > viewportAspect)
-                    x = .5f + (x - .5f) * (sourceAspect / viewportAspect);
-            }
             return new Vector2(x, y);
         }
 
@@ -2805,11 +2720,13 @@ namespace RealtimeBodyTracking
                 !pose.TryGetImage("right_shoulder", .55f, out var right))
                 return false;
 
-            // Match TrackerVideoBackground's centered "cover" transform.
+            // Keep the size calculation used by tracker-video-avatar-overlay: the
+            // camera image occupies only part of a wider Unity viewport, so compare
+            // shoulder widths in that fitted viewport rather than raw image space.
             var sourceAspect = pose.source_height > 0
                 ? (float)pose.source_width / pose.source_height
                 : 4f / 3f;
-            var viewportScaleX = trackingCamera.aspect < sourceAspect
+            var viewportScaleX = trackingCamera.aspect > sourceAspect
                 ? sourceAspect / trackingCamera.aspect
                 : 1f;
             width = Mathf.Abs(right.x - left.x) * viewportScaleX;
@@ -2883,6 +2800,17 @@ namespace RealtimeBodyTracking
             var topViewport = SourceImageToViewport(new Vector2(top.x, top.y), pose.source_width, pose.source_height);
             var chinViewport = SourceImageToViewport(new Vector2(chin.x, chin.y), pose.source_width, pose.source_height);
             var difference = topViewport - chinViewport;
+            // Match TrackerVideoBackground's centred cover fit. Only adjust the
+            // head-size measurement; keep the existing body/hand mapping intact.
+            if (pose.source_width > 0 && pose.source_height > 0)
+            {
+                var sourceAspect = (float)pose.source_width / pose.source_height;
+                var viewportAspect = trackingCamera.aspect;
+                if (sourceAspect < viewportAspect)
+                    difference.y *= viewportAspect / sourceAspect;
+                else if (sourceAspect > viewportAspect)
+                    difference.x *= sourceAspect / viewportAspect;
+            }
             difference.x *= trackingCamera.aspect;
             var rawSourceFaceWidth = difference.magnitude;
             if (rawSourceFaceWidth < .02f) return;
@@ -2938,53 +2866,6 @@ namespace RealtimeBodyTracking
             // avatar's eyes and produced an unintended close-up.
             trackingCamera.transform.position =
                 cameraPosition + cameraForward * (currentDistance - smoothDistance);
-            // Forehead/chin midpoint is slightly below the avatar eye line.
-            var sourceCenter = (topViewport + chinViewport) * .5f;
-            var avatarCenter = avatarWorldCenter - trackingCamera.transform.up * height * .12f;
-            // Ear midpoint estimates the skull centre instead of the face surface.
-            // Match it to the head bone, not the eyes, whose projection moves
-            // sideways relative to the skull when the avatar turns.
-            var head = targetAnimator.GetBoneTransform(HumanBodyBones.Head);
-            var hasLeftEar = pose.TryGetImage("left_ear", .55f, out var leftEar);
-            var hasRightEar = pose.TryGetImage("right_ear", .55f, out var rightEar);
-            if (head != null && (hasLeftEar || hasRightEar))
-            {
-                var earPoint = hasLeftEar && hasRightEar
-                    ? (leftEar + rightEar) * .5f
-                    : hasLeftEar ? leftEar : rightEar;
-                var earMidpoint = new Vector2(earPoint.x, earPoint.y);
-                var earViewport = SourceImageToViewport(
-                    earMidpoint, pose.source_width, pose.source_height);
-                sourceCenter.x = earViewport.x;
-                var avatarEar = head.position;
-                if (hasLeftEar != hasRightEar)
-                {
-                    var avatarLeft = hasLeftEar != avatarMirror;
-                    var anchor = avatarLeft ? leftEarAnchor : rightEarAnchor;
-                    if (anchor != null)
-                        avatarEar = anchor.position;
-                    else
-                    {
-                        // Humanoid has no standard ear bones. Approximate an ear
-                        // at skull depth using the eye axis; an assigned anchor
-                        // overrides this for models with different proportions.
-                        var leftEyeBone = targetAnimator.GetBoneTransform(HumanBodyBones.LeftEye);
-                        var rightEyeBone = targetAnimator.GetBoneTransform(HumanBodyBones.RightEye);
-                        if (leftEyeBone != null && rightEyeBone != null)
-                        {
-                            var lateral = leftEyeBone.position - rightEyeBone.position;
-                            avatarEar += lateral * (avatarLeft ? 1.1f : -1.1f);
-                        }
-                    }
-                }
-                var rightAxis = trackingCamera.transform.right;
-                avatarCenter += rightAxis * Vector3.Dot(avatarEar - avatarCenter, rightAxis);
-            }
-            var centerDepth = Vector3.Dot(avatarCenter - trackingCamera.transform.position, cameraForward);
-            var desiredCenter = trackingCamera.ViewportToWorldPoint(
-                new Vector3(sourceCenter.x, sourceCenter.y, centerDepth));
-            targetAnimator.transform.position += Vector3.ProjectOnPlane(
-                desiredCenter - avatarCenter, cameraForward);
         }
 
         private void ResetTrackingFiltersOnly()
@@ -3000,15 +2881,6 @@ namespace RealtimeBodyTracking
 
             filteredScreenCenter = Vector2.zero;
             stableScreenCenter = Vector2.zero;
-            predictedScreenCenter = Vector2.zero;
-            measuredScreenVelocity = Vector2.zero;
-            previousMeasuredScreenCenter = Vector2.zero;
-            previousScreenMeasurementTime = float.NegativeInfinity;
-            centerInterpolationStart = Vector2.zero;
-            centerInterpolationTarget = Vector2.zero;
-            centerInterpolationStartedAt = 0f;
-            centerSampleInterval = 1f / 30f;
-            predictiveCenterInitialized = false;
             filteredShoulderWidth = 0f;
             stableShoulderWidth = 0f;
         }
