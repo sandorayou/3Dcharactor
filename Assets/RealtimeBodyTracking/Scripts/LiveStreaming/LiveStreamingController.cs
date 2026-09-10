@@ -10,6 +10,21 @@ namespace RealtimeBodyTracking.LiveStreaming
         [SerializeField] private LiveStreamSettings settings = new LiveStreamSettings();
         [SerializeField] private bool useFrontCamera = true;
         public bool IsStreaming { get; private set; }
+        public LiveStreamProvider CurrentProvider => settings.provider;
+        public LiveStreamOrientation CurrentOrientation => settings.orientation;
+
+        private void OnApplicationPause(bool paused)
+        {
+            // Fail closed: leaving the app must never leave an unattended camera live.
+            if (paused) StopStreaming();
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused) StopStreaming();
+        }
+
+        private void OnDestroy() => StopStreaming();
 
         public void Configure(LiveStreamProvider provider, string ingestUrl, string streamKey)
         {
