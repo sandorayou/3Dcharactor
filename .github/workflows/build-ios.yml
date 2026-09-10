@@ -15,6 +15,11 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Ensure Git LFS objects are hydrated
+        run: git lfs checkout
 
       - name: Locate Xcode Project
         id: find-project
