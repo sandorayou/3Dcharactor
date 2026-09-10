@@ -5,6 +5,10 @@
 ## 統合配信機能の現在地
 
 Unity側には、VRM画面とiOSネイティブ配信エンジンを接続する契約（`LiveStreamingController`）と、カメラ・マイク権限の設定を追加しています。配信本体は`LiveStreamingBridge.swift`に実装し、HaishinKitのRTMPHaishinKitをXcodeのSwift Packageとして追加して有効化します。生成後のXcodeプロジェクトで、`https://github.com/shogo4405/HaishinKit.swift`を追加し、RTMPHaishinKit productをUnity-iPhone targetへリンクしてください。
+
+### 配信画面と設定画面
+
+配信映像はネイティブ配信エンジンがカメラ＋マイクから直接作るため、UnityのUIは映りません。「イン／アウト」ボタンはUnity UIとして表示し、押下時に配信カメラだけを切り替えます。標準画角は縦 `720 x 1280 / 30fps / 3.5Mbps / AAC 128kbps` です。設定画面では各サービスのアカウント、配信URL、配信キーを登録・選択できます。配信キーは現状Unity保存の仮実装なので、公開版ではiOS Keychain保存に置き換えてください。
 Windows 上に Mac や Xcode は不要です。
 
 ---

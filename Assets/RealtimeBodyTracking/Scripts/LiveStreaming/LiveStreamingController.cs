@@ -11,6 +11,13 @@ namespace RealtimeBodyTracking.LiveStreaming
         [SerializeField] private bool useFrontCamera = true;
         public bool IsStreaming { get; private set; }
 
+        public void Configure(LiveStreamProvider provider, string ingestUrl, string streamKey)
+        {
+            settings.provider = provider;
+            settings.ingestUrl = ingestUrl;
+            settings.streamKey = streamKey;
+        }
+
         public void ToggleCamera()
         {
             useFrontCamera = !useFrontCamera;
