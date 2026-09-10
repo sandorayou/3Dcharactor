@@ -22,15 +22,14 @@ namespace RealtimeBodyTracking.LiveStreaming
 
         public List<LiveStreamAccount> Load()
         {
-            var json = PlayerPrefs.GetString(Key, "{\"items\":[]}");
+            var json = LiveStreamSecureStore.Get(Key, "{\"items\":[]}");
             return JsonUtility.FromJson<Wrapper>(json)?.items ?? new List<LiveStreamAccount>();
         }
 
         public void Save(IEnumerable<LiveStreamAccount> accounts)
         {
             var wrapper = new Wrapper { items = new List<LiveStreamAccount>(accounts) };
-            PlayerPrefs.SetString(Key, JsonUtility.ToJson(wrapper));
-            PlayerPrefs.Save();
+            LiveStreamSecureStore.Set(Key, JsonUtility.ToJson(wrapper));
         }
     }
 }

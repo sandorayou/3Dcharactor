@@ -34,6 +34,14 @@ namespace RealtimeBodyTracking.LiveStreaming
             settings.streamKey = streamKey;
         }
 
+        public bool LoadSavedAccount(LiveStreamProvider provider)
+        {
+            var account = new LiveStreamAccountStore().Load().Find(x => x.provider == provider);
+            if (account == null) return false;
+            Configure(account.provider, account.ingestUrl, account.streamKey);
+            return true;
+        }
+
         public void SetOrientation(LiveStreamOrientation orientation)
         {
             if (IsStreaming) return;
@@ -48,6 +56,7 @@ namespace RealtimeBodyTracking.LiveStreaming
 
         public bool StartStreaming()
         {
+            if (!settings.IsValid) LoadSavedAccount(settings.provider);
             if (!settings.IsValid || IsStreaming) return false;
             IsStreaming = NativeStart(settings.ingestUrl, settings.streamKey,
                 settings.videoWidth, settings.videoHeight, settings.frameRate,
