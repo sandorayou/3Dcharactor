@@ -55,6 +55,8 @@ namespace RealtimeBodyTracking
         // Use forehead-to-chin height instead of projected shoulder width.
         [SerializeField] private bool enableFaceZoom = true;
         [SerializeField, Min(.01f)] private float avatarFaceHeightMeters = .22f;
+        [SerializeField] private Transform leftEarAnchor;
+        [SerializeField] private Transform rightEarAnchor;
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
         [SerializeField, Min(0.15f)] private float minimumFaceCameraDistance = 0.28f;
         [SerializeField, Min(1f)] private float maximumFaceCameraDistance = 8f;
@@ -2915,18 +2917,40 @@ namespace RealtimeBodyTracking
             // Match it to the head bone, not the eyes, whose projection moves
             // sideways relative to the skull when the avatar turns.
             var head = targetAnimator.GetBoneTransform(HumanBodyBones.Head);
-            if (head != null &&
-                pose.TryGetImage("left_ear", .55f, out var leftEar) &&
-                pose.TryGetImage("right_ear", .55f, out var rightEar))
+            var hasLeftEar = pose.TryGetImage("left_ear", .55f, out var leftEar);
+            var hasRightEar = pose.TryGetImage("right_ear", .55f, out var rightEar);
+            if (head != null && (hasLeftEar || hasRightEar))
             {
-                var earMidpoint = new Vector2(
-                    (leftEar.x + rightEar.x) * .5f,
-                    (leftEar.y + rightEar.y) * .5f);
+                var earPoint = hasLeftEar && hasRightEar
+                    ? (leftEar + rightEar) * .5f
+                    : hasLeftEar ? leftEar : rightEar;
+                var earMidpoint = new Vector2(earPoint.x, earPoint.y);
                 var earViewport = SourceImageToViewport(
                     earMidpoint, pose.source_width, pose.source_height);
                 sourceCenter.x = earViewport.x;
+                var avatarEar = head.position;
+                if (hasLeftEar != hasRightEar)
+                {
+                    var avatarLeft = hasLeftEar != avatarMirror;
+                    var anchor = avatarLeft ? leftEarAnchor : rightEarAnchor;
+                    if (anchor != null)
+                        avatarEar = anchor.position;
+                    else
+                    {
+                        // Humanoid has no standard ear bones. Approximate an ear
+                        // at skull depth using the eye axis; an assigned anchor
+                        // overrides this for models with different proportions.
+                        var leftEyeBone = targetAnimator.GetBoneTransform(HumanBodyBones.LeftEye);
+                        var rightEyeBone = targetAnimator.GetBoneTransform(HumanBodyBones.RightEye);
+                        if (leftEyeBone != null && rightEyeBone != null)
+                        {
+                            var lateral = leftEyeBone.position - rightEyeBone.position;
+                            avatarEar += lateral * (avatarLeft ? 1.1f : -1.1f);
+                        }
+                    }
+                }
                 var rightAxis = trackingCamera.transform.right;
-                avatarCenter += rightAxis * Vector3.Dot(head.position - avatarCenter, rightAxis);
+                avatarCenter += rightAxis * Vector3.Dot(avatarEar - avatarCenter, rightAxis);
             }
             var centerDepth = Vector3.Dot(avatarCenter - trackingCamera.transform.position, cameraForward);
             var desiredCenter = trackingCamera.ViewportToWorldPoint(
