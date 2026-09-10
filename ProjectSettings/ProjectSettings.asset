@@ -497,9 +497,9 @@ PlayerSettings:
   enableInternalProfiler: 0
   logObjCUncaughtExceptions: 1
   enableCrashReportAPI: 0
-  cameraUsageDescription: 
+  cameraUsageDescription: MyProject5 Live Streamingがカメラを配信映像に使用します。
   locationUsageDescription: 
-  microphoneUsageDescription: 
+  microphoneUsageDescription: MyProject5 Live Streamingがマイク音声を配信に使用します。
   bluetoothUsageDescription: 
   macOSTargetOSVersion: 10.13.0
   switchNMETAOverride: 
