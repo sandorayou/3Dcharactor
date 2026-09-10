@@ -1,0 +1,67 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-xcode:
+    name: Build IPA from exported Xcode project
+    runs-on: macos-15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Locate Xcode Project
+        id: find-project
+        run: |
+          XCODEPROJ=$(find . -name "*.xcodeproj" -not -path "*/Pods/*" | head -n 1)
+          if [ -z "$XCODEPROJ" ]; then
+            echo "::error::No .xcodeproj found in repository. Please export Unity to iOS and commit the Xcode project, or see GITHUB_SIDELOAD.md."
+            exit 1
+          fi
+          echo "Found project: $XCODEPROJ"
+          PROJECT_NAME=$(basename "$XCODEPROJ" .xcodeproj)
+          echo "project_path=$XCODEPROJ" >> $GITHUB_OUTPUT
+          echo "scheme=Unity-iPhone" >> $GITHUB_OUTPUT
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || true
+
+      - name: Add HaishinKit Swift Package
+        run: |
+          python3 Tools/add_haishinkit_spm.py "${{ steps.find-project.outputs.project_path }}"
+          xcodebuild -resolvePackageDependencies -project "${{ steps.find-project.outputs.project_path }}" -scheme "Unity-iPhone"
+
+      - name: Build unsigned app
+        run: |
+          xcodebuild \
+            -project "${{ steps.find-project.outputs.project_path }}" \
+            -scheme "Unity-iPhone" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/App" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build
+
+      - name: Package IPA
+        run: |
+          rm -rf "$RUNNER_TEMP/Payload"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          APP_PATH=$(find "$RUNNER_TEMP/App" -name "*.app" | head -n 1)
+          cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          ditto -c -k --sequesterRsrc --keepParent Payload MyProject5-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyProject5-unsigned-ipa
+          path: ${{ runner.temp }}/MyProject5-unsigned.ipa
+          if-no-files-found: error
