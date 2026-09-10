@@ -80,7 +80,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             var accounts = new LiveStreamAccountStore().Load();
             accounts.RemoveAll(x => x.provider == LiveStreamProvider.Twitch);
             accounts.Add(new LiveStreamAccount { provider = LiveStreamProvider.Twitch,
-                displayName = "Twitch", ingestUrl = "rtmps://live.twitch.tv/app/", streamKey = key, accessToken = accessToken });
+                displayName = "Twitch", ingestUrl = "rtmps://live.twitch.tv/app/", streamKey = key, accessToken = accessToken, channelName = "sandareyou" });
             new LiveStreamAccountStore().Save(accounts);
         }
 

@@ -13,6 +13,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         public string streamKey;
         public string accessToken;
         public string liveChatId;
+        public string channelName;
     }
 
     /// Settings-screen model. Production builds should replace PlayerPrefs with
