@@ -2911,6 +2911,23 @@ namespace RealtimeBodyTracking
             // Forehead/chin midpoint is slightly below the avatar eye line.
             var sourceCenter = (topViewport + chinViewport) * .5f;
             var avatarCenter = avatarWorldCenter - trackingCamera.transform.up * height * .12f;
+            // Ear midpoint estimates the skull centre instead of the face surface.
+            // Match it to the head bone, not the eyes, whose projection moves
+            // sideways relative to the skull when the avatar turns.
+            var head = targetAnimator.GetBoneTransform(HumanBodyBones.Head);
+            if (head != null &&
+                pose.TryGetImage("left_ear", .55f, out var leftEar) &&
+                pose.TryGetImage("right_ear", .55f, out var rightEar))
+            {
+                var earMidpoint = new Vector2(
+                    (leftEar.x + rightEar.x) * .5f,
+                    (leftEar.y + rightEar.y) * .5f);
+                var earViewport = SourceImageToViewport(
+                    earMidpoint, pose.source_width, pose.source_height);
+                sourceCenter.x = earViewport.x;
+                var rightAxis = trackingCamera.transform.right;
+                avatarCenter += rightAxis * Vector3.Dot(head.position - avatarCenter, rightAxis);
+            }
             var centerDepth = Vector3.Dot(avatarCenter - trackingCamera.transform.position, cameraForward);
             var desiredCenter = trackingCamera.ViewportToWorldPoint(
                 new Vector3(sourceCenter.x, sourceCenter.y, centerDepth));
