@@ -14,6 +14,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             Object.DontDestroyOnLoad(root);
             root.AddComponent<LiveStreamingController>();
             root.AddComponent<LiveStreamAccountLinkController>();
+            root.AddComponent<YouTubeAccountLinkController>();
             root.AddComponent<LiveStreamControlPanel>();
         }
     }

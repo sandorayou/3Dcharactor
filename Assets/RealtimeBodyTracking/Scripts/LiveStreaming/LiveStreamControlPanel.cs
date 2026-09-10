@@ -9,6 +9,7 @@ namespace RealtimeBodyTracking.LiveStreaming
     {
         [SerializeField] private LiveStreamingController controller;
         [SerializeField] private LiveStreamAccountLinkController accountLink;
+        [SerializeField] private YouTubeAccountLinkController youtubeLink;
         private Text status;
         private LiveStreamProvider selected = LiveStreamProvider.Twitch;
 
@@ -16,6 +17,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         {
             controller ??= GetComponent<LiveStreamingController>();
             accountLink ??= GetComponent<LiveStreamAccountLinkController>();
+            youtubeLink ??= GetComponent<YouTubeAccountLinkController>();
             var canvasObject = new GameObject("LiveStreamControlCanvas");
             canvasObject.transform.SetParent(transform, false);
             var canvas = canvasObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 9999;
@@ -38,7 +40,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         }
 
         private void Select(LiveStreamProvider provider) { selected = provider; controller?.LoadSavedAccount(provider); if (status) status.text = "配信先: " + provider + " / 待機中"; }
-        private void LinkSelected() { if (selected == LiveStreamProvider.Twitch) accountLink?.LinkTwitch(); else if (selected == LiveStreamProvider.YouTube) accountLink?.LinkYouTube(); }
+        private void LinkSelected() { if (selected == LiveStreamProvider.Twitch) accountLink?.LinkTwitch(); else if (selected == LiveStreamProvider.YouTube) youtubeLink?.LinkYouTube(); }
         private void Start() { if (controller != null && controller.StartStreaming() && status) status.text = "配信先: " + selected + " / 配信中"; }
         private void Stop() { controller?.StopStreaming(); if (status) status.text = "配信先: " + selected + " / 停止"; }
 
