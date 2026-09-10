@@ -91,8 +91,9 @@ final class UnityLivePublisher {
 @_cdecl("NativeStart")
 public func nativeStart(_ url: UnsafePointer<CChar>, _ key: UnsafePointer<CChar>, _ width: Int32,
                         _ height: Int32, _ fps: Int32, _ videoKbps: Int32, _ audioKbps: Int32) -> Int32 {
-    UnityLivePublisher.shared.start(url: String(cString: url), key: String(cString: key),
+    return Int32(UnityLivePublisher.shared.start(url: String(cString: url), key: String(cString: key),
         width: Int(width), height: Int(height), fps: Int(fps), videoKbps: Int(videoKbps), audioKbps: Int(audioKbps))
+    )
 }
 
 @_cdecl("NativeStop") public func nativeStop() { UnityLivePublisher.shared.stop() }
