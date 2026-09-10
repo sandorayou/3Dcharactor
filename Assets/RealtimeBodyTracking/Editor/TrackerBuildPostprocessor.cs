@@ -83,10 +83,11 @@ namespace RealtimeBodyTracking.Editor
 
                 if (!content.Contains("myproject5"))
                 {
-                    string urlEntry = "    <key>CFBundleURLTypes</key>\n    <array>\n        <dict>\n            <key>CFBundleURLSchemes</key>\n            <array><string>myproject5</string></array>\n        </dict>\n    </array>\n";
+                    string urlEntry = "    <key>CFBundleURLTypes</key>\n    <array>\n        <dict>\n            <key>CFBundleURLSchemes</key>\n            <array><string>myproject5</string><string>com.googleusercontent.apps.619136214643-6hsflt2isot3prrices9tu5nn5nvq355</string></array>\n        </dict>\n    </array>\n";
                     int insertIndex = content.IndexOf("<dict>");
                     if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + urlEntry); modified = true; }
                 }
+
 
                 if (modified)
                 {
