@@ -46,11 +46,18 @@ namespace RealtimeBodyTracking
         private void Update()
         {
             if (animator == null) return;
+            HandleWaistCoordinateToggle();
             HandlePlacementToggle();
             HandleMovement();
             HandleMotions();
             HandleExpressions();
             SynchronizeManualOverride();
+        }
+
+        private void HandleWaistCoordinateToggle()
+        {
+            if (!ControlHeld() || !Input.GetKeyDown(KeyCode.KeypadDivide)) return;
+            poseDriver?.ToggleWaistCoordinateLock();
         }
 
         private void LateUpdate()

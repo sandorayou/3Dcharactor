@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 3a7ad9b5d0fb4d1f8e9a1d7a3ef0c641
+PluginImporter:
+  serializedVersion: 2
+  platformData:
+  - first:
+      Any:
+    second:
+      enabled: 1
+  - first:
+      iPhone:
+    second:
+      enabled: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
