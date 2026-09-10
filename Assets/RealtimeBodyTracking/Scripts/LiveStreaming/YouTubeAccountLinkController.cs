@@ -76,11 +76,11 @@ namespace RealtimeBodyTracking.LiveStreaming
                 SetJsonHeaders(request, token); yield return request.SendWebRequest();
                 if (request.result != UnityWebRequest.Result.Success) yield break;
                 var stream = JsonUtility.FromJson<StreamResponse>(request.downloadHandler.text);
-                yield return BindBroadcast(token, broadcastId, stream.id);
+                yield return BindBroadcast(token, broadcastId, stream.id, liveChatId);
             }
         }
 
-        private IEnumerator BindBroadcast(string token, string broadcastId, string streamId)
+        private IEnumerator BindBroadcast(string token, string broadcastId, string streamId, string liveChatId)
         {
             using (var request = UnityWebRequest.PostWwwForm("https://www.googleapis.com/youtube/v3/liveBroadcasts/bind?id=" + Uri.EscapeDataString(broadcastId) + "&part=id,snippet,contentDetails,status&streamId=" + Uri.EscapeDataString(streamId), ""))
             {
