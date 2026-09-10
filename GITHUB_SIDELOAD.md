@@ -4,7 +4,7 @@
 
 ## 統合配信機能の現在地
 
-Unity側には、VRM画面とiOSネイティブ配信エンジンを接続する契約（`LiveStreamingController`）と、カメラ・マイク権限の設定を追加しています。RTMPSエンコーダ本体はまだリンクしていないため、現時点のIPAは配信を開始しません。次に、審査・ライセンスを確認したRTMP/RTMPS対応iOSライブラリをXcode側へ組み込み、`LiveStreamingBridge.mm`の3関数を実装する必要があります。
+Unity側には、VRM画面とiOSネイティブ配信エンジンを接続する契約（`LiveStreamingController`）と、カメラ・マイク権限の設定を追加しています。配信本体は`LiveStreamingBridge.swift`に実装し、HaishinKitのRTMPHaishinKitをXcodeのSwift Packageとして追加して有効化します。生成後のXcodeプロジェクトで、`https://github.com/shogo4405/HaishinKit.swift`を追加し、RTMPHaishinKit productをUnity-iPhone targetへリンクしてください。
 Windows 上に Mac や Xcode は不要です。
 
 ---
