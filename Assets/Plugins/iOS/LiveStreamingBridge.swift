@@ -17,7 +17,7 @@ final class UnityLivePublisher {
     private var mixer: MediaMixer?
 #endif
 
-    func start(url: String, key: String, fps: Int, videoKbps: Int, audioKbps: Int) -> Int {
+    func start(url: String, key: String, width: Int, height: Int, fps: Int, videoKbps: Int, audioKbps: Int) -> Int {
 #if canImport(RTMPHaishinKit)
         let connection = RTMPConnection()
         let stream = RTMPStream(connection: connection)
@@ -32,6 +32,8 @@ final class UnityLivePublisher {
                 try await mixer.attachVideo(camera)
                 mixer.addOutput(stream)
                 var video = VideoCodecSettings()
+                video.width = width
+                video.height = height
                 video.bitrate = videoKbps * 1000
                 video.maxKeyFrameIntervalDuration = 2
                 await stream.setVideoSettings(video)
@@ -68,10 +70,10 @@ final class UnityLivePublisher {
 }
 
 @_cdecl("NativeStart")
-public func nativeStart(_ url: UnsafePointer<CChar>, _ key: UnsafePointer<CChar>, _ fps: Int32,
-                        _ videoKbps: Int32, _ audioKbps: Int32) -> Int32 {
+public func nativeStart(_ url: UnsafePointer<CChar>, _ key: UnsafePointer<CChar>, _ width: Int32,
+                        _ height: Int32, _ fps: Int32, _ videoKbps: Int32, _ audioKbps: Int32) -> Int32 {
     UnityLivePublisher.shared.start(url: String(cString: url), key: String(cString: key),
-        fps: Int(fps), videoKbps: Int(videoKbps), audioKbps: Int(audioKbps))
+        width: Int(width), height: Int(height), fps: Int(fps), videoKbps: Int(videoKbps), audioKbps: Int(audioKbps))
 }
 
 @_cdecl("NativeStop") public func nativeStop() { UnityLivePublisher.shared.stop() }

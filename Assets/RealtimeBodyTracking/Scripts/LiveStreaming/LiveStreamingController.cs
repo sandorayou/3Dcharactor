@@ -18,6 +18,12 @@ namespace RealtimeBodyTracking.LiveStreaming
             settings.streamKey = streamKey;
         }
 
+        public void SetOrientation(LiveStreamOrientation orientation)
+        {
+            if (IsStreaming) return;
+            settings.orientation = orientation;
+        }
+
         public void ToggleCamera()
         {
             useFrontCamera = !useFrontCamera;
@@ -28,7 +34,8 @@ namespace RealtimeBodyTracking.LiveStreaming
         {
             if (!settings.IsValid || IsStreaming) return false;
             IsStreaming = NativeStart(settings.ingestUrl, settings.streamKey,
-                settings.frameRate, settings.videoBitrateKbps, settings.audioBitrateKbps) == 0;
+                settings.videoWidth, settings.videoHeight, settings.frameRate,
+                settings.videoBitrateKbps, settings.audioBitrateKbps) == 0;
             return IsStreaming;
         }
 
@@ -47,11 +54,11 @@ namespace RealtimeBodyTracking.LiveStreaming
         }
 
 #if UNITY_IOS && !UNITY_EDITOR
-        [DllImport("__Internal")] private static extern int NativeStart(string url, string key, int fps, int videoKbps, int audioKbps);
+        [DllImport("__Internal")] private static extern int NativeStart(string url, string key, int width, int height, int fps, int videoKbps, int audioKbps);
         [DllImport("__Internal")] private static extern void NativeStop();
         [DllImport("__Internal")] private static extern void NativeSetCamera(int front);
 #else
-        private static int NativeStart(string url, string key, int fps, int videoKbps, int audioKbps) => -1;
+        private static int NativeStart(string url, string key, int width, int height, int fps, int videoKbps, int audioKbps) => -1;
         private static void NativeStop() { }
         private static void NativeSetCamera(int front) { }
 #endif
