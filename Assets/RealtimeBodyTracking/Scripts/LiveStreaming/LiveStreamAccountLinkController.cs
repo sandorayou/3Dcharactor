@@ -46,10 +46,9 @@ namespace RealtimeBodyTracking.LiveStreaming
                 var body = Encoding.UTF8.GetBytes("client_id=" + Uri.EscapeDataString(twitchClientId)
                     + "&device_code=" + Uri.EscapeDataString(deviceCode)
                     + "&grant_type=urn:ietf:params:oauth:grant-type:device_code");
-                using (var request = UnityWebRequest.Post("https://id.twitch.tv/oauth2/token", ""))
+                using (var request = UnityWebRequest.PostWwwForm("https://id.twitch.tv/oauth2/token", ""))
                 {
                     request.uploadHandler = new UploadHandlerRaw(body);
-                    request.downloadHandler = new DownloadHandlerBuffer();
                     request.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
                     yield return request.SendWebRequest();
                     if (request.responseCode == 428 || request.responseCode == 400) continue;

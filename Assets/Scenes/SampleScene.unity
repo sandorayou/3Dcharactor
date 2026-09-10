@@ -228,6 +228,11 @@ GameObject:
   - component: {fileID: 963194227}
   - component: {fileID: 963194229}
   - component: {fileID: 963194226}
+  - component: {fileID: 963194234}
+  - component: {fileID: 963194233}
+  - component: {fileID: 963194232}
+  - component: {fileID: 963194231}
+  - component: {fileID: 963194230}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -325,6 +330,84 @@ MonoBehaviour:
   refreshRate: 30
   mirror: 0
   backgroundDistance: 100
+  useDeviceCameraOnMobile: 1
+--- !u!114 &963194230
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2e86fd6ec9da45a0ad4e1b1f1e4c5a23, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  controller: {fileID: 0}
+  accountLink: {fileID: 0}
+  youtubeLink: {fileID: 0}
+  settingsController: {fileID: 0}
+--- !u!114 &963194231
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 033990299a2173c4c985120dfd8c1880, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  streaming: {fileID: 0}
+--- !u!114 &963194232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d2a0d2a4b6f4c9a8b9f2a0d5f6c8e31, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &963194233
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b5d14a1e1a84f0c8a8c2d9a5be871a2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  twitchClientId: 7sh6f19iuva2ep5b5eyedbf1mvphiw
+  youtubeClientId: 619136214643-6hsflt2isot3prrices9tu5nn5nvq355.apps.googleusercontent.com
+  callbackScheme: myproject5
+--- !u!114 &963194234
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194225}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6db51fc9d84e4be5b58f0ce7c5d9c2b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  settings:
+    provider: 0
+    orientation: 0
+    ingestUrl: 
+    streamKey: 
+    frameRate: 30
+    videoBitrateKbps: 3500
+    audioBitrateKbps: 128
+  useFrontCamera: 1
 --- !u!1 &1316547653 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1029089546570068762, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
@@ -340,8 +423,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cbcd470018d1c3c43bc9960f8da75c01, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   targetAnimator: {fileID: 0}
   udpReceiver: {fileID: 0}
   trackingCamera: {fileID: 0}
@@ -361,12 +444,6 @@ MonoBehaviour:
   avatarMirror: 1
   enableHipsPosition: 1
   hipsPositionScale: 1
-  enableFaceZoom: 1
-  faceZoomSmoothTime: 0.18
-  minimumFaceCameraDistance: 0.28
-  maximumFaceCameraDistance: 8
-  faceSizeDeadZoneRatio: 0.025
-  avatarSizeMatchScale: 0.97
   bodyDepthFromShoulderWidth: 1.2
   maxHipsSpeed: 3
   screenHorizontalRange: 1.2
@@ -383,6 +460,14 @@ MonoBehaviour:
   bodyLeanSmoothing: 14
   bodyLeanGain: 1
   mirrorShoulderElevation: 1
+  calibrateBodyLeanOrigin: 0
+  enableFaceZoom: 1
+  avatarFaceHeightMeters: 0.22
+  faceZoomSmoothTime: 0.18
+  minimumFaceCameraDistance: 0.28
+  maximumFaceCameraDistance: 8
+  faceSizeDeadZoneRatio: 0.025
+  avatarSizeMatchScale: 1.07
   enableBodyTurn: 1
   bodyTurnSpeed: 240
   bodyTurnDeadZone: 25
@@ -393,6 +478,7 @@ MonoBehaviour:
   maxWristSpeed: 2.5
   maxElbowSpeed: 3
   handHorizontalGain: 0.75
+  armVerticalGain: 1.5
   armAcquireFrames: 2
   armPointDeadZoneScale: 0.03
   armPositionSmoothingCutoff: 2
@@ -403,21 +489,49 @@ MonoBehaviour:
   armRelaxSpeed: 1.2
   armRecoverSpeed: 4
   handContactDistanceRatio: 0.45
+  handDepthGain: 1
+  handNeutralProjectionRatio: 1.15
   handForwardOffsetShoulderWidths: 0.02
+  handForwardOffsetMeters: 0.03
+  maxPoseDepthCorrectionShoulderWidths: 0.1
+  maxHandDepthShoulderWidths: 0.85
   handDepthSmoothing: 6
+  torsoChestWristTrackerZ: -0.44
+  torsoExtendedWristTrackerZ: -0.38
+  torsoChestDepthShoulderWidths: 0.22
+  maxForearmTwistDegrees: 85
+  handOrientationSmoothing: 8
+  fingerSmoothingSpeed: 9
+  fingerRotationDeadZoneDegrees: 2
+  fingerTrackingHoldTime: 0.2
   enableHead: 1
   enableArms: 1
+  enableFingers: 1
   enableLegs: 1
   legMinConfidence: 0.75
   headMinConfidence: 0.1
+  faceHoldTime: 0.25
   neckRotationWeight: 0.65
   mirrorHeadRotation: 1
   headRotationOffsetEuler: {x: 0, y: 0, z: 0}
   headRotationSmoothing: 14
+  enableFaceExpressions: 1
+  faceExpressionSmoothing: 24
   enableRollCorrection: 1
   enableAnatomyLimits: 1
   trackingTimeout: 2
   returnToRestPose: 1
+  finishHorizontalExitOnTrackingLost: 1
+  horizontalExitLostDelay: 0.08
+  horizontalExitMargin: 0.02
+  horizontalExitEdgeThreshold: 0.82
+  horizontalExitMinimumSpeed: 0.12
+  horizontalExitViewportSpeed: 2.5
+  finishBottomExitOnTrackingLost: 1
+  bottomExitEdgeThreshold: 0.18
+  bottomExitMinimumSpeed: 0.12
+  bottomExitViewportSpeed: 2.5
+  bottomFallbackLostDelay: 0.3
   debugLogging: 1
   tracking: 0
   latestFrame: -1
@@ -428,16 +542,34 @@ MonoBehaviour:
   headPitchDegrees: 0
   headRollDegrees: 0
   anatomyClampCount: 0
-  lastAnatomyClamp:
+  lastAnatomyClamp: 
   handContactTracking: 0
   wristSeparationRatio: 0
   bodyPositionTracking: 0
+  waistCoordinatesLocked: 0
   bodyPositionOffset: {x: 0, y: 0, z: 0}
   bodyLeanDegrees: 0
   bodyShoulderMode: 0
   leftArmRelaxWeight: 0
   rightArmRelaxWeight: 0
+  leftArmFilterState: 
+  rightArmFilterState: 
+  leftArmRollState: 
+  rightArmRollState: 
+  leftHandOrientationState: 
+  rightHandOrientationState: 
+  leftFingerState: 
+  rightFingerState: 
+  armCameraClampCount: 0
+  lastArmCameraClamp: 
+  leftArmDepthState: 
+  rightArmDepthState: 
+  leftArmScreenState: 
+  rightArmScreenState: 
+  leftHandEvidenceState: 
+  rightHandEvidenceState: 
   cameraFramingReady: 0
+  cameraFramingState: 
 --- !u!114 &1316547663
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -452,6 +584,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   port: 39542
   logMalformedPackets: 0
+  recordIncomingPackets: 1
+  maximumRecordingMegabytes: 16
   latestReceivedFrame: -1
   latestTracking: 0
 --- !u!1001 &1670327318
@@ -545,6 +679,18 @@ PrefabInstance:
     - target: {fileID: 6326721969762771357, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
       propertyPath: m_AABB.m_Extent.z
       value: 0.17669833
+      objectReference: {fileID: 0}
+    - target: {fileID: 7373500401694070085, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7373500401694070085, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7373500401694070085, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.1
       objectReference: {fileID: 0}
     - target: {fileID: 7373500401694070085, guid: 49e80e5860154784493a8ed3c3cfd1b2, type: 3}
       propertyPath: m_LocalPosition.x

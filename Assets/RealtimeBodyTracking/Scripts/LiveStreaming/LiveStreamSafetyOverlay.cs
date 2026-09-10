@@ -32,7 +32,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             var button = buttonObject.AddComponent<Button>(); button.onClick.AddListener(StopNow);
             var text = new GameObject("Label").AddComponent<Text>();
             text.transform.SetParent(buttonObject.transform, false); text.text = label;
-            text.alignment = TextAnchor.MiddleCenter; text.color = Color.white; text.fontSize = 28;
+            text.alignment = TextAnchor.MiddleCenter; text.color = Color.white; text.fontSize = 28; text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.rectTransform.anchorMin = Vector2.zero; text.rectTransform.anchorMax = Vector2.one;
             text.rectTransform.offsetMin = Vector2.zero; text.rectTransform.offsetMax = Vector2.zero;
 
@@ -46,7 +46,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             var muteButton = muteObject.AddComponent<Button>(); muteButton.onClick.AddListener(() => controller?.ToggleMute());
             var muteText = new GameObject("Label").AddComponent<Text>();
             muteText.transform.SetParent(muteObject.transform, false); muteText.text = "ミュート／解除";
-            muteText.alignment = TextAnchor.MiddleCenter; muteText.color = Color.white; muteText.fontSize = 24;
+            muteText.alignment = TextAnchor.MiddleCenter; muteText.color = Color.white; muteText.fontSize = 24; muteText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             muteText.rectTransform.anchorMin = Vector2.zero; muteText.rectTransform.anchorMax = Vector2.one;
             muteText.rectTransform.offsetMin = Vector2.zero; muteText.rectTransform.offsetMax = Vector2.zero;
         }

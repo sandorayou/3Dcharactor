@@ -44,7 +44,7 @@ namespace RealtimeBodyTracking.LiveStreaming
             var body = "code=" + Uri.EscapeDataString(code) + "&client_id=" + Uri.EscapeDataString(ClientId)
                 + "&redirect_uri=" + Uri.EscapeDataString(redirectUri)
                 + "&grant_type=authorization_code&code_verifier=" + Uri.EscapeDataString(verifier);
-            using (var request = UnityWebRequest.Post("https://oauth2.googleapis.com/token", body))
+            using (var request = UnityWebRequest.PostWwwForm("https://oauth2.googleapis.com/token", body))
             {
                 request.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
                 yield return request.SendWebRequest();
@@ -59,7 +59,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         {
             var broadcastJson = "{\"snippet\":{\"title\":\"MyProject5 Live\",\"scheduledStartTime\":\""
                 + DateTime.UtcNow.ToString("o") + "\"},\"status\":{\"privacyStatus\":\"public\"}}";
-            using (var request = UnityWebRequest.Post("https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status", broadcastJson))
+            using (var request = UnityWebRequest.PostWwwForm("https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status", broadcastJson))
             {
                 SetJsonHeaders(request, token); yield return request.SendWebRequest();
                 if (request.result != UnityWebRequest.Result.Success) yield break;
@@ -71,7 +71,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         private IEnumerator CreateYouTubeStream(string token, string broadcastId)
         {
             const string json = "{\"snippet\":{\"title\":\"MyProject5 Stream\"},\"cdn\":{\"format\":\"720p\",\"ingestionType\":\"rtmp\"}}";
-            using (var request = UnityWebRequest.Post("https://www.googleapis.com/youtube/v3/liveStreams?part=snippet,cdn", json))
+            using (var request = UnityWebRequest.PostWwwForm("https://www.googleapis.com/youtube/v3/liveStreams?part=snippet,cdn", json))
             {
                 SetJsonHeaders(request, token); yield return request.SendWebRequest();
                 if (request.result != UnityWebRequest.Result.Success) yield break;
@@ -82,7 +82,7 @@ namespace RealtimeBodyTracking.LiveStreaming
 
         private IEnumerator BindBroadcast(string token, string broadcastId, string streamId)
         {
-            using (var request = UnityWebRequest.Post("https://www.googleapis.com/youtube/v3/liveBroadcasts/bind?id=" + Uri.EscapeDataString(broadcastId) + "&part=id,snippet,contentDetails,status&streamId=" + Uri.EscapeDataString(streamId), ""))
+            using (var request = UnityWebRequest.PostWwwForm("https://www.googleapis.com/youtube/v3/liveBroadcasts/bind?id=" + Uri.EscapeDataString(broadcastId) + "&part=id,snippet,contentDetails,status&streamId=" + Uri.EscapeDataString(streamId), ""))
             {
                 request.SetRequestHeader("Authorization", "Bearer " + token); yield return request.SendWebRequest();
                 if (request.result != UnityWebRequest.Result.Success) yield break;
