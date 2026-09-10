@@ -1273,6 +1273,10 @@
 				en,
 			);
 			mainGroup = 29B97314FDCFA39411CA2CEA /* CustomTemplate */;
+			
+			packageReferences = (
+				E0919FFAFF504F7F8B6AE5F7 /* XCRemoteSwiftPackageReference \"HaishinKit.swift\" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -2458,3 +2462,7 @@
 	};
 	rootObject = 29B97313FDCFA39411CA2CEA /* Project object */;
 }
+			packageProductDependencies = (
+				325313378AB84CD88DD270CF /* XCSwiftPackageProductDependency RTMPHaishinKit */,
+			);
+			
