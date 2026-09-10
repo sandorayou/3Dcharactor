@@ -19,12 +19,19 @@ final class UnityLivePublisher {
 
     func start(url: String, key: String, width: Int, height: Int, fps: Int, videoKbps: Int, audioKbps: Int) -> Int {
 #if canImport(RTMPHaishinKit)
+        guard url.hasPrefix("rtmp://") || url.hasPrefix("rtmps://"), !key.isEmpty else { return -1 }
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetooth])
+            try audioSession.setActive(true)
+        } catch { return -1 }
         let connection = RTMPConnection()
         let stream = RTMPStream(connection: connection)
         let mixer = MediaMixer()
         self.connection = connection; self.stream = stream; self.mixer = mixer
         Task { @MainActor in
             do {
+                guard await AVCaptureDevice.requestAccess(for: .video), await AVCaptureDevice.requestAccess(for: .audio) else { self.stop(); return }
                 let audio = AVCaptureDevice.default(for: .audio)
                 let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video,
                     position: self.front ? .front : .back)
