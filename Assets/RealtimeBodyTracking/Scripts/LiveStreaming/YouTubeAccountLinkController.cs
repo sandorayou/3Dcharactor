@@ -64,11 +64,11 @@ namespace RealtimeBodyTracking.LiveStreaming
                 SetJsonHeaders(request, token); yield return request.SendWebRequest();
                 if (request.result != UnityWebRequest.Result.Success) yield break;
                 var broadcast = JsonUtility.FromJson<BroadcastResponse>(request.downloadHandler.text);
-                yield return CreateYouTubeStream(token, broadcast.id);
+                yield return CreateYouTubeStream(token, broadcast.id, broadcast.snippet.liveChatId);
             }
         }
 
-        private IEnumerator CreateYouTubeStream(string token, string broadcastId)
+        private IEnumerator CreateYouTubeStream(string token, string broadcastId, string liveChatId)
         {
             const string json = "{\"snippet\":{\"title\":\"MyProject5 Stream\"},\"cdn\":{\"format\":\"720p\",\"ingestionType\":\"rtmp\"}}";
             using (var request = UnityWebRequest.PostWwwForm("https://www.googleapis.com/youtube/v3/liveStreams?part=snippet,cdn", json))
@@ -94,7 +94,7 @@ namespace RealtimeBodyTracking.LiveStreaming
                     if (result.items == null || result.items.Length == 0) yield break;
                     var info = result.items[0].cdn.ingestionInfo;
                     var accounts = new LiveStreamAccountStore().Load(); accounts.RemoveAll(x => x.provider == LiveStreamProvider.YouTube);
-                    accounts.Add(new LiveStreamAccount { provider = LiveStreamProvider.YouTube, displayName = "YouTube", ingestUrl = info.ingestionAddress, streamKey = info.streamName });
+                    accounts.Add(new LiveStreamAccount { provider = LiveStreamProvider.YouTube, displayName = "YouTube", ingestUrl = info.ingestionAddress, streamKey = info.streamName, accessToken = token, liveChatId = liveChatId });
                     new LiveStreamAccountStore().Save(accounts);
                 }
             }
@@ -105,7 +105,8 @@ namespace RealtimeBodyTracking.LiveStreaming
         private static byte[] RandomBytes(int count) { var bytes = new byte[count]; using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(bytes); return bytes; }
         private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         [Serializable] private sealed class TokenResponse { public string access_token; }
-        [Serializable] private sealed class BroadcastResponse { public string id; }
+        [Serializable] private sealed class BroadcastResponse { public string id; public BroadcastSnippet snippet; }
+        [Serializable] private sealed class BroadcastSnippet { public string liveChatId; }
         [Serializable] private sealed class StreamResponse { public string id; }
         [Serializable] private sealed class StreamListResponse { public StreamItem[] items; }
         [Serializable] private sealed class StreamItem { public Cdn cdn; }

@@ -49,6 +49,7 @@ namespace RealtimeBodyTracking.LiveStreaming
                 using (var request = UnityWebRequest.PostWwwForm("https://id.twitch.tv/oauth2/token", ""))
                 {
                     request.uploadHandler = new UploadHandlerRaw(body);
+                    request.downloadHandler = new DownloadHandlerBuffer();
                     request.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
                     yield return request.SendWebRequest();
                     if (request.responseCode == 428 || request.responseCode == 400) continue;
@@ -70,16 +71,16 @@ namespace RealtimeBodyTracking.LiveStreaming
                 if (request.result != UnityWebRequest.Result.Success) yield break;
                 var result = JsonUtility.FromJson<TwitchStreamKeyResponse>(request.downloadHandler.text);
                 if (result.data == null || result.data.Length == 0) yield break;
-                SaveTwitchAccount(result.data[0].stream_key);
+            SaveTwitchAccount(result.data[0].stream_key, accessToken);
             }
         }
 
-        private void SaveTwitchAccount(string key)
+        private void SaveTwitchAccount(string key, string accessToken)
         {
             var accounts = new LiveStreamAccountStore().Load();
             accounts.RemoveAll(x => x.provider == LiveStreamProvider.Twitch);
             accounts.Add(new LiveStreamAccount { provider = LiveStreamProvider.Twitch,
-                displayName = "Twitch", ingestUrl = "rtmps://live.twitch.tv/app/", streamKey = key });
+                displayName = "Twitch", ingestUrl = "rtmps://live.twitch.tv/app/", streamKey = key, accessToken = accessToken });
             new LiveStreamAccountStore().Save(accounts);
         }
 
