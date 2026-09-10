@@ -57,6 +57,12 @@ namespace RealtimeBodyTracking
         [SerializeField, Min(.01f)] private float avatarFaceHeightMeters = .22f;
         [SerializeField] private Transform leftEarAnchor;
         [SerializeField] private Transform rightEarAnchor;
+        [SerializeField, Min(0f)] private float palmChestClearance = .06f;
+        [SerializeField, Min(.01f)] private float palmChestDepthSmoothTime = .10f;
+        private readonly bool[] palmChestActive = new bool[2];
+        private readonly float[] palmChestDepth = new float[2];
+        private readonly float[] palmChestVelocity = new float[2];
+        private readonly float[] palmChestLastSeen = { float.NegativeInfinity, float.NegativeInfinity };
         [SerializeField, Range(0.05f, 1f)] private float faceZoomSmoothTime = 0.18f;
         [SerializeField, Min(0.15f)] private float minimumFaceCameraDistance = 0.28f;
         [SerializeField, Min(1f)] private float maximumFaceCameraDistance = 8f;
@@ -1304,13 +1310,35 @@ namespace RealtimeBodyTracking
                 var chestHeight = Mathf.Max(Vector3.Distance(
                     chest.position,
                     targetAnimator.GetBoneTransform(HumanBodyBones.Hips)?.position ?? chest.position), .001f);
-                if (Mathf.Abs(rel.x) <= torsoRadii.x && Mathf.Abs(rel.y) <= chestHeight * .55f)
+                var sideIndex = left ? 0 : 1;
+                if (Time.unscaledTime - palmChestLastSeen[sideIndex] > .2f)
+                    palmChestActive[sideIndex] = false;
+                var lateral = Quaternion.Inverse(facingOffset) * targetAnimator.transform.right;
+                var up = Quaternion.Inverse(facingOffset) * targetAnimator.transform.up;
+                // Hysteresis avoids repeatedly entering/leaving at the chest edge.
+                var padding = palmChestActive[sideIndex] ? .035f : 0f;
+                if (Mathf.Abs(Vector3.Dot(rel, lateral)) <= torsoRadii.x + padding &&
+                    Mathf.Abs(Vector3.Dot(rel, up)) <= chestHeight * .55f + padding)
                 {
-                    var frontSurface = Mathf.Max(torsoRadii.y, .001f);
+                    var frontSurface = Mathf.Max(torsoRadii.y, .001f) + palmChestClearance;
                     var signedDepth = Vector3.Dot(rel, front);
-                    if (signedDepth < frontSurface)
-                        palmTarget += front * (frontSurface - signedDepth);
+                    var desiredDepth = Mathf.Max(signedDepth, frontSurface);
+                    if (!palmChestActive[sideIndex])
+                    {
+                        palmChestDepth[sideIndex] = desiredDepth;
+                        palmChestVelocity[sideIndex] = 0f;
+                    }
+                    // Filter only chest-relative depth; preserve measured planar motion.
+                    var smoothTime = Mathf.Abs(desiredDepth - palmChestDepth[sideIndex]) > .08f
+                        ? palmChestDepthSmoothTime * .4f : palmChestDepthSmoothTime;
+                    palmChestDepth[sideIndex] = Mathf.Max(frontSurface, Mathf.SmoothDamp(
+                        palmChestDepth[sideIndex], desiredDepth, ref palmChestVelocity[sideIndex],
+                        smoothTime, Mathf.Infinity, Time.unscaledDeltaTime));
+                    palmTarget += front * (palmChestDepth[sideIndex] - signedDepth);
+                    palmChestActive[sideIndex] = true;
+                    palmChestLastSeen[sideIndex] = Time.unscaledTime;
                 }
+                else palmChestActive[sideIndex] = false;
             }
             wristTarget = palmTarget - avatarPalmOffset;
             return true;
