@@ -12,6 +12,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         [SerializeField] private YouTubeAccountLinkController youtubeLink;
         [SerializeField] private LiveStreamSettingsController settingsController;
         [SerializeField] private LocalAvatarVisibilityController avatarVisibility;
+        [SerializeField] private LiveCommentsController commentsController;
         private Text status;
         private InputField ingestUrl;
         private InputField streamKey;
@@ -27,6 +28,8 @@ namespace RealtimeBodyTracking.LiveStreaming
             settingsController ??= GetComponent<LiveStreamSettingsController>();
             avatarVisibility ??= GetComponent<LocalAvatarVisibilityController>();
             if (avatarVisibility == null) avatarVisibility = gameObject.AddComponent<LocalAvatarVisibilityController>();
+            commentsController ??= GetComponent<LiveCommentsController>();
+            if (commentsController == null) commentsController = gameObject.AddComponent<LiveCommentsController>();
             var canvasObject = new GameObject("LiveStreamControlCanvas");
             canvasObject.transform.SetParent(transform, false);
             var canvas = canvasObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 9999;
@@ -58,7 +61,14 @@ namespace RealtimeBodyTracking.LiveStreaming
         private void Stop() { controller?.StopStreaming(); if (status) status.text = "配信先: " + selected + " / 停止"; }
         private void ToggleAvatarVisibility() { avatarVisibility?.ToggleVisibility(); if (status) status.text = avatarVisibility != null && avatarVisibility.IsVisible ? "キャラ: 表示" : "キャラ: 非表示"; }
         private void ToggleSettings() { if (settingsRoot != null) settingsRoot.SetActive(!settingsRoot.activeSelf); }
-        private void ToggleComments() { if (commentsRoot != null) commentsRoot.SetActive(!commentsRoot.activeSelf); }
+        private void ToggleComments()
+        {
+            if (commentsRoot == null) return;
+            var visible = !commentsRoot.activeSelf;
+            commentsRoot.SetActive(visible);
+            if (visible) commentsController?.StartReceiving(selected, commentsRoot.transform);
+            else commentsController?.StopReceiving();
+        }
 
         private static Text AddLabel(Transform parent, string value, int size) { var text = new GameObject("Status").AddComponent<Text>(); text.transform.SetParent(parent, false); text.text = value; text.fontSize = size; text.color = Color.white; text.alignment = TextAnchor.MiddleLeft; text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); return text; }
         private static InputField AddInput(Transform parent, string placeholder) { var obj = new GameObject(placeholder); obj.transform.SetParent(parent, false); obj.AddComponent<LayoutElement>().preferredHeight = 42; obj.AddComponent<Image>().color = Color.white; var input = obj.AddComponent<InputField>(); var text = new GameObject("Text").AddComponent<Text>(); text.transform.SetParent(obj.transform, false); text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.color = Color.black; text.fontSize = 18; text.rectTransform.anchorMin = Vector2.zero; text.rectTransform.anchorMax = Vector2.one; text.rectTransform.offsetMin = new Vector2(10, 0); text.rectTransform.offsetMax = new Vector2(-10, 0); input.textComponent = text; input.placeholder = AddLabel(obj.transform, placeholder, 18); input.placeholder.color = Color.gray; return input; }
