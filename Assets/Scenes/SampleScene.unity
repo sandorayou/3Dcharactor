@@ -365,7 +365,7 @@ MonoBehaviour:
   centerPredictionSeconds: 0.033
   centerInterpolationSpeed: 30
   hipsPositionScale: 1
-  enableFaceZoom: 1
+  enableFaceZoom: 0
   faceZoomSmoothTime: 0.18
   minimumFaceCameraDistance: 0.28
   maximumFaceCameraDistance: 8
