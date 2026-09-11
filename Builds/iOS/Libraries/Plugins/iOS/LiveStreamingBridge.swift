@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import ReplayKit
 import Photos
+import UIKit
 
 #if canImport(RTMPHaishinKit)
 import RTMPHaishinKit
@@ -90,11 +91,12 @@ final class UnityLivePublisher {
     }
 }
 
-final class UnityScreenRecorder {
+final class UnityScreenRecorder: NSObject, RPPreviewViewControllerDelegate {
     static let shared = UnityScreenRecorder()
     private let recorder = RPScreenRecorder.shared()
     func start() -> Int { guard recorder.isAvailable, !recorder.isRecording else { return -1 }; recorder.startRecording { error in if let error { NSLog("[Recorder] %@", error.localizedDescription) } }; return 0 }
-    func stop() { guard recorder.isRecording else { return }; recorder.stopRecording { preview, error in if let error { NSLog("[Recorder] %@", error.localizedDescription); return }; guard let preview else { return }; preview.previewControllerDelegate = nil; preview.saveVideo(to: .photoLibrary) { saveError in if let saveError { NSLog("[Recorder] save failed %@", saveError.localizedDescription) } } } }
+    func stop() { guard recorder.isRecording else { return }; recorder.stopRecording { preview, error in if let error { NSLog("[Recorder] %@", error.localizedDescription); return }; guard let preview else { return }; preview.previewControllerDelegate = self; DispatchQueue.main.async { var root = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController }.first; while let presented = root?.presentedViewController { root = presented }; root?.present(preview, animated: true) } } }
+    func previewControllerDidFinish(_ previewController: RPPreviewViewController) { previewController.dismiss(animated: true) }
 }
 
 @_cdecl("NativeStart")
