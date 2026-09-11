@@ -386,7 +386,7 @@ namespace RealtimeBodyTracking
         {
             receivedNewPoseFrame = false;
             receivedTrackedPoseFrame = false;
-            PosePacket packet;
+            PosePacket packet = null;
 #if UNITY_IOS || UNITY_ANDROID
             var hasPacket = localPoseSource != null && localPoseSource.TryTakeLatest(out packet);
 #else
