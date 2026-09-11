@@ -25,6 +25,12 @@ namespace RealtimeBodyTracking.LiveStreaming
 
         private void Awake()
         {
+#if UNITY_IOS || UNITY_ANDROID
+            // Mobile validation currently targets camera compositing and local
+            // pose tracking only. Keep streaming code out of this execution path.
+            enabled = false;
+            return;
+#endif
             controller ??= GetComponent<LiveStreamingController>();
             accountLink ??= GetComponent<LiveStreamAccountLinkController>();
             youtubeLink ??= GetComponent<YouTubeAccountLinkController>();
