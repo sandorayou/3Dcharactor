@@ -4,9 +4,8 @@
 #import <UnityInterface.h>
 @import MediaPipeTasksVision;
 
-// Phase 1 of the native tracking bridge.
-// MediaPipe inference is intentionally not included yet; this owns the camera
-// and provides the CVPixelBuffer hand-off point for the next phase.
+#include <atomic>
+static std::atomic<int> s_width{640}, s_height{480};
 static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
@@ -25,6 +24,8 @@ static long long s_frame;
     if (pixelBuffer == nil) return;
 
     if (s_landmarker == nil || s_unityObject == nil) return;
+    s_width = (int)CVPixelBufferGetWidth(pixelBuffer);
+    s_height = (int)CVPixelBufferGetHeight(pixelBuffer);
     MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:pixelBuffer error:nil];
     if (image == nil) return;
     [s_landmarker detectAsyncImage:image timestampInMilliseconds:(NSInteger)(CACurrentMediaTime() * 1000.0) error:nil];
@@ -35,15 +36,19 @@ static long long s_frame;
 @end
 @implementation NativePoseResultDelegate
 - (void)poseLandmarker:(MPPPoseLandmarker *)landmarker didFinishDetectionWithResult:(MPPPoseLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
-    if (result == nil || result.landmarks.count == 0 || s_unityObject == nil) return;
+    if (result == nil || s_unityObject == nil) return;
     NSArray *points = result.landmarks.firstObject;
+    NSArray<MPPLandmark *> *world = result.worldLandmarks.firstObject;
     NSArray *names = @[@"nose", @"left_eye_inner", @"left_eye", @"left_eye_outer", @"right_eye_inner", @"right_eye", @"right_eye_outer", @"left_ear", @"right_ear", @"mouth_left", @"mouth_right", @"left_shoulder", @"right_shoulder", @"left_elbow", @"right_elbow", @"left_wrist", @"right_wrist", @"left_pinky", @"right_pinky", @"left_index", @"right_index", @"left_thumb", @"right_thumb", @"left_hip", @"right_hip", @"left_knee", @"right_knee", @"left_ankle", @"right_ankle", @"left_heel", @"right_heel", @"left_foot_index", @"right_foot_index"];
     NSMutableArray *jsonPoints = [NSMutableArray array];
-    for (NSUInteger i = 0; i < points.count && i < names.count; ++i) {
-        MPPLandmark *p = points[i];
-        [jsonPoints addObject:@{@"name": names[i], @"x": @(p.x), @"y": @(p.y), @"z": @(p.z), @"confidence": @1.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
+    for (NSUInteger i = 0; i < points.count && i < world.count && i < names.count; ++i) {
+        MPPNormalizedLandmark *p = points[i];
+        MPPLandmark *w = world[i];
+        // Match the Windows protocol: raw MediaPipe world axes, image coordinates
+        // separately, and visibility as confidence. Unity performs axis conversion.
+        [jsonPoints addObject:@{@"name": names[i], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": p.visibility ?: @0.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
     }
-    NSDictionary *packet = @{@"version": @4, @"frame": @(s_frame++), @"timestamp_ms": @(timestamp), @"source_width": @640, @"source_height": @480, @"tracking": @(jsonPoints.count >= 4), @"points": jsonPoints};
+    NSDictionary *packet = @{@"version": @4, @"frame": @(s_frame++), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints};
     NSData *data = [NSJSONSerialization dataWithJSONObject:packet options:0 error:nil];
     NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
     UnitySendMessage(s_unityObject.UTF8String, "OnNativePoseJson", json.UTF8String);

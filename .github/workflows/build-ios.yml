@@ -48,9 +48,23 @@ jobs:
           xcodebuild -resolvePackageDependencies -project "${{ steps.find-project.outputs.project_path }}" -scheme "Unity-iPhone"
 
       - name: Build unsigned app
+        env:
+          XCODE_PROJECT: ${{ steps.find-project.outputs.project_path }}
         run: |
+          set -euo pipefail
+          PROJECT_DIR=$(dirname "$XCODE_PROJECT")
+          if [ ! -f "$PROJECT_DIR/Podfile" ]; then
+            echo "::error::Podfile missing. Re-export the updated Unity project to iOS and commit the export."
+            exit 1
+          fi
+          if ! command -v pod >/dev/null 2>&1; then
+            brew install cocoapods
+          fi
+          (cd "$PROJECT_DIR" && pod install --repo-update --silent)
+          WORKSPACE="${XCODE_PROJECT%.xcodeproj}.xcworkspace"
+          test -d "$WORKSPACE"
           xcodebuild \
-            -project "${{ steps.find-project.outputs.project_path }}" \
+            -workspace "$WORKSPACE" \
             -scheme "Unity-iPhone" \
             -configuration Release \
             -sdk iphoneos \
