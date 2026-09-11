@@ -1,6 +1,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
+#import <CoreImage/CoreImage.h>
 #import "UnityInterface.h"
 #import <MediaPipeTasksVision/MediaPipeTasksVision.h>
 
@@ -14,6 +15,11 @@ static MPPHandLandmarker *s_handLandmarker;
 static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
+static BOOL s_useFrontCamera = YES;
+static CGFloat s_mosaicScale = 24.0;
+static CALayer *s_backgroundLayer;
+static CIContext *s_ciContext;
+static CFTimeInterval s_lastBackgroundFrame;
 // Each detector completes independently. Publish only matching capture timestamps.
 static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timestamp) {
     static NSMutableDictionary *pending;
@@ -59,6 +65,23 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
         fromConnection:(AVCaptureConnection *)connection {
     CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     if (pixelBuffer == nil) return;
+
+    CFTimeInterval now = CACurrentMediaTime();
+    if (s_backgroundLayer != nil && now - s_lastBackgroundFrame >= (1.0 / 15.0)) {
+        s_lastBackgroundFrame = now;
+        if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
+        CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
+        CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
+        [pixelate setValue:source forKey:kCIInputImageKey];
+        [pixelate setValue:@(s_mosaicScale) forKey:kCIInputScaleKey];
+        [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent) y:CGRectGetMidY(source.extent)] forKey:kCIInputCenterKey];
+        CIImage *processed = [pixelate.outputImage imageByCroppingToRect:source.extent];
+        CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
+        if (frame != nil) dispatch_async(dispatch_get_main_queue(), ^{
+            s_backgroundLayer.contents = (__bridge id)frame;
+            CGImageRelease(frame);
+        });
+    }
 
     if (s_landmarker == nil || s_unityObject == nil) return;
     s_width = (int)CVPixelBufferGetWidth(pixelBuffer);
@@ -131,25 +154,37 @@ static NativePoseCaptureDelegate *s_delegate;
 static NativePoseResultDelegate *s_resultDelegate;
 static NativeHandResultDelegate *s_handDelegate;
 static NativeFaceResultDelegate *s_faceDelegate;
-static AVCaptureVideoPreviewLayer *s_previewLayer;
 static BOOL s_paused;
 static BOOL s_stopping;
 
 static void UpdateVideoOrientation() {
-    s_previewLayer.frame = UnityGetGLViewController().view.bounds;
+    UIView *unityView = UnityGetGLViewController().view;
+    s_backgroundLayer.frame = unityView.frame;
     AVCaptureVideoOrientation orientation = AVCaptureVideoOrientationPortrait;
     UIInterfaceOrientation ui = UIApplication.sharedApplication.statusBarOrientation;
     if (ui == UIInterfaceOrientationLandscapeLeft) orientation = AVCaptureVideoOrientationLandscapeLeft;
     else if (ui == UIInterfaceOrientationLandscapeRight) orientation = AVCaptureVideoOrientationLandscapeRight;
     AVCaptureConnection *video = [s_output connectionWithMediaType:AVMediaTypeVideo];
     if (video.isVideoOrientationSupported) video.videoOrientation = orientation;
-    AVCaptureConnection *preview = s_previewLayer.connection;
-    if (preview.isVideoOrientationSupported) preview.videoOrientation = orientation;
+    if (video.isVideoMirroringSupported) {
+        video.automaticallyAdjustsVideoMirroring = NO;
+        video.videoMirrored = s_useFrontCamera;
+    }
+}
+
+static AVCaptureDevice *CameraDevice(BOOL front) {
+    AVCaptureDevicePosition position = front ? AVCaptureDevicePositionFront : AVCaptureDevicePositionBack;
+    AVCaptureDeviceDiscoverySession *discovery = [AVCaptureDeviceDiscoverySession
+        discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInWideAngleCamera]
+        mediaType:AVMediaTypeVideo position:position];
+    return discovery.devices.firstObject;
 }
 
 static void NotifyCameraState(NSString *message) {
     if (s_unityObject != nil) UnitySendMessage(s_unityObject.UTF8String, "OnNativeCameraState", message.UTF8String);
 }
+
+extern "C" void NativePoseCaptureStop();
 
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
@@ -194,7 +229,7 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if ([s_session canSetSessionPreset:AVCaptureSessionPreset640x480])
         s_session.sessionPreset = AVCaptureSessionPreset640x480;
 
-    AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    AVCaptureDevice *device = CameraDevice(s_useFrontCamera);
     AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:device error:nil];
     if (input == nil || ![s_session canAddInput:input]) {
         s_session = nil;
@@ -216,14 +251,18 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     }
     [s_session addOutput:s_output];
     [s_session commitConfiguration];
-    s_previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:s_session];
-    s_previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
     dispatch_async(dispatch_get_main_queue(), ^{
         UIView *unityView = UnityGetGLViewController().view;
         unityView.opaque = NO;
         unityView.backgroundColor = UIColor.clearColor;
-        s_previewLayer.frame = unityView.bounds;
-        [unityView.layer insertSublayer:s_previewLayer atIndex:0];
+        s_backgroundLayer = [CALayer layer];
+        s_backgroundLayer.contentsGravity = kCAGravityResizeAspectFill;
+        s_backgroundLayer.masksToBounds = YES;
+        UIView *container = unityView.superview;
+        if (container != nil) {
+            s_backgroundLayer.frame = unityView.frame;
+            [container.layer insertSublayer:s_backgroundLayer below:unityView.layer];
+        }
         UpdateVideoOrientation();
     });
     [s_session startRunning];
@@ -238,12 +277,27 @@ extern "C" void NativePoseCaptureSetPaused(int paused) {
     if (s_unityObject != nil) NotifyCameraState(s_paused ? @"camera_paused" : @"camera_resumed");
 }
 
+extern "C" void NativePoseCaptureSetFrontCamera(int front) {
+    BOOL requested = front != 0;
+    if (requested == s_useFrontCamera) return;
+    s_useFrontCamera = requested;
+    if (s_session == nil || s_unityObject == nil) return;
+    NSString *receiver = [s_unityObject copy];
+    NativePoseCaptureStop();
+    NativePoseCaptureStart(receiver.UTF8String);
+}
+
+extern "C" void NativePoseCaptureSetMosaicScale(float scale) {
+    s_mosaicScale = MAX(2.0, scale);
+}
+
 extern "C" void NativePoseCaptureStop() {
     s_stopping = YES;
     [s_session stopRunning];
     [s_output setSampleBufferDelegate:nil queue:NULL];
-    [s_previewLayer removeFromSuperlayer];
-    s_previewLayer = nil;
+    [s_backgroundLayer removeFromSuperlayer];
+    s_backgroundLayer = nil;
+    s_ciContext = nil;
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;

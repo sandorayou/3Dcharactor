@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		00000000008063A1000160D3 /* libiPhone-lib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D8A1C72A0E8063A1000160D3 /* libiPhone-lib.a */; };
 		1D45A5CCCCC4E76191AAF1D0 /* libil2cpp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EE54DC7E56FA015DDC9659BD /* libil2cpp.a */; };
-		40E02B9FFD08CCB6F54AB716 /* MediaPipeUnity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 39B6C45B412878A6068AAA2C /* MediaPipeUnity.framework */; };
 		415674EFD2EC187355BC05B1 /* LaunchScreen-iPhoneLandscape.png in Resources */ = {isa = PBXBuildFile; fileRef = 1E24B93E9D27D99850693BAF /* LaunchScreen-iPhoneLandscape.png */; };
 		475B26F38A3A652C6174529D /* IUnityInterface.h in Headers */ = {isa = PBXBuildFile; fileRef = 679ACDCF6D14CA6FE6F81479 /* IUnityInterface.h */; };
 		5623C57617FDCB0800090B9E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D30AB110D05D00D00671497 /* Foundation.framework */; };
@@ -95,7 +94,6 @@
 		9DC67E8921CBBEDF005F9FA1 /* LifeCycleListener.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A292A9717992CE100409BA4 /* LifeCycleListener.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		9DFA7F9D21410F2E00C2880E /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = D82DCFBB0E8000A5005D6AD8 /* main.mm */; };
 		9E277B346B541C2D072C5489 /* IUnityGraphicsMetal.h in Headers */ = {isa = PBXBuildFile; fileRef = 894C1B251937BE1BC2B4D36C /* IUnityGraphicsMetal.h */; };
-		A2BC357D73C621B23CC411CC /* MediaPipeUnity.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 39B6C45B412878A6068AAA2C /* MediaPipeUnity.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A9D25940D8D548F7AE1ED9ED /* LiveStreamingBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FD999FF58189790DC0724D /* LiveStreamingBridge.swift */; };
 		BEE3E21D322649C83B0DD4DC /* LaunchScreen-iPhone.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 5A3A1B4C3FB1FC90023B942E /* LaunchScreen-iPhone.storyboard */; };
 		D085C06443DB1B1B5C6637B6 /* LaunchScreen-iPad.png in Resources */ = {isa = PBXBuildFile; fileRef = D556450C3DBEECE838996A3D /* LaunchScreen-iPad.png */; };
@@ -153,7 +151,6 @@
 			dstSubfolderSpec = 10;
 			files = (
 				9D25ABA5213FB47800354C27 /* UnityFramework.framework in Embed Frameworks */,
-				A2BC357D73C621B23CC411CC /* MediaPipeUnity.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -239,7 +236,6 @@
 		36BDE40EFAF15832D01C4E85 /* Generics__49.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Generics__49.cpp; path = Il2CppOutputProject/Source/il2cppOutput/Generics__49.cpp; sourceTree = SOURCE_ROOT; };
 		37AC7AC7977FAFF44E7DAA61 /* UnityEngine.TilemapModule_CodeGen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = UnityEngine.TilemapModule_CodeGen.c; path = Il2CppOutputProject/Source/il2cppOutput/UnityEngine.TilemapModule_CodeGen.c; sourceTree = SOURCE_ROOT; };
 		37EEDE6C9967DEE1D5EF5912 /* Generics__18.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Generics__18.cpp; path = Il2CppOutputProject/Source/il2cppOutput/Generics__18.cpp; sourceTree = SOURCE_ROOT; };
-		39B6C45B412878A6068AAA2C /* MediaPipeUnity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaPipeUnity.framework; path = Frameworks/com.github.homuler.mediapipe/Runtime/Plugins/iOS/MediaPipeUnity.framework; sourceTree = SOURCE_ROOT; };
 		3B557CF9358F36A58A8F38FC /* UnityEngine.PhysicsModule_CodeGen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = UnityEngine.PhysicsModule_CodeGen.c; path = Il2CppOutputProject/Source/il2cppOutput/UnityEngine.PhysicsModule_CodeGen.c; sourceTree = SOURCE_ROOT; };
 		3C3FA87D53EEBC03335BFC95 /* UniGLTF.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = UniGLTF.cpp; path = Il2CppOutputProject/Source/il2cppOutput/UniGLTF.cpp; sourceTree = SOURCE_ROOT; };
 		3CC546E182B89988089AC598 /* UnityEngine.UIElementsModule__3.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = UnityEngine.UIElementsModule__3.cpp; path = Il2CppOutputProject/Source/il2cppOutput/UnityEngine.UIElementsModule__3.cpp; sourceTree = SOURCE_ROOT; };
@@ -601,7 +597,6 @@
 				9D690CDF21BFD3E3005026B1 /* UIKit.framework in Frameworks */,
 				7F4E05AB2717219200A2CBE4 /* libGameAssembly.a in Frameworks */,
 				9D0A618B21BFE7F30094DC33 /* libiconv.2.tbd in Frameworks */,
-				40E02B9FFD08CCB6F54AB716 /* MediaPipeUnity.framework in Frameworks */,
 				1D45A5CCCCC4E76191AAF1D0 /* libil2cpp.a in Frameworks */,
 				63ACF7178776C648B96974EB /* baselib.a in Frameworks */,
 				72D5251345547DFA436F17EA /* OpenGLES.framework in Frameworks */,
@@ -665,7 +660,6 @@
 		29B97323FDCFA39411CA2CEA /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				43F2C43E44AFE70700398183 /* com.github.homuler.mediapipe */,
 				7F36C11013C5C673007FBDD9 /* AVFoundation.framework */,
 				8A20382C213D4B3C005E6C56 /* AVKit.framework */,
 				8358D1B70ED1CC3700E3A684 /* AudioToolbox.framework */,
@@ -689,22 +683,6 @@
 				9D0A618A21BFE7F30094DC33 /* libiconv.2.tbd */,
 			);
 			path = Frameworks;
-			sourceTree = "<group>";
-		};
-		35AE92B319602F71829025D7 /* Runtime */ = {
-			isa = PBXGroup;
-			children = (
-				56D79CF69FEF16BBA0C458E7 /* Plugins */,
-			);
-			path = Runtime;
-			sourceTree = "<group>";
-		};
-		43F2C43E44AFE70700398183 /* com.github.homuler.mediapipe */ = {
-			isa = PBXGroup;
-			children = (
-				35AE92B319602F71829025D7 /* Runtime */,
-			);
-			path = com.github.homuler.mediapipe;
 			sourceTree = "<group>";
 		};
 		45C76ABEC14C6E10C9CFC809 /* il2cppOutput */ = {
@@ -996,22 +974,6 @@
 				5623C57B17FDCB0900090B9E /* InfoPlist.strings */,
 			);
 			name = "Supporting Files";
-			sourceTree = "<group>";
-		};
-		56D79CF69FEF16BBA0C458E7 /* Plugins */ = {
-			isa = PBXGroup;
-			children = (
-				5FD244D539692EEF44084650 /* iOS */,
-			);
-			path = Plugins;
-			sourceTree = "<group>";
-		};
-		5FD244D539692EEF44084650 /* iOS */ = {
-			isa = PBXGroup;
-			children = (
-				39B6C45B412878A6068AAA2C /* MediaPipeUnity.framework */,
-			);
-			path = iOS;
 			sourceTree = "<group>";
 		};
 		8A3EDDC51615B7C1001839E9 /* UI */ = {

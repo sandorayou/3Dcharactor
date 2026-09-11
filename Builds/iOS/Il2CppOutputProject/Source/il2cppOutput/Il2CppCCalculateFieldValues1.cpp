@@ -14645,6 +14645,8 @@ struct IOSDebugOverlay_t471E9EB3D7F9BD2E8036CC69312A66EF059B9357  : public MonoB
 };
 struct IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708  : public MonoBehaviour_t532A11E69716D348D8AA7F854AFCBFCB8AD17F71
 {
+	bool ___useFrontCamera;
+	float ___mosaicScale;
 	PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* ___latest;
 	float ___nextStatusLog;
 };
@@ -20928,9 +20930,9 @@ IL2CPP_EXTERN_C const int32_t g_FieldOffsetTable4706[260] =
 IL2CPP_EXTERN_C const int32_t g_FieldOffsetTable4707[3] = 
 {
 	static_cast<int32_t>(offsetof(IOSDebugOverlay_t471E9EB3D7F9BD2E8036CC69312A66EF059B9357, ___visible)),static_cast<int32_t>(offsetof(IOSDebugOverlay_t471E9EB3D7F9BD2E8036CC69312A66EF059B9357, ___scroll)),static_cast<int32_t>(offsetof(IOSDebugOverlay_t471E9EB3D7F9BD2E8036CC69312A66EF059B9357, ___textStyle)),};
-IL2CPP_EXTERN_C const int32_t g_FieldOffsetTable4709[2] = 
+IL2CPP_EXTERN_C const int32_t g_FieldOffsetTable4709[4] = 
 {
-	static_cast<int32_t>(offsetof(IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708, ___latest)),static_cast<int32_t>(offsetof(IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708, ___nextStatusLog)),};
+	static_cast<int32_t>(offsetof(IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708, ___useFrontCamera)),static_cast<int32_t>(offsetof(IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708, ___mosaicScale)),static_cast<int32_t>(offsetof(IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708, ___latest)),static_cast<int32_t>(offsetof(IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708, ___nextStatusLog)),};
 IL2CPP_EXTERN_C const int32_t g_FieldOffsetTable4711[6] = 
 {
 	static_cast<int32_t>(offsetof(U3CPlaySequenceU3Ed__34_t2BE3817A42C5790D8ED86A5FBB6DDC17DE099579, ___U3CU3E1__state)),static_cast<int32_t>(offsetof(U3CPlaySequenceU3Ed__34_t2BE3817A42C5790D8ED86A5FBB6DDC17DE099579, ___U3CU3E2__current)),static_cast<int32_t>(offsetof(U3CPlaySequenceU3Ed__34_t2BE3817A42C5790D8ED86A5FBB6DDC17DE099579, ___U3CU3E4__this)),static_cast<int32_t>(offsetof(U3CPlaySequenceU3Ed__34_t2BE3817A42C5790D8ED86A5FBB6DDC17DE099579, ___actions)),static_cast<int32_t>(offsetof(U3CPlaySequenceU3Ed__34_t2BE3817A42C5790D8ED86A5FBB6DDC17DE099579, ___U3CU3E7__wrap1)),static_cast<int32_t>(offsetof(U3CPlaySequenceU3Ed__34_t2BE3817A42C5790D8ED86A5FBB6DDC17DE099579, ___U3CU3E7__wrap2)),};

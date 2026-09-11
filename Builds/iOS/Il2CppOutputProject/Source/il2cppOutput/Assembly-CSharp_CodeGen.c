@@ -172,10 +172,14 @@ extern void IOSDebugOverlayBootstrap_Install_mFC6530C5BD49D71A25074EC547550C6D37
 extern void IOSNativePoseSource_NativePoseCaptureStart_m16BA0BF480BE26D7E099D870676CA5933188ABA6 (void);
 extern void IOSNativePoseSource_NativePoseCaptureStop_m7879C986FBBB006827299B6D1FCFE45863A63A4E (void);
 extern void IOSNativePoseSource_NativePoseCaptureSetPaused_m9798EFD275F8093DB0E7E31B3C543428F7DA3B9B (void);
+extern void IOSNativePoseSource_NativePoseCaptureSetFrontCamera_mBA2FD6777A52CCC9AA01EF168BE1E8C084A3D34E (void);
+extern void IOSNativePoseSource_NativePoseCaptureSetMosaicScale_mFC2703634A066774282E07ADFC4A1296229BE745 (void);
 extern void IOSNativePoseSource_OnNativePoseJson_m0AC642FAC7EAB421BACB711912A43475FBEAFA0F (void);
 extern void IOSNativePoseSource_OnNativeCameraPermissionGranted_mF2F19741A3C240F62AD8C6B96B81952AF6640C0C (void);
 extern void IOSNativePoseSource_OnNativeCameraState_m10915435A26404C9185C4D9212EA5D7B9EC8B678 (void);
 extern void IOSNativePoseSource_TryTakeLatest_m279CF990F80254FD633A7EDB6AFA0D79575B8B46 (void);
+extern void IOSNativePoseSource_ToggleCamera_m1CC2BC6EDCD241B347341028528A97C0D4C7366E (void);
+extern void IOSNativePoseSource_SetFrontCamera_m9542A9A1A4CD628E7C201B1A1EA073E79B1D294C (void);
 extern void IOSNativePoseSource_OnEnable_mFA0E6E4CEBF861D1B0FFDAA5045E581D010B9E87 (void);
 extern void IOSNativePoseSource_OnDisable_mF3E807671333F93EA404CCC9FC3672A83095CD6C (void);
 extern void IOSNativePoseSource_OnApplicationPause_m0DB2AA2EAD80AA9066A42695BA7B1952B2AA3540 (void);
@@ -486,7 +490,7 @@ extern void U3CExchangeAndCreateU3Ed__9_U3CU3Em__Finally1_m123006062DB13A88B6873
 extern void U3CExchangeAndCreateU3Ed__9_System_Collections_Generic_IEnumeratorU3CSystem_ObjectU3E_get_Current_m6D59C410605007E75F84A881915251A5BAC548E9 (void);
 extern void U3CExchangeAndCreateU3Ed__9_System_Collections_IEnumerator_Reset_m9DE696731D2BB2D0E431D211B948238520671408 (void);
 extern void U3CExchangeAndCreateU3Ed__9_System_Collections_IEnumerator_get_Current_m9B8EB275657B8D582A8E34AE84295FE6B3BDD7AB (void);
-static Il2CppMethodPointer s_methodPointers[475] = 
+static Il2CppMethodPointer s_methodPointers[479] = 
 {
 	UnitySourceGeneratedAssemblyMonoScriptTypes_v1_Get_mBEB95BEB954BB63E9710BBC7AD5E78C4CB0A0033,
 	UnitySourceGeneratedAssemblyMonoScriptTypes_v1__ctor_mE70FB23ACC1EA12ABC948AA22C2E78B2D0AA39B1,
@@ -648,10 +652,14 @@ static Il2CppMethodPointer s_methodPointers[475] =
 	IOSNativePoseSource_NativePoseCaptureStart_m16BA0BF480BE26D7E099D870676CA5933188ABA6,
 	IOSNativePoseSource_NativePoseCaptureStop_m7879C986FBBB006827299B6D1FCFE45863A63A4E,
 	IOSNativePoseSource_NativePoseCaptureSetPaused_m9798EFD275F8093DB0E7E31B3C543428F7DA3B9B,
+	IOSNativePoseSource_NativePoseCaptureSetFrontCamera_mBA2FD6777A52CCC9AA01EF168BE1E8C084A3D34E,
+	IOSNativePoseSource_NativePoseCaptureSetMosaicScale_mFC2703634A066774282E07ADFC4A1296229BE745,
 	IOSNativePoseSource_OnNativePoseJson_m0AC642FAC7EAB421BACB711912A43475FBEAFA0F,
 	IOSNativePoseSource_OnNativeCameraPermissionGranted_mF2F19741A3C240F62AD8C6B96B81952AF6640C0C,
 	IOSNativePoseSource_OnNativeCameraState_m10915435A26404C9185C4D9212EA5D7B9EC8B678,
 	IOSNativePoseSource_TryTakeLatest_m279CF990F80254FD633A7EDB6AFA0D79575B8B46,
+	IOSNativePoseSource_ToggleCamera_m1CC2BC6EDCD241B347341028528A97C0D4C7366E,
+	IOSNativePoseSource_SetFrontCamera_m9542A9A1A4CD628E7C201B1A1EA073E79B1D294C,
 	IOSNativePoseSource_OnEnable_mFA0E6E4CEBF861D1B0FFDAA5045E581D010B9E87,
 	IOSNativePoseSource_OnDisable_mF3E807671333F93EA404CCC9FC3672A83095CD6C,
 	IOSNativePoseSource_OnApplicationPause_m0DB2AA2EAD80AA9066A42695BA7B1952B2AA3540,
@@ -977,21 +985,21 @@ extern void U3CStartTwitchSocketU3Ed__15_MoveNext_mA2EC6E42FF8A20CC3FA04FDACC60A
 extern void U3CStartTwitchSocketU3Ed__15_SetStateMachine_mB44F3448640A8EF6A24B542FC764D6B1A0ED196E_AdjustorThunk (void);
 static Il2CppTokenAdjustorThunkPair s_adjustorThunks[11] = 
 {
-	{ 0x060000D3, UpperBodyPose__ctor_m4B68636ADB64F60E3BC5D9FF20F77D01518C527D_AdjustorThunk },
-	{ 0x060000D4, ArmPose__ctor_mF4C095189B46DB208D0A2EA3B8D579395F40D8DE_AdjustorThunk },
-	{ 0x060000D5, ScreenBodyPose__ctor_m65711CA6C90A006057AD60D6E87370F57EE22A55_AdjustorThunk },
-	{ 0x06000107, ArmSolveDiagnostics__ctor_mCDCAA7EC4A6CA111BB31DD3712960A3B7EF593A3_AdjustorThunk },
-	{ 0x06000108, ArmSolveDiagnostics_ToString_m9282CCB076C5EDADB03ED1C6726E3CE1030DB1C8_AdjustorThunk },
-	{ 0x06000124, U3CReadTwitchU3Ed__17_MoveNext_m3C92BE1260B8A804CC3028C3A631D8F0A0CD9A36_AdjustorThunk },
-	{ 0x06000125, U3CReadTwitchU3Ed__17_SetStateMachine_mB552CAFF374A3F91861A42C2741EC22360ADC3D7_AdjustorThunk },
-	{ 0x0600012C, U3CSendTwitchU3Ed__16_MoveNext_m65EF8A7C13E85FF978B60F309A1C5B7368092A85_AdjustorThunk },
-	{ 0x0600012D, U3CSendTwitchU3Ed__16_SetStateMachine_m14D91033A79912B6C0F8E514EF3B2CFD71AD0F04_AdjustorThunk },
-	{ 0x0600012E, U3CStartTwitchSocketU3Ed__15_MoveNext_mA2EC6E42FF8A20CC3FA04FDACC60A7BE13D8A367_AdjustorThunk },
-	{ 0x0600012F, U3CStartTwitchSocketU3Ed__15_SetStateMachine_mB44F3448640A8EF6A24B542FC764D6B1A0ED196E_AdjustorThunk },
+	{ 0x060000D7, UpperBodyPose__ctor_m4B68636ADB64F60E3BC5D9FF20F77D01518C527D_AdjustorThunk },
+	{ 0x060000D8, ArmPose__ctor_mF4C095189B46DB208D0A2EA3B8D579395F40D8DE_AdjustorThunk },
+	{ 0x060000D9, ScreenBodyPose__ctor_m65711CA6C90A006057AD60D6E87370F57EE22A55_AdjustorThunk },
+	{ 0x0600010B, ArmSolveDiagnostics__ctor_mCDCAA7EC4A6CA111BB31DD3712960A3B7EF593A3_AdjustorThunk },
+	{ 0x0600010C, ArmSolveDiagnostics_ToString_m9282CCB076C5EDADB03ED1C6726E3CE1030DB1C8_AdjustorThunk },
+	{ 0x06000128, U3CReadTwitchU3Ed__17_MoveNext_m3C92BE1260B8A804CC3028C3A631D8F0A0CD9A36_AdjustorThunk },
+	{ 0x06000129, U3CReadTwitchU3Ed__17_SetStateMachine_mB552CAFF374A3F91861A42C2741EC22360ADC3D7_AdjustorThunk },
+	{ 0x06000130, U3CSendTwitchU3Ed__16_MoveNext_m65EF8A7C13E85FF978B60F309A1C5B7368092A85_AdjustorThunk },
+	{ 0x06000131, U3CSendTwitchU3Ed__16_SetStateMachine_m14D91033A79912B6C0F8E514EF3B2CFD71AD0F04_AdjustorThunk },
+	{ 0x06000132, U3CStartTwitchSocketU3Ed__15_MoveNext_mA2EC6E42FF8A20CC3FA04FDACC60A7BE13D8A367_AdjustorThunk },
+	{ 0x06000133, U3CStartTwitchSocketU3Ed__15_SetStateMachine_mB44F3448640A8EF6A24B542FC764D6B1A0ED196E_AdjustorThunk },
 };
-static const int32_t s_InvokerIndices[475] = 
+static const int32_t s_InvokerIndices[479] = 
 {
-	9486,
+	9487,
 	6558,
 	7834,
 	9150,
@@ -1000,7 +1008,7 @@ static const int32_t s_InvokerIndices[475] =
 	2813,
 	6354,
 	6558,
-	9482,
+	9483,
 	5345,
 	2238,
 	2266,
@@ -1031,8 +1039,8 @@ static const int32_t s_InvokerIndices[475] =
 	6558,
 	5257,
 	6558,
-	9446,
-	9482,
+	9447,
+	9483,
 	6558,
 	6558,
 	6558,
@@ -1126,7 +1134,7 @@ static const int32_t s_InvokerIndices[475] =
 	5316,
 	6558,
 	6558,
-	9482,
+	9483,
 	182,
 	6558,
 	6558,
@@ -1147,14 +1155,18 @@ static const int32_t s_InvokerIndices[475] =
 	6558,
 	6558,
 	6558,
-	9482,
+	9483,
 	8999,
-	9482,
+	9483,
 	9274,
+	9274,
+	9284,
 	5345,
 	5345,
 	5345,
 	3738,
+	6558,
+	5257,
 	6558,
 	6558,
 	5257,
@@ -1182,8 +1194,8 @@ static const int32_t s_InvokerIndices[475] =
 	6490,
 	6550,
 	9097,
-	9433,
-	9433,
+	9434,
+	9434,
 	6558,
 	5316,
 	6558,
@@ -1235,13 +1247,13 @@ static const int32_t s_InvokerIndices[475] =
 	198,
 	6558,
 	6558,
-	9453,
+	9454,
 	6558,
 	6558,
 	8030,
 	6558,
-	9482,
-	9482,
+	9483,
+	9483,
 	6354,
 	2813,
 	5257,
@@ -1306,7 +1318,7 @@ static const int32_t s_InvokerIndices[475] =
 	6558,
 	6558,
 	6558,
-	9482,
+	9483,
 	6558,
 	3863,
 	5316,
@@ -1346,7 +1358,7 @@ static const int32_t s_InvokerIndices[475] =
 	6558,
 	6558,
 	6558,
-	9482,
+	9483,
 	7817,
 	8370,
 	8032,
@@ -1358,7 +1370,7 @@ static const int32_t s_InvokerIndices[475] =
 	6558,
 	6558,
 	6558,
-	9482,
+	9483,
 	6354,
 	5257,
 	6354,
@@ -1377,7 +1389,7 @@ static const int32_t s_InvokerIndices[475] =
 	6558,
 	9271,
 	6724,
-	9482,
+	9483,
 	9274,
 	9274,
 	6558,
@@ -1434,7 +1446,7 @@ static const int32_t s_InvokerIndices[475] =
 	6558,
 	6558,
 	6558,
-	9482,
+	9483,
 	6558,
 	3863,
 	5316,
@@ -1471,7 +1483,7 @@ IL2CPP_EXTERN_C const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule;
 const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule = 
 {
 	"Assembly-CSharp.dll",
-	475,
+	479,
 	s_methodPointers,
 	11,
 	s_adjustorThunks,

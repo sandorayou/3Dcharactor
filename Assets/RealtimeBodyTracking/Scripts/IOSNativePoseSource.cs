@@ -12,7 +12,11 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern int NativePoseCaptureStart(string unityObjectName);
         [DllImport("__Internal")] private static extern void NativePoseCaptureStop();
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetPaused(int paused);
+        [DllImport("__Internal")] private static extern void NativePoseCaptureSetFrontCamera(int front);
+        [DllImport("__Internal")] private static extern void NativePoseCaptureSetMosaicScale(float scale);
 #endif
+        [SerializeField] private bool useFrontCamera = true;
+        [SerializeField, Range(2f, 80f)] private float mosaicScale = 24f;
         private PosePacket latest;
         private float nextStatusLog;
 
@@ -49,9 +53,25 @@ namespace RealtimeBodyTracking
             return packet != null;
         }
 
+        public void ToggleCamera()
+        {
+            SetFrontCamera(!useFrontCamera);
+        }
+
+        public void SetFrontCamera(bool front)
+        {
+            useFrontCamera = front;
+#if UNITY_IOS && !UNITY_EDITOR
+            NativePoseCaptureSetFrontCamera(front ? 1 : 0);
+#endif
+            Debug.Log("[NativeCamera] selected=" + (front ? "front" : "rear"), this);
+        }
+
         private void OnEnable()
         {
 #if UNITY_IOS && !UNITY_EDITOR
+            NativePoseCaptureSetFrontCamera(useFrontCamera ? 1 : 0);
+            NativePoseCaptureSetMosaicScale(mosaicScale);
             var camera = Camera.main;
             if (camera != null)
             {

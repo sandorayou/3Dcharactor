@@ -944,6 +944,8 @@ struct HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427  : public Mo
 };
 struct IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708  : public MonoBehaviour_t532A11E69716D348D8AA7F854AFCBFCB8AD17F71
 {
+	bool ___useFrontCamera;
+	float ___mosaicScale;
 	PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* ___latest;
 	float ___nextStatusLog;
 };
