@@ -315,7 +315,11 @@ namespace RealtimeBodyTracking
             if (udpReceiver == null) udpReceiver = GetComponent<UdpPoseReceiver>();
             localPoseSource = GetComponent<LocalPosePacketSource>();
 #if UNITY_IOS || UNITY_ANDROID
+#if UNITY_IOS
+            if (localPoseSource == null) localPoseSource = gameObject.AddComponent<IOSNativePoseSource>();
+#else
             if (localPoseSource == null) localPoseSource = gameObject.AddComponent<LocalMediaPipePoseSource>();
+#endif
 #endif
             if (targetAnimator == null) targetAnimator = GetComponentInChildren<Animator>();
             if (trackingCamera == null) trackingCamera = Camera.main;
