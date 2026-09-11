@@ -10,6 +10,8 @@ static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
 static MPPPoseLandmarker *s_landmarker;
+static MPPHandLandmarker *s_handLandmarker;
+static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
 
@@ -28,11 +30,18 @@ static long long s_frame;
     s_height = (int)CVPixelBufferGetHeight(pixelBuffer);
     MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:pixelBuffer error:nil];
     if (image == nil) return;
-    [s_landmarker detectAsyncImage:image timestampInMilliseconds:(NSInteger)(CACurrentMediaTime() * 1000.0) error:nil];
+    NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
+    [s_landmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
+    [s_handLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
+    [s_faceLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
 }
 @end
 
 @interface NativePoseResultDelegate : NSObject <MPPPoseLandmarkerLiveStreamDelegate>
+@end
+@interface NativeHandResultDelegate : NSObject <MPPHandLandmarkerLiveStreamDelegate>
+@end
+@interface NativeFaceResultDelegate : NSObject <MPPFaceLandmarkerLiveStreamDelegate>
 @end
 @implementation NativePoseResultDelegate
 - (void)poseLandmarker:(MPPPoseLandmarker *)landmarker didFinishDetectionWithResult:(MPPPoseLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
@@ -55,8 +64,42 @@ static long long s_frame;
 }
 @end
 
+@implementation NativeHandResultDelegate
+- (void)handLandmarker:(MPPHandLandmarker *)landmarker didFinishDetectionWithResult:(MPPHandLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
+    if (!result || !s_unityObject) return;
+    NSArray *names = @[@"wrist", @"thumb_cmc", @"thumb_mcp", @"thumb_ip", @"thumb", @"index_mcp", @"index_pip", @"index_dip", @"index", @"middle_mcp", @"middle_pip", @"middle_dip", @"middle", @"ring_mcp", @"ring_pip", @"ring_dip", @"ring", @"pinky_mcp", @"pinky_pip", @"pinky_dip", @"pinky"];
+    NSMutableArray *points = [NSMutableArray array];
+    for (NSUInteger h = 0; h < result.landmarks.count; h++) {
+        NSArray *image = result.landmarks[h]; NSArray *world = h < result.worldLandmarks.count ? result.worldLandmarks[h] : @[];
+        NSString *side = @"right";
+        if (h < result.handedness.count && [[result.handedness[h] firstObject].categoryName.lowercaseString containsString:@"left"]) side = @"left";
+        for (NSUInteger i = 0; i < image.count && i < world.count && i < names.count; i++) {
+            MPPNormalizedLandmark *p = image[i]; MPPLandmark *w = world[i];
+            [points addObject:@{@"name": [NSString stringWithFormat:@"%@_hand_%@", side, names[i]], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": p.visibility ?: @1.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
+        }
+    }
+    NSDictionary *packet = @{@"version": @4, @"frame": @(s_frame++), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(points.count > 0), @"points": points};
+    NSData *data = [NSJSONSerialization dataWithJSONObject:packet options:0 error:nil];
+    UnitySendMessage(s_unityObject.UTF8String, "OnNativePoseJson", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] UTF8String]);
+}
+@end
+
+@implementation NativeFaceResultDelegate
+- (void)faceLandmarker:(MPPFaceLandmarker *)landmarker didFinishDetectionWithResult:(MPPFaceLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
+    if (!result || !s_unityObject) return;
+    NSMutableArray *blend = [NSMutableArray array];
+    if (result.faceBlendshapes.count > 0) for (MPPCategory *c in result.faceBlendshapes.firstObject.categories)
+        [blend addObject:@{@"name": c.categoryName ?: @"", @"score": @(c.score)}];
+    NSDictionary *packet = @{@"version": @4, @"frame": @(s_frame++), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": @[]};
+    NSData *data = [NSJSONSerialization dataWithJSONObject:packet options:0 error:nil];
+    UnitySendMessage(s_unityObject.UTF8String, "OnNativePoseJson", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] UTF8String]);
+}
+@end
+
 static NativePoseCaptureDelegate *s_delegate;
 static NativePoseResultDelegate *s_resultDelegate;
+static NativeHandResultDelegate *s_handDelegate;
+static NativeFaceResultDelegate *s_faceDelegate;
 static AVCaptureVideoPreviewLayer *s_previewLayer;
 static BOOL s_paused;
 static BOOL s_stopping;
@@ -101,6 +144,18 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     options.poseLandmarkerLiveStreamDelegate = s_resultDelegate;
     s_landmarker = [[MPPPoseLandmarker alloc] initWithOptions:options error:nil];
     if (s_landmarker == nil) return -4;
+    NSString *handPath = [[NSBundle mainBundle] pathForResource:@"hand_landmarker" ofType:@"task" inDirectory:@"Data/Raw"];
+    NSString *facePath = [[NSBundle mainBundle] pathForResource:@"face_landmarker" ofType:@"task" inDirectory:@"Data/Raw"];
+    if (!handPath || !facePath) return -7;
+    MPPHandLandmarkerOptions *handOptions = [MPPHandLandmarkerOptions new];
+    handOptions.baseOptions.modelAssetPath = handPath; handOptions.runningMode = MPPRunningModeLiveStream; handOptions.numHands = 2;
+    s_handDelegate = [NativeHandResultDelegate new]; handOptions.handLandmarkerLiveStreamDelegate = s_handDelegate;
+    s_handLandmarker = [[MPPHandLandmarker alloc] initWithOptions:handOptions error:nil];
+    MPPFaceLandmarkerOptions *faceOptions = [MPPFaceLandmarkerOptions new];
+    faceOptions.baseOptions.modelAssetPath = facePath; faceOptions.runningMode = MPPRunningModeLiveStream; faceOptions.numFaces = 1; faceOptions.outputFaceBlendshapes = YES;
+    s_faceDelegate = [NativeFaceResultDelegate new]; faceOptions.faceLandmarkerLiveStreamDelegate = s_faceDelegate;
+    s_faceLandmarker = [[MPPFaceLandmarker alloc] initWithOptions:faceOptions error:nil];
+    if (!s_handLandmarker || !s_faceLandmarker) return -8;
 
     s_session = [AVCaptureSession new];
     [s_session beginConfiguration];
@@ -161,7 +216,11 @@ extern "C" void NativePoseCaptureStop() {
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;
+    s_handLandmarker = nil;
+    s_faceLandmarker = nil;
     s_resultDelegate = nil;
+    s_handDelegate = nil;
+    s_faceDelegate = nil;
     s_unityObject = nil;
     s_queue = nil;
     s_session = nil;
