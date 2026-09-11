@@ -99,7 +99,7 @@ namespace RealtimeBodyTracking.Editor
         private static void GenerateMediaPipePodfile(string pathToBuiltProject)
         {
             var podfile = Path.Combine(pathToBuiltProject, "Podfile");
-            var content = "platform :ios, '12.0'\nuse_frameworks!\n\ntarget 'Unity-iPhone' do\n  pod 'MediaPipeTasksVision'\nend\n";
+            var content = "platform :ios, '12.0'\nuse_frameworks!\n\ntarget 'Unity-iPhone' do\n  pod 'MediaPipeTasksVision'\nend\n\ntarget 'UnityFramework' do\n  pod 'MediaPipeTasksVision'\nend\n";
             if (!File.Exists(podfile) || File.ReadAllText(podfile) != content)
             {
                 File.WriteAllText(podfile, content);

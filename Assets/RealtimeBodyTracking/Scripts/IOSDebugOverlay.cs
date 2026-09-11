@@ -13,7 +13,6 @@ namespace RealtimeBodyTracking
         private void Awake()
         {
             DontDestroyOnLoad(gameObject);
-            textStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, wordWrap = true };
         }
 
         private void OnGUI()
@@ -23,6 +22,8 @@ namespace RealtimeBodyTracking
                 return;
             }
 
+            if (textStyle == null)
+                textStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, wordWrap = true };
             var width = Mathf.Min(Screen.width - 24, 900);
             var height = Mathf.Min(Screen.height * .42f, 620);
             GUILayout.BeginArea(new Rect(12, 12, width, height), GUI.skin.box);

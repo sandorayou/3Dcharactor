@@ -10,20 +10,27 @@ namespace RealtimeBodyTracking
     public sealed class IOSNativePoseSource : MonoBehaviour, LocalPosePacketSource
     {
 #if UNITY_IOS && !UNITY_EDITOR
-        [DllImport("__Internal")] private static extern int NativePoseCaptureStart();
+        [DllImport("__Internal")] private static extern int NativePoseCaptureStart(string unityObjectName);
         [DllImport("__Internal")] private static extern void NativePoseCaptureStop();
 #endif
+        private PosePacket latest;
+
+        public void OnNativePoseJson(string json)
+        {
+            if (!string.IsNullOrEmpty(json)) latest = JsonUtility.FromJson<PosePacket>(json);
+        }
 
         public bool TryTakeLatest(out PosePacket packet)
         {
-            packet = null;
-            return false;
+            packet = latest;
+            latest = null;
+            return packet != null;
         }
 
         private void OnEnable()
         {
 #if UNITY_IOS && !UNITY_EDITOR
-            var result = NativePoseCaptureStart();
+            var result = NativePoseCaptureStart(gameObject.name);
             if (result != 0) Debug.LogError($"Native iOS camera start failed: {result}", this);
 #endif
         }
