@@ -2,6 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using UnityEditor.iOS.Xcode;
 using UnityEngine;
 
 namespace RealtimeBodyTracking.Editor
@@ -15,6 +16,7 @@ namespace RealtimeBodyTracking.Editor
             if (report.summary.platform == BuildTarget.iOS)
             {
                 ConfigureIosBuild(report.summary.outputPath);
+                RemoveLegacyMediaPipeFramework(report.summary.outputPath);
                 GenerateMediaPipePodfile(report.summary.outputPath);
                 return;
             }
@@ -96,10 +98,30 @@ namespace RealtimeBodyTracking.Editor
             }
         }
 
+        private static void RemoveLegacyMediaPipeFramework(string pathToBuiltProject)
+        {
+            var projectPath = PBXProject.GetPBXProjectPath(pathToBuiltProject);
+            var project = new PBXProject();
+            project.ReadFromFile(projectPath);
+            var frameworkPath = "Frameworks/com.github.homuler.mediapipe/Runtime/Plugins/iOS/MediaPipeUnity.framework";
+            var fileGuid = project.FindFileGuidByProjectPath(frameworkPath);
+            if (!string.IsNullOrEmpty(fileGuid))
+            {
+                project.RemoveFileFromBuild(project.GetUnityMainTargetGuid(), fileGuid);
+                project.RemoveFileFromBuild(project.GetUnityFrameworkTargetGuid(), fileGuid);
+                project.RemoveFile(fileGuid);
+                project.WriteToFile(projectPath);
+            }
+
+            var frameworkDirectory = Path.Combine(pathToBuiltProject, frameworkPath);
+            if (Directory.Exists(frameworkDirectory)) Directory.Delete(frameworkDirectory, true);
+            Debug.Log("[TrackerBuildPostprocessor] Removed legacy MediaPipeUnity.framework from iOS export.");
+        }
+
         private static void GenerateMediaPipePodfile(string pathToBuiltProject)
         {
             var podfile = Path.Combine(pathToBuiltProject, "Podfile");
-            var content = "platform :ios, '15.0'\nuse_frameworks! :linkage => :static\n\ntarget 'Unity-iPhone' do\n  pod 'MediaPipeTasksVision'\nend\n\ntarget 'UnityFramework' do\n  pod 'MediaPipeTasksVision'\nend\n";
+            var content = "platform :ios, '15.0'\nuse_frameworks! :linkage => :static\n\ntarget 'UnityFramework' do\n  pod 'MediaPipeTasksVision'\nend\n";
             if (!File.Exists(podfile) || File.ReadAllText(podfile) != content)
             {
                 File.WriteAllText(podfile, content);

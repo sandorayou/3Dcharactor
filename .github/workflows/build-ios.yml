@@ -79,6 +79,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             clean build
+          if find "$RUNNER_TEMP/App" -name 'MediaPipeUnity.framework' -print -quit | grep -q .; then
+            echo "::error::Legacy MediaPipeUnity.framework was embedded alongside MediaPipeTasksVision"
+            exit 1
+          fi
 
       - name: Package IPA
         run: |
