@@ -29,6 +29,8 @@ namespace RealtimeBodyTracking
             GUILayout.BeginArea(new Rect(12, 12, width, height), GUI.skin.box);
             GUILayout.BeginHorizontal();
             GUILayout.Label("iPhone Tracking Log", textStyle);
+            if (GUILayout.Button("コピー", GUILayout.Width(110), GUILayout.Height(44)))
+                GUIUtility.systemCopyBuffer = RuntimeLogCapture.GetText();
             if (GUILayout.Button("閉じる", GUILayout.Width(110), GUILayout.Height(44))) visible = false;
             GUILayout.EndHorizontal();
             scroll = GUILayout.BeginScrollView(scroll, GUI.skin.box);

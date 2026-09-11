@@ -14,6 +14,41 @@ static MPPHandLandmarker *s_handLandmarker;
 static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
+// Each detector completes independently. Publish only matching capture timestamps.
+static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timestamp) {
+    static NSMutableDictionary *pending;
+    static NSObject *gate;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ pending = [NSMutableDictionary dictionary]; gate = [NSObject new]; });
+    @synchronized(gate) {
+        NSNumber *key = @(timestamp);
+        NSMutableDictionary *parts = pending[key];
+        if (!parts) { parts = [NSMutableDictionary dictionary]; pending[key] = parts; }
+        parts[kind] = packet;
+        if (parts.count == 3) {
+            NSMutableDictionary *combined = [parts[@"pose"] mutableCopy];
+            NSMutableArray *points = [combined[@"points"] mutableCopy];
+            [points addObjectsFromArray:parts[@"hand"][@"points"]];
+            combined[@"points"] = points;
+            combined[@"face_blendshapes"] = parts[@"face"][@"face_blendshapes"];
+            combined[@"frame"] = @(s_frame++);
+            NSData *data = [NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];
+            NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            NSString *receiver = [s_unityObject copy];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (receiver && [receiver isEqualToString:s_unityObject] && json)
+                    UnitySendMessage(receiver.UTF8String, "OnNativePoseJson", json.UTF8String);
+            });
+            for (NSNumber *old in [pending.allKeys copy])
+                if (old.longLongValue <= timestamp) [pending removeObjectForKey:old];
+        }
+        // Live-stream detectors can drop frames independently. Bound incomplete frames.
+        while (pending.count > 8) {
+            NSNumber *oldest = [[pending.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
+            [pending removeObjectForKey:oldest];
+        }
+    }
+}
 
 @interface NativePoseCaptureDelegate : NSObject <AVCaptureVideoDataOutputSampleBufferDelegate>
 @end
@@ -57,10 +92,8 @@ static long long s_frame;
         // separately, and visibility as confidence. Unity performs axis conversion.
         [jsonPoints addObject:@{@"name": names[i], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": p.visibility ?: @0.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
     }
-    NSDictionary *packet = @{@"version": @4, @"frame": @(s_frame++), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints};
-    NSData *data = [NSJSONSerialization dataWithJSONObject:packet options:0 error:nil];
-    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    UnitySendMessage(s_unityObject.UTF8String, "OnNativePoseJson", json.UTF8String);
+    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints};
+    SubmitResult(@"pose", packet, timestamp);
 }
 @end
 
@@ -78,9 +111,8 @@ static long long s_frame;
             [points addObject:@{@"name": [NSString stringWithFormat:@"%@_hand_%@", side, names[i]], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": p.visibility ?: @1.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
         }
     }
-    NSDictionary *packet = @{@"version": @4, @"frame": @(s_frame++), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(points.count > 0), @"points": points};
-    NSData *data = [NSJSONSerialization dataWithJSONObject:packet options:0 error:nil];
-    UnitySendMessage(s_unityObject.UTF8String, "OnNativePoseJson", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] UTF8String]);
+    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(points.count > 0), @"points": points};
+    SubmitResult(@"hand", packet, timestamp);
 }
 @end
 
@@ -90,9 +122,8 @@ static long long s_frame;
     NSMutableArray *blend = [NSMutableArray array];
     if (result.faceBlendshapes.count > 0) for (MPPCategory *c in result.faceBlendshapes.firstObject.categories)
         [blend addObject:@{@"name": c.categoryName ?: @"", @"score": @(c.score)}];
-    NSDictionary *packet = @{@"version": @4, @"frame": @(s_frame++), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": @[]};
-    NSData *data = [NSJSONSerialization dataWithJSONObject:packet options:0 error:nil];
-    UnitySendMessage(s_unityObject.UTF8String, "OnNativePoseJson", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] UTF8String]);
+    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": @[]};
+    SubmitResult(@"face", packet, timestamp);
 }
 @end
 

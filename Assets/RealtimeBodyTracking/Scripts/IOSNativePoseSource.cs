@@ -4,8 +4,7 @@ using UnityEngine;
 namespace RealtimeBodyTracking
 {
     /// Native iOS camera/inference source contract.
-    /// MediaPipe result decoding will be added after the AVFoundation hand-off
-    /// is verified on a device.
+    /// Receives combined native Pose/Hand/Face results on Unity's main thread.
     [DisallowMultipleComponent]
     public sealed class IOSNativePoseSource : MonoBehaviour, LocalPosePacketSource
     {
@@ -15,10 +14,18 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetPaused(int paused);
 #endif
         private PosePacket latest;
+        private float nextStatusLog;
 
         public void OnNativePoseJson(string json)
         {
-            if (!string.IsNullOrEmpty(json)) latest = JsonUtility.FromJson<PosePacket>(json);
+            if (string.IsNullOrEmpty(json)) return;
+            try { latest = JsonUtility.FromJson<PosePacket>(json); }
+            catch (System.ArgumentException error) { Debug.LogError("[Tracking] Invalid packet: " + error.Message, this); return; }
+            if (latest != null && Time.unscaledTime >= nextStatusLog)
+            {
+                nextStatusLog = Time.unscaledTime + 2f;
+                Debug.Log($"[Tracking] frame={latest.frame} points={latest.points?.Count ?? 0} blendshapes={latest.face_blendshapes?.Count ?? 0}", this);
+            }
         }
 
         public void OnNativeCameraPermissionGranted(string ignored)

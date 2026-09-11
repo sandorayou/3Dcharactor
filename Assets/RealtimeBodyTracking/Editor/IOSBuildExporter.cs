@@ -1,11 +1,13 @@
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 
 namespace RealtimeBodyTracking.Editor
 {
     public static class IOSBuildExporter
     {
+        [MenuItem("Build/Export updated iOS project")]
         public static void Export()
         {
             var scenes = EditorBuildSettings.scenes.Where(x => x.enabled).Select(x => x.path).ToArray();
