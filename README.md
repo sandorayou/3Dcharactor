@@ -1,6 +1,6 @@
-# Realtime Body Tracker
+# iPhone Native Body Tracker
 
-Windows向けの、MediaPipe Pose LandmarkerからUnity Humanoid/VRMへ低遅延で全身姿勢を送る初版です。Python側は最新の1フレームだけを保持して古いフレームを破棄し、Unity側も未処理パケットを常に最新のものへ置換します。
+現在はiPhone専用です。AVFoundationでカメラを取得し、iOSネイティブMediaPipeで推論した関節座標だけをUnityへ渡します。
 
 ## Python tracker
 
