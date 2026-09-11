@@ -1,4 +1,5 @@
 #import <AVFoundation/AVFoundation.h>
+#import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UnityInterface.h>
 @import MediaPipeTasksVision;
@@ -51,10 +52,28 @@ static long long s_frame;
 
 static NativePoseCaptureDelegate *s_delegate;
 static NativePoseResultDelegate *s_resultDelegate;
+static AVCaptureVideoPreviewLayer *s_previewLayer;
+static BOOL s_paused;
+
+static void NotifyCameraState(NSString *message) {
+    if (s_unityObject != nil) UnitySendMessage(s_unityObject.UTF8String, "OnNativeCameraState", message.UTF8String);
+}
 
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil) return 1;
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
+    if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] == AVAuthorizationStatusNotDetermined) {
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (granted) UnitySendMessage(s_unityObject.UTF8String, "OnNativeCameraPermissionGranted", "");
+                else NotifyCameraState(@"camera_permission_denied");
+            });
+        }];
+        return -6;
+    } else if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] != AVAuthorizationStatusAuthorized) {
+        NotifyCameraState(@"camera_permission_denied");
+        return -5;
+    }
     NSString *modelPath = [[NSBundle mainBundle] pathForResource:@"pose_landmarker_full" ofType:@"bytes" inDirectory:@"Data/Raw"];
     if (modelPath == nil) return -3;
     MPPPoseLandmarkerOptions *options = [MPPPoseLandmarkerOptions new];
@@ -93,13 +112,31 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     }
     [s_session addOutput:s_output];
     [s_session commitConfiguration];
+    s_previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:s_session];
+    s_previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIView *unityView = UnityGetGLViewController().view;
+        s_previewLayer.frame = unityView.bounds;
+        s_previewLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
+        [unityView.layer insertSublayer:s_previewLayer atIndex:0];
+    });
     [s_session startRunning];
+    NotifyCameraState(@"camera_started");
     return 0;
+}
+
+extern "C" void NativePoseCaptureSetPaused(int paused) {
+    s_paused = paused != 0;
+    if (s_paused) [s_session stopRunning];
+    else if (s_session != nil) [s_session startRunning];
+    if (s_unityObject != nil) NotifyCameraState(s_paused ? @"camera_paused" : @"camera_resumed");
 }
 
 extern "C" void NativePoseCaptureStop() {
     [s_session stopRunning];
     [s_output setSampleBufferDelegate:nil queue:NULL];
+    [s_previewLayer removeFromSuperlayer];
+    s_previewLayer = nil;
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;

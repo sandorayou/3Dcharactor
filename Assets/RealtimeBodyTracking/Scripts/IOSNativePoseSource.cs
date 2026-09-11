@@ -12,12 +12,26 @@ namespace RealtimeBodyTracking
 #if UNITY_IOS && !UNITY_EDITOR
         [DllImport("__Internal")] private static extern int NativePoseCaptureStart(string unityObjectName);
         [DllImport("__Internal")] private static extern void NativePoseCaptureStop();
+        [DllImport("__Internal")] private static extern void NativePoseCaptureSetPaused(int paused);
 #endif
         private PosePacket latest;
 
         public void OnNativePoseJson(string json)
         {
             if (!string.IsNullOrEmpty(json)) latest = JsonUtility.FromJson<PosePacket>(json);
+        }
+
+        public void OnNativeCameraPermissionGranted(string ignored)
+        {
+#if UNITY_IOS && !UNITY_EDITOR
+            var result = NativePoseCaptureStart(gameObject.name);
+            if (result != 0) Debug.LogError($"Native iOS camera start failed after permission: {result}", this);
+#endif
+        }
+
+        public void OnNativeCameraState(string state)
+        {
+            Debug.Log("[NativeCamera] " + state, this);
         }
 
         public bool TryTakeLatest(out PosePacket packet)
@@ -39,6 +53,13 @@ namespace RealtimeBodyTracking
         {
 #if UNITY_IOS && !UNITY_EDITOR
             NativePoseCaptureStop();
+#endif
+        }
+
+        private void OnApplicationPause(bool paused)
+        {
+#if UNITY_IOS && !UNITY_EDITOR
+            NativePoseCaptureSetPaused(paused ? 1 : 0);
 #endif
         }
     }
