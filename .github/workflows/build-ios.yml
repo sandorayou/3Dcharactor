@@ -53,13 +53,22 @@ jobs:
         run: |
           set -euo pipefail
           PROJECT_DIR=$(dirname "$XCODE_PROJECT")
-          if [ ! -f "$PROJECT_DIR/Podfile" ]; then
-            echo "::error::Podfile missing. Re-export the updated Unity project to iOS and commit the export."
-            exit 1
-          fi
+          cat > "$PROJECT_DIR/Podfile" <<'PODFILE'
+          platform :ios, '12.0'
+          use_frameworks! :linkage => :static
+
+          target 'Unity-iPhone' do
+            pod 'MediaPipeTasksVision'
+          end
+
+          target 'UnityFramework' do
+            pod 'MediaPipeTasksVision'
+          end
+          PODFILE
           if ! command -v pod >/dev/null 2>&1; then
             brew install cocoapods
           fi
+          ruby Tools/add_ios_native_pose.rb "$XCODE_PROJECT" Assets/Plugins/iOS/NativePoseBridge.mm
           (cd "$PROJECT_DIR" && pod install --repo-update --silent)
           WORKSPACE="${XCODE_PROJECT%.xcodeproj}.xcworkspace"
           test -d "$WORKSPACE"
