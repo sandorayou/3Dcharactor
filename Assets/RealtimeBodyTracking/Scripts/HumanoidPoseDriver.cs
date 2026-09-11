@@ -12,6 +12,7 @@ namespace RealtimeBodyTracking
         [Header("References")]
         [SerializeField] private Animator targetAnimator;
         [SerializeField] private UdpPoseReceiver udpReceiver;
+        private LocalPosePacketSource localPoseSource;
         [SerializeField] private Camera trackingCamera;
         [Header("Camera Framing")]
         [SerializeField] private bool autoFrameCamera = true;
@@ -312,6 +313,10 @@ namespace RealtimeBodyTracking
         private void Awake()
         {
             if (udpReceiver == null) udpReceiver = GetComponent<UdpPoseReceiver>();
+            localPoseSource = GetComponent<LocalPosePacketSource>();
+#if UNITY_IOS || UNITY_ANDROID
+            if (localPoseSource == null) localPoseSource = gameObject.AddComponent<LocalMediaPipePoseSource>();
+#endif
             if (targetAnimator == null) targetAnimator = GetComponentInChildren<Animator>();
             if (trackingCamera == null) trackingCamera = Camera.main;
         }
@@ -381,7 +386,13 @@ namespace RealtimeBodyTracking
         {
             receivedNewPoseFrame = false;
             receivedTrackedPoseFrame = false;
-            if (udpReceiver != null && udpReceiver.TryTakeLatest(out var packet))
+            PosePacket packet;
+#if UNITY_IOS || UNITY_ANDROID
+            var hasPacket = localPoseSource != null && localPoseSource.TryTakeLatest(out packet);
+#else
+            var hasPacket = udpReceiver != null && udpReceiver.TryTakeLatest(out packet);
+#endif
+            if (hasPacket)
             {
                 receivedNewPoseFrame = true;
                 var reacquired = !tracking || (latestFrame >= 0 && packet.frame < latestFrame);

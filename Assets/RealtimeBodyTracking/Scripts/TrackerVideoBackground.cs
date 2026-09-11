@@ -19,6 +19,7 @@ namespace RealtimeBodyTracking
         private MeshRenderer backgroundRenderer;
         private Texture2D texture;
         private WebCamTexture deviceCamera;
+        public static WebCamTexture DeviceCamera { get; private set; }
 
         private void Awake()
         {
@@ -59,6 +60,7 @@ namespace RealtimeBodyTracking
             for (var i = 0; i < devices.Length; i++)
                 if (devices[i].isFrontFacing) { selected = devices[i].name; break; }
             deviceCamera = new WebCamTexture(selected, 1280, 720, 30);
+            DeviceCamera = deviceCamera;
             deviceCamera.Play();
             yield return new WaitUntil(() => deviceCamera.width > 16 && deviceCamera.height > 16);
             backgroundRenderer.material.mainTexture = deviceCamera;
@@ -133,6 +135,7 @@ namespace RealtimeBodyTracking
         private void OnDestroy()
         {
             if (deviceCamera != null && deviceCamera.isPlaying) deviceCamera.Stop();
+            if (DeviceCamera == deviceCamera) DeviceCamera = null;
             if (texture != null) Destroy(texture);
             if (backgroundRenderer != null && backgroundRenderer.material != null)
                 Destroy(backgroundRenderer.material);
