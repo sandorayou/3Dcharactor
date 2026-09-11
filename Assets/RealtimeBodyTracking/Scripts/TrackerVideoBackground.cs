@@ -62,9 +62,17 @@ namespace RealtimeBodyTracking
             deviceCamera.Play();
             yield return new WaitUntil(() => deviceCamera.width > 16 && deviceCamera.height > 16);
             backgroundRenderer.material.mainTexture = deviceCamera;
-            backgroundRenderer.material.mainTextureScale = mirror ? new Vector2(-1f, 1f) : Vector2.one;
-            backgroundRenderer.material.mainTextureOffset = mirror ? new Vector2(1f, 0f) : Vector2.zero;
-            FitToSource(deviceCamera.width, deviceCamera.height);
+            // WebCamTexture exposes the device sensor orientation separately
+            // from the pixels. Apply it to the quad so portrait camera input
+            // is not displayed sideways or stretched.
+            var rotation = deviceCamera.videoRotationAngle;
+            background.localRotation = Quaternion.Euler(0f, 0f, -rotation);
+            var flipX = mirror ^ deviceCamera.videoVerticallyMirrored;
+            backgroundRenderer.material.mainTextureScale = flipX ? new Vector2(-1f, 1f) : Vector2.one;
+            backgroundRenderer.material.mainTextureOffset = flipX ? new Vector2(1f, 0f) : Vector2.zero;
+            var rotatedWidth = rotation == 90 || rotation == 270 ? deviceCamera.height : deviceCamera.width;
+            var rotatedHeight = rotation == 90 || rotation == 270 ? deviceCamera.width : deviceCamera.height;
+            FitToSource(rotatedWidth, rotatedHeight);
             backgroundRenderer.enabled = true;
         }
 #endif

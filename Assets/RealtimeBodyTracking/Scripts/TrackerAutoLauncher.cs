@@ -34,6 +34,13 @@ namespace RealtimeBodyTracking
         private IEnumerator Start()
         {
             receiver = GetComponent<UdpPoseReceiver>();
+#if UNITY_IOS || UNITY_ANDROID
+            // Mobile builds process their camera locally. Never attempt to
+            // launch the desktop Python/UDP tracker on the phone.
+            autoLaunchLiveTracker = false;
+            launcherState = "mobile_local_camera";
+            yield break;
+#else
             if (!autoLaunchLiveTracker)
             {
                 launcherState = "replay_or_external_tracker";
@@ -43,6 +50,7 @@ namespace RealtimeBodyTracking
             yield return null;
             yield return new WaitForSecondsRealtime(0.75f);
             RestartOwnedTracker("Unity play mode started");
+#endif
         }
 
         private void RestartOwnedTracker(string reason)
