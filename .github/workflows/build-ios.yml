@@ -57,10 +57,6 @@ jobs:
           platform :ios, '15.0'
           use_frameworks! :linkage => :static
 
-          target 'Unity-iPhone' do
-            pod 'MediaPipeTasksVision'
-          end
-
           target 'UnityFramework' do
             pod 'MediaPipeTasksVision'
           end

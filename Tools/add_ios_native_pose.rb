@@ -18,6 +18,13 @@ project = Xcodeproj::Project.open(project_path)
 target = project.targets.find { |item| item.name == 'UnityFramework' }
 abort 'UnityFramework target not found' unless target
 
+%w[Metal OpenGLES UIKit].each do |name|
+  path = "System/Library/Frameworks/#{name}.framework"
+  reference = project.files.find { |item| item.path == path }
+  reference ||= project.frameworks_group.new_file(path)
+  target.frameworks_build_phase.add_file_reference(reference, true) unless target.frameworks_build_phase.files_references.include?(reference)
+end
+
 destination_dir = File.join(File.dirname(project_path), 'Libraries', 'Plugins', 'iOS')
 FileUtils.mkdir_p(destination_dir)
 destination = File.join(destination_dir, File.basename(source_path))
