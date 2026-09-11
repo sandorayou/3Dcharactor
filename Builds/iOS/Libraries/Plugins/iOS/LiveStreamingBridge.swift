@@ -94,7 +94,7 @@ final class UnityScreenRecorder {
     static let shared = UnityScreenRecorder()
     private let recorder = RPScreenRecorder.shared()
     func start() -> Int { guard recorder.isAvailable, !recorder.isRecording else { return -1 }; recorder.startRecording { error in if let error { NSLog("[Recorder] %@", error.localizedDescription) } }; return 0 }
-    func stop() { guard recorder.isRecording else { return }; recorder.stopRecording { preview, error in if let error { NSLog("[Recorder] %@", error.localizedDescription); return }; guard let preview else { return }; preview.previewControllerDelegate = nil; preview.exportedVideoQuality = .high; preview.saveVideo(to: .photoLibrary) { saveError in if let saveError { NSLog("[Recorder] save failed %@", saveError.localizedDescription) } } } }
+    func stop() { guard recorder.isRecording else { return }; recorder.stopRecording { preview, error in if let error { NSLog("[Recorder] %@", error.localizedDescription); return }; guard let preview else { return }; preview.previewControllerDelegate = nil; preview.saveVideo(to: .photoLibrary) { saveError in if let saveError { NSLog("[Recorder] save failed %@", saveError.localizedDescription) } } } }
 }
 
 @_cdecl("NativeStart")
