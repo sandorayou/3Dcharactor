@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
           PROJECT_DIR=$(dirname "$XCODE_PROJECT")
           cat > "$PROJECT_DIR/Podfile" <<'PODFILE'
-          platform :ios, '12.0'
+          platform :ios, '15.0'
           use_frameworks! :linkage => :static
 
           target 'Unity-iPhone' do
@@ -78,6 +78,7 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/App" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
