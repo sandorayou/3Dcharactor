@@ -1,8 +1,8 @@
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
-#import <UnityInterface.h>
-@import MediaPipeTasksVision;
+#import "UnityInterface.h"
+#import <MediaPipeTasksVision/MediaPipeTasksVision.h>
 
 #include <atomic>
 static std::atomic<int> s_width{640}, s_height{480};
