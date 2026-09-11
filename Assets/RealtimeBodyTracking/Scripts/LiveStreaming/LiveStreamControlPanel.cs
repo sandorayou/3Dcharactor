@@ -19,6 +19,9 @@ namespace RealtimeBodyTracking.LiveStreaming
         private LiveStreamProvider selected = LiveStreamProvider.Twitch;
         private GameObject settingsRoot;
         private GameObject commentsRoot;
+        private GameObject logRoot;
+        private Text logText;
+        private RealtimeBodyTracking.DeviceScreenRecorder recorder;
 
         private void Awake()
         {
@@ -29,6 +32,8 @@ namespace RealtimeBodyTracking.LiveStreaming
             avatarVisibility ??= GetComponent<LocalAvatarVisibilityController>();
             if (avatarVisibility == null) avatarVisibility = gameObject.AddComponent<LocalAvatarVisibilityController>();
             commentsController ??= GetComponent<LiveCommentsController>();
+            recorder = GetComponent<RealtimeBodyTracking.DeviceScreenRecorder>();
+            EnsureEventSystem();
             if (commentsController == null) commentsController = gameObject.AddComponent<LiveCommentsController>();
             var canvasObject = new GameObject("LiveStreamControlCanvas");
             canvasObject.transform.SetParent(transform, false);
@@ -41,7 +46,9 @@ namespace RealtimeBodyTracking.LiveStreaming
             status = AddLabel(panel.transform, "配信先: Twitch / 待機中", 24);
             var toolbar = new GameObject("LiveControls"); toolbar.transform.SetParent(panel.transform, false); var toolbarLayout = toolbar.AddComponent<HorizontalLayoutGroup>(); toolbarLayout.spacing = 6; toolbarLayout.childForceExpandWidth = true; toolbar.AddComponent<LayoutElement>().preferredHeight = 48;
             AddButton(toolbar.transform, "開始", Start); AddButton(toolbar.transform, "停止", Stop); AddButton(toolbar.transform, "ミュート", () => controller?.ToggleMute()); AddButton(toolbar.transform, "カメラ", () => controller?.ToggleCamera()); AddButton(toolbar.transform, "キャラ", ToggleAvatarVisibility);
+            AddButton(toolbar.transform, "録画", ToggleRecording);
             AddButton(panel.transform, "コメントを表示／閉じる", ToggleComments);
+            AddButton(panel.transform, "実機ログを表示／閉じる", ToggleLog);
             AddButton(panel.transform, "配信設定を開く／閉じる", ToggleSettings);
             settingsRoot = new GameObject("StreamingSettings"); settingsRoot.transform.SetParent(panel.transform, false); var settingsLayout = settingsRoot.AddComponent<VerticalLayoutGroup>(); settingsLayout.spacing = 6; settingsLayout.childForceExpandHeight = false;
             AddLabel(settingsRoot.transform, "配信設定", 16);
@@ -69,6 +76,14 @@ namespace RealtimeBodyTracking.LiveStreaming
             if (visible) commentsController?.StartReceiving(selected, commentsRoot.transform);
             else commentsController?.StopReceiving();
         }
+
+        private void ToggleRecording() { if (recorder == null) return; if (recorder.IsRecording) recorder.StopRecording(); else recorder.StartRecording(); if (status) status.text = recorder.IsRecording ? "録画中（写真アプリに保存）" : "録画停止"; }
+        private void ToggleLog()
+        {
+            if (logRoot == null) { logRoot = new GameObject("RuntimeLog"); logRoot.transform.SetParent(transform, false); var canvas = logRoot.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 11000; logRoot.AddComponent<CanvasScaler>(); logRoot.AddComponent<GraphicRaycaster>(); var panel = new GameObject("Panel"); panel.transform.SetParent(logRoot.transform, false); var rect = panel.AddComponent<RectTransform>(); rect.anchorMin = new Vector2(.05f,.08f); rect.anchorMax = new Vector2(.95f,.82f); rect.offsetMin = rect.offsetMax = Vector2.zero; panel.AddComponent<Image>().color = new Color(0,0,0,.92f); logText = AddLabel(panel.transform, "", 14); logText.rectTransform.anchorMin = Vector2.zero; logText.rectTransform.anchorMax = Vector2.one; logText.rectTransform.offsetMin = new Vector2(12,12); logText.rectTransform.offsetMax = new Vector2(-12,-12); logText.horizontalOverflow = HorizontalWrapMode.Wrap; logText.verticalOverflow = VerticalWrapMode.Truncate; }
+            logRoot.SetActive(!logRoot.activeSelf); if (logRoot.activeSelf) logText.text = RealtimeBodyTracking.RuntimeLogCapture.GetText();
+        }
+        private static void EnsureEventSystem() { if (FindObjectOfType<UnityEngine.EventSystems.EventSystem>() != null) return; var o = new GameObject("EventSystem"); o.AddComponent<UnityEngine.EventSystems.EventSystem>(); o.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>(); DontDestroyOnLoad(o); }
 
         private static Text AddLabel(Transform parent, string value, int size) { var text = new GameObject("Status").AddComponent<Text>(); text.transform.SetParent(parent, false); text.text = value; text.fontSize = size; text.color = Color.white; text.alignment = TextAnchor.MiddleLeft; text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); return text; }
         private static InputField AddInput(Transform parent, string placeholder) { var obj = new GameObject(placeholder); obj.transform.SetParent(parent, false); obj.AddComponent<LayoutElement>().preferredHeight = 42; obj.AddComponent<Image>().color = Color.white; var input = obj.AddComponent<InputField>(); var text = new GameObject("Text").AddComponent<Text>(); text.transform.SetParent(obj.transform, false); text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.color = Color.black; text.fontSize = 18; text.rectTransform.anchorMin = Vector2.zero; text.rectTransform.anchorMax = Vector2.one; text.rectTransform.offsetMin = new Vector2(10, 0); text.rectTransform.offsetMax = new Vector2(-10, 0); input.textComponent = text; input.placeholder = AddLabel(obj.transform, placeholder, 18); input.placeholder.color = Color.gray; return input; }

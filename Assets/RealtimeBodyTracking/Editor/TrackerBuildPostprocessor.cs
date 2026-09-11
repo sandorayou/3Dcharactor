@@ -62,6 +62,13 @@ namespace RealtimeBodyTracking.Editor
                     if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + microphoneEntry); modified = true; }
                 }
 
+                if (!content.Contains("<key>NSPhotoLibraryAddUsageDescription</key>"))
+                {
+                    string photosEntry = "    <key>NSPhotoLibraryAddUsageDescription</key>\n    <string>デバッグ録画を写真アプリに保存するために使用します。</string>\n";
+                    int insertIndex = content.IndexOf("<dict>");
+                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + photosEntry); modified = true; }
+                }
+
                 if (!content.Contains("<key>NSLocalNetworkUsageDescription</key>"))
                 {
                     string networkEntry = "    <key>NSLocalNetworkUsageDescription</key>\n    <string>PCからの姿勢トラッキングデータを受信するためにローカルネットワークを使用します。</string>\n";

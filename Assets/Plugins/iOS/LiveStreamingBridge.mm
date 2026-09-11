@@ -33,3 +33,5 @@ extern "C" __attribute__((weak)) int NativeStart(const char *url, const char *ke
 extern "C" __attribute__((weak)) void NativeStop() { }
 extern "C" __attribute__((weak)) void NativeSetCamera(int front) { (void)front; }
 extern "C" __attribute__((weak)) void NativeSetMuted(int muted) { (void)muted; }
+extern "C" __attribute__((weak)) int NativeStartRecording() { return -1; }
+extern "C" __attribute__((weak)) void NativeStopRecording() { }
