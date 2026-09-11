@@ -15,6 +15,7 @@ namespace RealtimeBodyTracking.Editor
             if (report.summary.platform == BuildTarget.iOS)
             {
                 ConfigureIosBuild(report.summary.outputPath);
+                GenerateMediaPipePodfile(report.summary.outputPath);
                 return;
             }
 
@@ -93,6 +94,21 @@ namespace RealtimeBodyTracking.Editor
             {
                 Debug.LogWarning($"[TrackerBuildPostprocessor] Failed to update Info.plist: {ex.Message}");
             }
+        }
+
+        private static void GenerateMediaPipePodfile(string pathToBuiltProject)
+        {
+            var podfile = Path.Combine(pathToBuiltProject, "Podfile");
+            var content = "platform :ios, '12.0'\nuse_frameworks!\n\ntarget 'Unity-iPhone' do\n  pod 'MediaPipeTasksVision'\nend\n";
+            if (!File.Exists(podfile) || File.ReadAllText(podfile) != content)
+            {
+                File.WriteAllText(podfile, content);
+                Debug.Log($"[TrackerBuildPostprocessor] Generated MediaPipe Podfile: {podfile}");
+            }
+
+            var script = Path.Combine(pathToBuiltProject, "InstallMediaPipePods.command");
+            File.WriteAllText(script, "#!/bin/sh\nset -eu\ncd \"$(dirname \"$0\")\"\npod install\nopen Unity-iPhone.xcworkspace\n");
+            Debug.Log("[TrackerBuildPostprocessor] Run InstallMediaPipePods.command on macOS before opening the iOS project.");
         }
 
     }
