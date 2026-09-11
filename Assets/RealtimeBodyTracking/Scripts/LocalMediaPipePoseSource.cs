@@ -26,7 +26,9 @@ namespace RealtimeBodyTracking
 #if UNITY_IOS || UNITY_ANDROID
             yield return new WaitUntil(() => TrackerVideoBackground.DeviceCamera != null && TrackerVideoBackground.DeviceCamera.width > 16);
             cameraTexture = TrackerVideoBackground.DeviceCamera;
-            inputTexture = new Texture2D(inputWidth, inputHeight, TextureFormat.RGBA32, false);
+            // The source texture dimensions must match the pixel buffer passed
+            // to SetPixels32; resizing here would otherwise throw every frame.
+            inputTexture = new Texture2D(cameraTexture.width, cameraTexture.height, TextureFormat.RGBA32, false);
             var modelPath = Path.Combine(Application.streamingAssetsPath, "pose_landmarker_full.bytes");
             if (!File.Exists(modelPath)) { Debug.LogError("MediaPipe pose model is missing: " + modelPath, this); enabled = false; yield break; }
             var options = new PoseLandmarkerOptions(new Mediapipe.Tasks.Core.BaseOptions(Mediapipe.Tasks.Core.BaseOptions.Delegate.CPU, modelAssetPath: modelPath), runningMode: Mediapipe.Tasks.Vision.Core.RunningMode.IMAGE, numPoses: 1, minPoseDetectionConfidence: .5f, minPosePresenceConfidence: .5f, minTrackingConfidence: .5f);
