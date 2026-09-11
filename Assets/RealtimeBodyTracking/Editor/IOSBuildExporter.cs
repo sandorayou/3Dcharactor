@@ -11,6 +11,9 @@ namespace RealtimeBodyTracking.Editor
         public static void Export()
         {
             var scenes = EditorBuildSettings.scenes.Where(x => x.enabled).Select(x => x.path).ToArray();
+            if (scenes.Length == 0)
+                scenes = new[] { "Assets/Scenes/SampleScene.unity" };
+
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = scenes,

@@ -6752,7 +6752,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool U3CU3Ec__DisplayClass16_0_U3CCreateAvata
 		L_2 = U3CU3Ef__AnonymousType0_2_get_Value_m600F74B6ED26F37EF687035886A281CC96C724F9_inline(L_1, U3CU3Ef__AnonymousType0_2_get_Value_m600F74B6ED26F37EF687035886A281CC96C724F9_RuntimeMethod_var);
 		NullCheck(L_0);
 		bool L_3;
-		L_3 = InterfaceFuncInvoker1< bool, Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* >::Invoke(3, IDictionary_2_t87FB2B1E255DA1AE5DF7F83CFD99568B7D2C3CD0_il2cpp_TypeInfo_var, L_0, L_2);
+		L_3 = InterfaceFuncInvoker1< bool, Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* >::Invoke(1, IDictionary_2_t87FB2B1E255DA1AE5DF7F83CFD99568B7D2C3CD0_il2cpp_TypeInfo_var, L_0, L_2);
 		return L_3;
 	}
 }
@@ -10509,7 +10509,7 @@ IL_00f2:
 				StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_4 = V_0;
 				NullCheck(L_4);
 				String_t* L_5;
-				L_5 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_4);
+				L_5 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_4);
 				bool L_6;
 				L_6 = String_op_Inequality_m8C940F3CFC42866709D7CA931B3D77B4BE94BCB6(L_5, _stringLiteral3F8570C4670AE4FC51BED644E5E31F52A4D98EF5, NULL);
 				if (!L_6)
@@ -10547,7 +10547,7 @@ IL_0037_1:
 				StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_11 = V_0;
 				NullCheck(L_11);
 				String_t* L_12;
-				L_12 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_11);
+				L_12 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_11);
 				bool L_13;
 				L_13 = String_op_Equality_m030E1B219352228970A076136E455C4E568C02C1(L_12, _stringLiteralC2B4BD1826B71D1E13C8A0571DDBBB249AE415D3, NULL);
 				if (!L_13)
@@ -10559,7 +10559,7 @@ IL_0037_1:
 				StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_14 = V_0;
 				NullCheck(L_14);
 				String_t* L_15;
-				L_15 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_14);
+				L_15 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_14);
 				NullCheck(L_15);
 				StringU5BU5D_t7674CD946EC0CE7B3AE0BE70E6EE85F2ECD9F248* L_16;
 				L_16 = String_Split_m9530B73D02054692283BF35C3A27C8F2230946F4(L_15, ((int32_t)58), 0, NULL);
@@ -10593,7 +10593,7 @@ IL_0079_1:
 				StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_25 = V_0;
 				NullCheck(L_25);
 				String_t* L_26;
-				L_26 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_25);
+				L_26 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_25);
 				NullCheck(L_26);
 				StringU5BU5D_t7674CD946EC0CE7B3AE0BE70E6EE85F2ECD9F248* L_27;
 				L_27 = String_Split_m9530B73D02054692283BF35C3A27C8F2230946F4(L_26, ((int32_t)58), 0, NULL);
@@ -10646,7 +10646,7 @@ IL_00c5_1:
 				StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_41 = V_0;
 				NullCheck(L_41);
 				String_t* L_42;
-				L_42 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_41);
+				L_42 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_41);
 				V_7 = L_42;
 				Bvh_t860215FD572E44D06C2764E255A5129C00A39687* L_43 = V_4;
 				int32_t L_44 = V_6;
@@ -10708,7 +10708,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR BvhNode_t69ABF425B6902A35367FF490DF3BB35A4F1A
 		StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_0 = ___0_r;
 		NullCheck(L_0);
 		String_t* L_1;
-		L_1 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_0);
+		L_1 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_0);
 		NullCheck(L_1);
 		String_t* L_2;
 		L_2 = String_Trim_mCD6D8C6D4CFD15225D12DB7D3E0544CA80FB8DA5(L_1, NULL);
@@ -10894,7 +10894,7 @@ IL_00d8:
 		StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_50 = ___0_r;
 		NullCheck(L_50);
 		String_t* L_51;
-		L_51 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_50);
+		L_51 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_50);
 		NullCheck(L_51);
 		String_t* L_52;
 		L_52 = String_Trim_mCD6D8C6D4CFD15225D12DB7D3E0544CA80FB8DA5(L_51, NULL);
@@ -11327,7 +11327,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void BvhEndSite_Parse_m83EB418F4D22E9C93943E5
 		StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_0 = ___0_r;
 		NullCheck(L_0);
 		String_t* L_1;
-		L_1 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_0);
+		L_1 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_0);
 		return;
 	}
 }
@@ -11500,14 +11500,14 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void BvhNode_Parse_m9536364BEFC69950C41D1D28C
 		StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_0 = ___0_r;
 		NullCheck(L_0);
 		String_t* L_1;
-		L_1 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_0);
+		L_1 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_0);
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_2;
 		L_2 = BvhNode_ParseOffset_m68E66B37397CFC92A6AB03391BE2002A2DB3196E(L_1, NULL);
 		BvhNode_set_Offset_mEB3A2E8EB390C0A0EF478CD1113F7EFA59C03C22_inline(__this, L_2, NULL);
 		StringReader_t1A336148FF22A9584E759A9D720CC96C23E35DD8* L_3 = ___0_r;
 		NullCheck(L_3);
 		String_t* L_4;
-		L_4 = VirtualFuncInvoker0< String_t* >::Invoke(13, L_3);
+		L_4 = VirtualFuncInvoker0< String_t* >::Invoke(12, L_3);
 		BvhChannelU5BU5D_t08AFCA08A7E2D99611887A0C082DD0A8FD5E53D1* L_5;
 		L_5 = BvhNode_ParseChannel_m725D58AB7A60392E0766BF7B7E225BC8DA856E13(L_4, NULL);
 		BvhNode_set_Channels_mAA0D7E83B040F8A231D128C9F01DB146CF34330B_inline(__this, L_5, NULL);
