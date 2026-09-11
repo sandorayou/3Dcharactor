@@ -38,7 +38,11 @@ namespace RealtimeBodyTracking.LiveStreaming
             var canvasObject = new GameObject("LiveStreamControlCanvas");
             canvasObject.transform.SetParent(transform, false);
             var canvas = canvasObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 9999;
-            canvasObject.AddComponent<CanvasScaler>(); canvasObject.AddComponent<GraphicRaycaster>();
+            var scaler = canvasObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080, 1920);
+            scaler.matchWidthOrHeight = .5f;
+            canvasObject.AddComponent<GraphicRaycaster>();
             var panel = new GameObject("Panel"); panel.transform.SetParent(canvasObject.transform, false);
             var panelRect = panel.AddComponent<RectTransform>(); panelRect.anchorMin = new Vector2(0, 1); panelRect.anchorMax = new Vector2(0, 1); panelRect.pivot = new Vector2(0, 1); panelRect.anchoredPosition = new Vector2(24, -24); panelRect.sizeDelta = new Vector2(420, 520);
             panel.AddComponent<Image>().color = new Color(0.04f, 0.04f, 0.06f, 0.94f);
@@ -83,10 +87,34 @@ namespace RealtimeBodyTracking.LiveStreaming
             if (logRoot == null) { logRoot = new GameObject("RuntimeLog"); logRoot.transform.SetParent(transform, false); var canvas = logRoot.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 11000; logRoot.AddComponent<CanvasScaler>(); logRoot.AddComponent<GraphicRaycaster>(); var panel = new GameObject("Panel"); panel.transform.SetParent(logRoot.transform, false); var rect = panel.AddComponent<RectTransform>(); rect.anchorMin = new Vector2(.05f,.08f); rect.anchorMax = new Vector2(.95f,.82f); rect.offsetMin = rect.offsetMax = Vector2.zero; panel.AddComponent<Image>().color = new Color(0,0,0,.92f); logText = AddLabel(panel.transform, "", 14); logText.rectTransform.anchorMin = Vector2.zero; logText.rectTransform.anchorMax = Vector2.one; logText.rectTransform.offsetMin = new Vector2(12,12); logText.rectTransform.offsetMax = new Vector2(-12,-12); logText.horizontalOverflow = HorizontalWrapMode.Wrap; logText.verticalOverflow = VerticalWrapMode.Truncate; }
             logRoot.SetActive(!logRoot.activeSelf); if (logRoot.activeSelf) logText.text = RealtimeBodyTracking.RuntimeLogCapture.GetText();
         }
-        private static void EnsureEventSystem() { if (FindObjectOfType<UnityEngine.EventSystems.EventSystem>() != null) return; var o = new GameObject("EventSystem"); o.AddComponent<UnityEngine.EventSystems.EventSystem>(); o.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>(); DontDestroyOnLoad(o); }
+        private static void EnsureEventSystem()
+        {
+            var eventSystem = FindObjectOfType<UnityEngine.EventSystems.EventSystem>();
+            if (eventSystem == null)
+            {
+                var o = new GameObject("EventSystem");
+                eventSystem = o.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                o.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+                DontDestroyOnLoad(o);
+            }
+
+            var input = eventSystem.GetComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+            if (input == null) input = eventSystem.gameObject.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+            input.forceModuleActive = true;
+            input.inputActionsPerSecond = 30;
+            input.repeatDelay = .15f;
+        }
 
         private static Text AddLabel(Transform parent, string value, int size) { var text = new GameObject("Status").AddComponent<Text>(); text.transform.SetParent(parent, false); text.text = value; text.fontSize = size; text.color = Color.white; text.alignment = TextAnchor.MiddleLeft; text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); return text; }
         private static InputField AddInput(Transform parent, string placeholder) { var obj = new GameObject(placeholder); obj.transform.SetParent(parent, false); obj.AddComponent<LayoutElement>().preferredHeight = 42; obj.AddComponent<Image>().color = Color.white; var input = obj.AddComponent<InputField>(); var text = new GameObject("Text").AddComponent<Text>(); text.transform.SetParent(obj.transform, false); text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.color = Color.black; text.fontSize = 18; text.rectTransform.anchorMin = Vector2.zero; text.rectTransform.anchorMax = Vector2.one; text.rectTransform.offsetMin = new Vector2(10, 0); text.rectTransform.offsetMax = new Vector2(-10, 0); input.textComponent = text; input.placeholder = AddLabel(obj.transform, placeholder, 18); input.placeholder.color = Color.gray; return input; }
-        private static void AddButton(Transform parent, string label, UnityEngine.Events.UnityAction action) { var obj = new GameObject(label); obj.transform.SetParent(parent, false); obj.AddComponent<LayoutElement>().preferredHeight = 42; obj.AddComponent<Image>().color = new Color(0.18f, 0.18f, 0.22f, 1); var button = obj.AddComponent<Button>(); button.onClick.AddListener(action); var text = AddLabel(obj.transform, label, 20); text.alignment = TextAnchor.MiddleCenter; text.rectTransform.anchorMin = Vector2.zero; text.rectTransform.anchorMax = Vector2.one; text.rectTransform.offsetMin = Vector2.zero; text.rectTransform.offsetMax = Vector2.zero; }
+        private static void AddButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
+        {
+            var obj = new GameObject(label); obj.transform.SetParent(parent, false);
+            obj.AddComponent<LayoutElement>().preferredHeight = 56;
+            var image = obj.AddComponent<Image>(); image.color = new Color(0.18f, 0.18f, 0.22f, 1);
+            var button = obj.AddComponent<Button>(); button.targetGraphic = image; button.onClick.AddListener(action);
+            var colors = button.colors; colors.normalColor = image.color; colors.highlightedColor = new Color(.28f, .38f, .48f, 1); colors.pressedColor = new Color(.1f, .55f, .75f, 1); colors.selectedColor = colors.highlightedColor; button.colors = colors;
+            var text = AddLabel(obj.transform, label, 20); text.alignment = TextAnchor.MiddleCenter; text.raycastTarget = false; text.rectTransform.anchorMin = Vector2.zero; text.rectTransform.anchorMax = Vector2.one; text.rectTransform.offsetMin = Vector2.zero; text.rectTransform.offsetMax = Vector2.zero;
+        }
     }
 }

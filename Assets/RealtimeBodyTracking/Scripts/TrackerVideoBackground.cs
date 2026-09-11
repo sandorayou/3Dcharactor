@@ -12,11 +12,13 @@ namespace RealtimeBodyTracking
         [SerializeField] private string frameUrl = "http://127.0.0.1:39543/frame.jpg";
         [SerializeField, Range(5, 60)] private int refreshRate = 30;
         [SerializeField] private bool mirror;
+        [SerializeField] private bool useDeviceCameraOnMobile = true;
         [SerializeField, Min(1f)] private float backgroundDistance = 100f;
         private Camera targetCamera;
         private Transform background;
         private MeshRenderer backgroundRenderer;
         private Texture2D texture;
+        private WebCamTexture deviceCamera;
 
         private void Awake()
         {
@@ -32,8 +34,40 @@ namespace RealtimeBodyTracking
             var shader = Shader.Find("Unlit/Texture");
             backgroundRenderer.material = new Material(shader);
             backgroundRenderer.enabled = false;
+#if UNITY_ANDROID || UNITY_IOS
+            if (useDeviceCameraOnMobile) StartCoroutine(StartDeviceCamera());
+            else StartCoroutine(PollFrames());
+#else
             StartCoroutine(PollFrames());
+#endif
         }
+
+#if UNITY_ANDROID || UNITY_IOS
+        private IEnumerator StartDeviceCamera()
+        {
+#if UNITY_ANDROID
+            if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera))
+                UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Camera);
+            yield return new WaitUntil(() => UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera));
+#elif UNITY_IOS
+            yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
+            if (!Application.HasUserAuthorization(UserAuthorization.WebCam)) yield break;
+#endif
+            var devices = WebCamTexture.devices;
+            if (devices == null || devices.Length == 0) yield break;
+            var selected = devices[0].name;
+            for (var i = 0; i < devices.Length; i++)
+                if (devices[i].isFrontFacing) { selected = devices[i].name; break; }
+            deviceCamera = new WebCamTexture(selected, 1280, 720, 30);
+            deviceCamera.Play();
+            yield return new WaitUntil(() => deviceCamera.width > 16 && deviceCamera.height > 16);
+            backgroundRenderer.material.mainTexture = deviceCamera;
+            backgroundRenderer.material.mainTextureScale = mirror ? new Vector2(-1f, 1f) : Vector2.one;
+            backgroundRenderer.material.mainTextureOffset = mirror ? new Vector2(1f, 0f) : Vector2.zero;
+            FitToSource(deviceCamera.width, deviceCamera.height);
+            backgroundRenderer.enabled = true;
+        }
+#endif
 
         private IEnumerator PollFrames()
         {
@@ -90,6 +124,7 @@ namespace RealtimeBodyTracking
 
         private void OnDestroy()
         {
+            if (deviceCamera != null && deviceCamera.isPlaying) deviceCamera.Stop();
             if (texture != null) Destroy(texture);
             if (backgroundRenderer != null && backgroundRenderer.material != null)
                 Destroy(backgroundRenderer.material);
