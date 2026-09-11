@@ -31,6 +31,17 @@ struct InterfaceFuncInvoker0
 		return ((Func)invokeData.methodPtr)(obj, invokeData.method);
 	}
 };
+template <typename R, typename T1>
+struct InterfaceFuncInvoker1
+{
+	typedef R (*Func)(void*, T1, const RuntimeMethod*);
+
+	static inline R Invoke (Il2CppMethodSlot slot, RuntimeClass* declaringInterface, RuntimeObject* obj, T1 p1)
+	{
+		const VirtualInvokeData& invokeData = il2cpp_codegen_get_interface_invoke_data(slot, obj, declaringInterface);
+		return ((Func)invokeData.methodPtr)(obj, p1, invokeData.method);
+	}
+};
 
 struct Dictionary_2_t2D10B322509887B7163C3AC67AF8BD02AB1D1EE1;
 struct Dictionary_2_tD0CBC51853B760183D17B24E64814E618D61CC45;
@@ -67,11 +78,14 @@ struct GameObject_t76FEDD663AB33C991A9C9A23129337651094216F;
 struct HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427;
 struct IDisposable_t030E0496B4E0E4E4F086825007979AF51F7248C5;
 struct IEnumerator_t7B609C2FFA6EB5167D9C62A0C32A21DE2F666DAA;
+struct LocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0;
+struct LocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36;
 struct ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72;
 struct Material_t18053F08F347D0DCA5E1140EC7EC4533DD8A14E3;
 struct MemberFilter_tF644F1AE82F611B677CE1964D5A3277DDA21D553;
 struct MonoBehaviour_t532A11E69716D348D8AA7F854AFCBFCB8AD17F71;
 struct Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C;
+struct PoseLandmarker_t520AC3FE4373B68F6C9E3805C436CB9CC512C7A3;
 struct PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473;
 struct PoseRotation_tB0B4EDF2E1572B7D99692CF94FF7D5DB6B61DE0A;
 struct PoseSmoother_t976FAB959CB97AF0605DEBB79FABCB0127C6EE75;
@@ -79,6 +93,7 @@ struct Renderer_t320575F223BCB177A982E5DDB5DB19FAA89E7FBF;
 struct RuntimeAnimatorController_t6F7C753402B42EC23C163099CF935C5E0D7A7254;
 struct StreamWriter_t6E7DF7D524AA3C018A65F62EE80779873ED4D1E4;
 struct String_t;
+struct Texture2D_tE6505BC111DD8A424A9DBE8E05D7D09E11FFFCF4;
 struct Thread_t0A773B9DE873D2DCAA7D229EAB36757B500E207F;
 struct Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1;
 struct Type_t;
@@ -86,6 +101,7 @@ struct UdpClient_t03C5278D44ADD98C3A506D8EA5445309FDF1F5B8;
 struct UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10;
 struct VRMBlendShapeProxy_tB2968BACF2EE91A405D0107DB6850893CD61AA7A;
 struct Void_t4861ACF8F4594C3437BB48B6E56783494B843915;
+struct WebCamTexture_t2021D179149C925AA6D73E6F1898C8D46521C749;
 struct CameraCallback_t844E527BFE37BC0495E7F67993E43C07642DA9DD;
 struct HandDepthTracker_t7FBEC4F1141C44E617F0BB8BE5BB79166571F49C;
 struct PalmProjectionTracker_t2F5969599AAAC0D00B8ECD43C224EE4B0643E31C;
@@ -107,6 +123,7 @@ IL2CPP_EXTERN_C RuntimeClass* Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il
 IL2CPP_EXTERN_C RuntimeClass* Int64_t092CFB123BE63C28ACDAF65C68F21A526050DBA3_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* KeyValuePair_2U5BU5D_t8B42A1FF41A21F9CCFFF96EC438F29EEA08678EE_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* List_1_t0D1C46FD8DDDE974D93CA4F3474EEC05AF950918_il2cpp_TypeInfo_var;
+IL2CPP_EXTERN_C RuntimeClass* LocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Math_tEB65DE7CA8B083C412C969C92981C030865486CE_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Mathf_tE284D016E3B297B72311AAD9EB8F0E643F6A4682_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918_il2cpp_TypeInfo_var;
@@ -245,10 +262,12 @@ IL2CPP_EXTERN_C String_t* _stringLiteralFE58BA89A92B11850572A80F278CFA74A888C679
 IL2CPP_EXTERN_C const RuntimeMethod* Component_GetComponentInChildren_TisAnimator_t8A52E42AE54F76681838FE9E632683EF3952E883_mDB9FC26B94B8EE9CF1F88BFEC75DF06CC2E3A000_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* Component_GetComponentInChildren_TisVRMBlendShapeProxy_tB2968BACF2EE91A405D0107DB6850893CD61AA7A_m416E81B5DBB729ADF5A7DD07655704937511674D_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* Component_GetComponent_TisAnimeLinePostEffect_tBCB1C40A26BB895CF2C9A59BFBE48EFB372CA2DF_m59F0C9A344E21F0B360762F94A6FC8C561D0AF92_RuntimeMethod_var;
+IL2CPP_EXTERN_C const RuntimeMethod* Component_GetComponent_TisLocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_m267C28E2570FD1092A3B02D42DF30DBE7761DB71_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* Component_GetComponent_TisManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72_mA2D5C27C3C700804A16A6CB8EFA21485CFC7B427_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* Component_GetComponent_TisUdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10_m3AB0689FCFA77FCB19B6EDDF0E8313A1FDAADFD6_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* Component_GetComponentsInChildren_TisRenderer_t320575F223BCB177A982E5DDB5DB19FAA89E7FBF_m28EB00D8747BD14E8E8EC3BFDB9D79F689CB0293_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* GameObject_AddComponent_TisAnimeLinePostEffect_tBCB1C40A26BB895CF2C9A59BFBE48EFB372CA2DF_m66A68B7EBD960966AB09CF0CD8223E3BFB3F9239_RuntimeMethod_var;
+IL2CPP_EXTERN_C const RuntimeMethod* GameObject_AddComponent_TisLocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0_mEFBDEE30D725C523D7685F65E8CDFB7748D5EC74_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* GameObject_AddComponent_TisManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72_m65CDAD9C12139D71A9D6A2DCC66B0112CAD10490_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* KeyValuePair_2__ctor_m027C486C6EE13C3023458C3876EB76B75430F0C5_RuntimeMethod_var;
 IL2CPP_EXTERN_C const RuntimeMethod* List_1_Add_m2F86E252D086E288E02FA1C830B7E86C0A431E51_RuntimeMethod_var;
@@ -675,6 +694,7 @@ struct HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427  : public Mo
 {
 	Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* ___targetAnimator;
 	UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* ___udpReceiver;
+	RuntimeObject* ___localPoseSource;
 	Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* ___trackingCamera;
 	bool ___autoFrameCamera;
 	float ___cameraCalibrationSeconds;
@@ -931,6 +951,17 @@ struct HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427  : public Mo
 	bool ___leftRestHandBasisInitialized;
 	bool ___rightRestHandBasisInitialized;
 };
+struct LocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0  : public MonoBehaviour_t532A11E69716D348D8AA7F854AFCBFCB8AD17F71
+{
+	int32_t ___inputWidth;
+	int32_t ___inputHeight;
+	float ___minimumVisibility;
+	PoseLandmarker_t520AC3FE4373B68F6C9E3805C436CB9CC512C7A3* ___landmarker;
+	Texture2D_tE6505BC111DD8A424A9DBE8E05D7D09E11FFFCF4* ___inputTexture;
+	PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* ___latest;
+	WebCamTexture_t2021D179149C925AA6D73E6F1898C8D46521C749* ___cameraTexture;
+	int64_t ___frame;
+};
 struct ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72  : public MonoBehaviour_t532A11E69716D348D8AA7F854AFCBFCB8AD17F71
 {
 	float ___moveSpeed;
@@ -1071,6 +1102,10 @@ struct HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427_StaticFields
 {
 	ValueTuple_3U5BU5D_tBCEAB461153495887C90A0E2A65EB3A36569278E* ___LegChains;
 	ValueTuple_8U5BU5D_tABACAD3AFDC058FF4263B75747CBF36129041149* ___FingerChains;
+};
+struct LocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0_StaticFields
+{
+	StringU5BU5D_t7674CD946EC0CE7B3AE0BE70E6EE85F2ECD9F248* ___Names;
 };
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -1344,9 +1379,9 @@ struct RendererU5BU5D_t32FDD782F67917B2291EA4FF242719877440A02A  : public Runtim
 
 
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* Component_GetComponent_TisRuntimeObject_m7181F81CAEC2CF53F5D2BC79B7425C16E1F80D33_gshared (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* GameObject_AddComponent_TisRuntimeObject_m69B93700FACCF372F5753371C6E8FB780800B824_gshared (GameObject_t76FEDD663AB33C991A9C9A23129337651094216F* __this, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* Component_GetComponentInChildren_TisRuntimeObject_mE483A27E876DE8E4E6901D6814837F81D7C42F65_gshared (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* Component_GetComponentInChildren_TisRuntimeObject_m831BC1785A9E9CB99F8D66BDFCF6D606622B5ADB_gshared (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, bool ___0_includeInactive, const RuntimeMethod* method) ;
-IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* GameObject_AddComponent_TisRuntimeObject_m69B93700FACCF372F5753371C6E8FB780800B824_gshared (GameObject_t76FEDD663AB33C991A9C9A23129337651094216F* __this, const RuntimeMethod* method) ;
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR int32_t List_1_get_Count_m4407E4C389F22B8CEC282C15D56516658746C383_gshared_inline (List_1_tA239CB83DE5615F348BB0507E45F490F4F7C9A8D* __this, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void KeyValuePair_2__ctor_m027C486C6EE13C3023458C3876EB76B75430F0C5_gshared (KeyValuePair_2_tDB356D743A1D4D34BA48D27CE52257520898DA92* __this, BlendShapeKey_t9096DB0E781394377981BB4EC2E72EA4E9AF2136 ___0_key, float ___1_value, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void List_1__ctor_mD19FC87E6CCC1D0C477B598DDB4A09F2A75E3E12_gshared (List_1_t0D1C46FD8DDDE974D93CA4F3474EEC05AF950918* __this, int32_t ___0_capacity, const RuntimeMethod* method) ;
@@ -1364,6 +1399,15 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool Object_op_Equality_mB6120F782D83091EF56A
 inline UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* Component_GetComponent_TisUdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10_m3AB0689FCFA77FCB19B6EDDF0E8313A1FDAADFD6 (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, const RuntimeMethod* method)
 {
 	return ((  UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* (*) (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3*, const RuntimeMethod*))Component_GetComponent_TisRuntimeObject_m7181F81CAEC2CF53F5D2BC79B7425C16E1F80D33_gshared)(__this, method);
+}
+inline RuntimeObject* Component_GetComponent_TisLocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_m267C28E2570FD1092A3B02D42DF30DBE7761DB71 (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, const RuntimeMethod* method)
+{
+	return ((  RuntimeObject* (*) (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3*, const RuntimeMethod*))Component_GetComponent_TisRuntimeObject_m7181F81CAEC2CF53F5D2BC79B7425C16E1F80D33_gshared)(__this, method);
+}
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR GameObject_t76FEDD663AB33C991A9C9A23129337651094216F* Component_get_gameObject_m57AEFBB14DB39EC476F740BA000E170355DE691B (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, const RuntimeMethod* method) ;
+inline LocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0* GameObject_AddComponent_TisLocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0_mEFBDEE30D725C523D7685F65E8CDFB7748D5EC74 (GameObject_t76FEDD663AB33C991A9C9A23129337651094216F* __this, const RuntimeMethod* method)
+{
+	return ((  LocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0* (*) (GameObject_t76FEDD663AB33C991A9C9A23129337651094216F*, const RuntimeMethod*))GameObject_AddComponent_TisRuntimeObject_m69B93700FACCF372F5753371C6E8FB780800B824_gshared)(__this, method);
 }
 inline Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* Component_GetComponentInChildren_TisAnimator_t8A52E42AE54F76681838FE9E632683EF3952E883_mDB9FC26B94B8EE9CF1F88BFEC75DF06CC2E3A000 (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, const RuntimeMethod* method)
 {
@@ -1391,7 +1435,6 @@ inline ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72* Compone
 {
 	return ((  ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72* (*) (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3*, const RuntimeMethod*))Component_GetComponent_TisRuntimeObject_m7181F81CAEC2CF53F5D2BC79B7425C16E1F80D33_gshared)(__this, method);
 }
-IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR GameObject_t76FEDD663AB33C991A9C9A23129337651094216F* Component_get_gameObject_m57AEFBB14DB39EC476F740BA000E170355DE691B (Component_t39FBE53E5EFCF4409111FB22C15FF73717632EC3* __this, const RuntimeMethod* method) ;
 inline ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72* GameObject_AddComponent_TisManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72_m65CDAD9C12139D71A9D6A2DCC66B0112CAD10490 (GameObject_t76FEDD663AB33C991A9C9A23129337651094216F* __this, const RuntimeMethod* method)
 {
 	return ((  ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72* (*) (GameObject_t76FEDD663AB33C991A9C9A23129337651094216F*, const RuntimeMethod*))GameObject_AddComponent_TisRuntimeObject_m69B93700FACCF372F5753371C6E8FB780800B824_gshared)(__this, method);
@@ -1416,7 +1459,6 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_RestoreNeutralEye_m65
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* Animator_GetBoneTransform_m02042CB47C468D576C6EE436F4AA71D8C47AAF56 (Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* __this, int32_t ___0_humanBoneId, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool BoneRotationSolver_TryGetRestLocalRotation_m4BABAB7C7881752F7DF9B31F9060A082B00511B0 (BoneRotationSolver_t3267D0DF3BF4EE35D24545D5429D514DE9962141* __this, int32_t ___0_bone, Quaternion_tDA59F214EF07D7700B26E40E562F267AF7306974* ___1_rotation, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void Transform_set_localRotation_mAB4A011D134BA58AB780BECC0025CA65F16185FA (Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* __this, Quaternion_tDA59F214EF07D7700B26E40E562F267AF7306974 ___0_value, const RuntimeMethod* method) ;
-IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool UdpPoseReceiver_TryTakeLatest_m3341C3D3360AFD7116AF9D6867D604C0E30678EF (UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* __this, PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473** ___0_packet, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_ResetTrackingFiltersOnly_mC262C216A078512678F304C24739A8614B52F97A (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) ;
 inline int32_t List_1_get_Count_m0D7D9F87C214AC725C2EBA41B1930426F14DC4C2_inline (List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* __this, const RuntimeMethod* method)
 {
@@ -1710,7 +1752,9 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_Awake_m0BEE32C3BE081F
 	if (!s_Il2CppMethodInitialized)
 	{
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Component_GetComponentInChildren_TisAnimator_t8A52E42AE54F76681838FE9E632683EF3952E883_mDB9FC26B94B8EE9CF1F88BFEC75DF06CC2E3A000_RuntimeMethod_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Component_GetComponent_TisLocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_m267C28E2570FD1092A3B02D42DF30DBE7761DB71_RuntimeMethod_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Component_GetComponent_TisUdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10_m3AB0689FCFA77FCB19B6EDDF0E8313A1FDAADFD6_RuntimeMethod_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&GameObject_AddComponent_TisLocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0_mEFBDEE30D725C523D7685F65E8CDFB7748D5EC74_RuntimeMethod_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
 		s_Il2CppMethodInitialized = true;
 	}
@@ -1733,41 +1777,63 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_Awake_m0BEE32C3BE081F
 
 IL_001a:
 	{
-		Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* L_3 = __this->___targetAnimator;
-		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
-		bool L_4;
-		L_4 = Object_op_Equality_mB6120F782D83091EF56A198FCEBCF066DB4A9605(L_3, (Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C*)NULL, NULL);
-		if (!L_4)
+		RuntimeObject* L_3;
+		L_3 = Component_GetComponent_TisLocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_m267C28E2570FD1092A3B02D42DF30DBE7761DB71(__this, Component_GetComponent_TisLocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_m267C28E2570FD1092A3B02D42DF30DBE7761DB71_RuntimeMethod_var);
+		__this->___localPoseSource = L_3;
+		Il2CppCodeGenWriteBarrier((void**)(&__this->___localPoseSource), (void*)L_3);
+		RuntimeObject* L_4 = __this->___localPoseSource;
+		if (L_4)
 		{
-			goto IL_0034;
+			goto IL_003f;
 		}
 	}
 	{
-		Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* L_5;
-		L_5 = Component_GetComponentInChildren_TisAnimator_t8A52E42AE54F76681838FE9E632683EF3952E883_mDB9FC26B94B8EE9CF1F88BFEC75DF06CC2E3A000(__this, Component_GetComponentInChildren_TisAnimator_t8A52E42AE54F76681838FE9E632683EF3952E883_mDB9FC26B94B8EE9CF1F88BFEC75DF06CC2E3A000_RuntimeMethod_var);
-		__this->___targetAnimator = L_5;
-		Il2CppCodeGenWriteBarrier((void**)(&__this->___targetAnimator), (void*)L_5);
+		GameObject_t76FEDD663AB33C991A9C9A23129337651094216F* L_5;
+		L_5 = Component_get_gameObject_m57AEFBB14DB39EC476F740BA000E170355DE691B(__this, NULL);
+		NullCheck(L_5);
+		LocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0* L_6;
+		L_6 = GameObject_AddComponent_TisLocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0_mEFBDEE30D725C523D7685F65E8CDFB7748D5EC74(L_5, GameObject_AddComponent_TisLocalMediaPipePoseSource_t9C4473BE83BCAEC574F854879198BF1A3AEFB2F0_mEFBDEE30D725C523D7685F65E8CDFB7748D5EC74_RuntimeMethod_var);
+		__this->___localPoseSource = L_6;
+		Il2CppCodeGenWriteBarrier((void**)(&__this->___localPoseSource), (void*)L_6);
 	}
 
-IL_0034:
+IL_003f:
 	{
-		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_6 = __this->___trackingCamera;
+		Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* L_7 = __this->___targetAnimator;
 		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
-		bool L_7;
-		L_7 = Object_op_Equality_mB6120F782D83091EF56A198FCEBCF066DB4A9605(L_6, (Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C*)NULL, NULL);
-		if (!L_7)
+		bool L_8;
+		L_8 = Object_op_Equality_mB6120F782D83091EF56A198FCEBCF066DB4A9605(L_7, (Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C*)NULL, NULL);
+		if (!L_8)
 		{
-			goto IL_004d;
+			goto IL_0059;
 		}
 	}
 	{
-		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_8;
-		L_8 = Camera_get_main_m52C992F18E05355ABB9EEB64A4BF2215E12762DF(NULL);
-		__this->___trackingCamera = L_8;
-		Il2CppCodeGenWriteBarrier((void**)(&__this->___trackingCamera), (void*)L_8);
+		Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* L_9;
+		L_9 = Component_GetComponentInChildren_TisAnimator_t8A52E42AE54F76681838FE9E632683EF3952E883_mDB9FC26B94B8EE9CF1F88BFEC75DF06CC2E3A000(__this, Component_GetComponentInChildren_TisAnimator_t8A52E42AE54F76681838FE9E632683EF3952E883_mDB9FC26B94B8EE9CF1F88BFEC75DF06CC2E3A000_RuntimeMethod_var);
+		__this->___targetAnimator = L_9;
+		Il2CppCodeGenWriteBarrier((void**)(&__this->___targetAnimator), (void*)L_9);
 	}
 
-IL_004d:
+IL_0059:
+	{
+		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_10 = __this->___trackingCamera;
+		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
+		bool L_11;
+		L_11 = Object_op_Equality_mB6120F782D83091EF56A198FCEBCF066DB4A9605(L_10, (Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C*)NULL, NULL);
+		if (!L_11)
+		{
+			goto IL_0072;
+		}
+	}
+	{
+		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_12;
+		L_12 = Camera_get_main_m52C992F18E05355ABB9EEB64A4BF2215E12762DF(NULL);
+		__this->___trackingCamera = L_12;
+		Il2CppCodeGenWriteBarrier((void**)(&__this->___trackingCamera), (void*)L_12);
+	}
+
+IL_0072:
 	{
 		return;
 	}
@@ -2134,134 +2200,144 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_UpdateTrackingPose_mF
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Int64_t092CFB123BE63C28ACDAF65C68F21A526050DBA3_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&List_1_get_Count_m0D7D9F87C214AC725C2EBA41B1930426F14DC4C2_RuntimeMethod_var);
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&LocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918_il2cpp_TypeInfo_var);
-		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2_il2cpp_TypeInfo_var);
 		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&_stringLiteral1565F71E675DDE4F010AA61D28B6B52CA9ADCCE1);
 		s_Il2CppMethodInitialized = true;
 	}
 	PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* V_0 = NULL;
-	int32_t G_B7_0 = 0;
-	List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* G_B12_0 = NULL;
-	List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* G_B11_0 = NULL;
-	int32_t G_B13_0 = 0;
+	int32_t G_B3_0 = 0;
+	int32_t G_B9_0 = 0;
+	List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* G_B14_0 = NULL;
+	List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* G_B13_0 = NULL;
+	int32_t G_B15_0 = 0;
 	{
 		__this->___receivedNewPoseFrame = (bool)0;
 		__this->___receivedTrackedPoseFrame = (bool)0;
-		UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* L_0 = __this->___udpReceiver;
-		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
-		bool L_1;
-		L_1 = Object_op_Inequality_mD0BE578448EAA61948F25C32F8DD55AB1F778602(L_0, (Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C*)NULL, NULL);
-		if (!L_1)
+		V_0 = (PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473*)NULL;
+		RuntimeObject* L_0 = __this->___localPoseSource;
+		if (!L_0)
 		{
-			goto IL_00db;
+			goto IL_0027;
 		}
 	}
 	{
-		UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* L_2 = __this->___udpReceiver;
-		NullCheck(L_2);
-		bool L_3;
-		L_3 = UdpPoseReceiver_TryTakeLatest_m3341C3D3360AFD7116AF9D6867D604C0E30678EF(L_2, (&V_0), NULL);
-		if (!L_3)
+		RuntimeObject* L_1 = __this->___localPoseSource;
+		NullCheck(L_1);
+		bool L_2;
+		L_2 = InterfaceFuncInvoker1< bool, PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473** >::Invoke(0, LocalPosePacketSource_t2F326AAFEFA8F38CE74E89D287B4F304DBB76B36_il2cpp_TypeInfo_var, L_1, (&V_0));
+		G_B3_0 = ((int32_t)(L_2));
+		goto IL_0028;
+	}
+
+IL_0027:
+	{
+		G_B3_0 = 0;
+	}
+
+IL_0028:
+	{
+		if (!G_B3_0)
 		{
-			goto IL_00db;
+			goto IL_00d7;
 		}
 	}
 	{
 		__this->___receivedNewPoseFrame = (bool)1;
-		bool L_4 = __this->___tracking;
-		if (!L_4)
+		bool L_3 = __this->___tracking;
+		if (!L_3)
 		{
-			goto IL_005d;
+			goto IL_0059;
 		}
 	}
 	{
-		int64_t L_5 = __this->___latestFrame;
-		if ((((int64_t)L_5) < ((int64_t)((int64_t)0))))
+		int64_t L_4 = __this->___latestFrame;
+		if ((((int64_t)L_4) < ((int64_t)((int64_t)0))))
 		{
-			goto IL_005a;
+			goto IL_0056;
 		}
 	}
 	{
-		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_6 = V_0;
-		NullCheck(L_6);
-		int64_t L_7 = L_6->___frame;
-		int64_t L_8 = __this->___latestFrame;
-		G_B7_0 = ((((int64_t)L_7) < ((int64_t)L_8))? 1 : 0);
-		goto IL_005e;
+		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_5 = V_0;
+		NullCheck(L_5);
+		int64_t L_6 = L_5->___frame;
+		int64_t L_7 = __this->___latestFrame;
+		G_B9_0 = ((((int64_t)L_6) < ((int64_t)L_7))? 1 : 0);
+		goto IL_005a;
+	}
+
+IL_0056:
+	{
+		G_B9_0 = 0;
+		goto IL_005a;
+	}
+
+IL_0059:
+	{
+		G_B9_0 = 1;
 	}
 
 IL_005a:
 	{
-		G_B7_0 = 0;
-		goto IL_005e;
-	}
-
-IL_005d:
-	{
-		G_B7_0 = 1;
-	}
-
-IL_005e:
-	{
-		if (!G_B7_0)
+		if (!G_B9_0)
 		{
-			goto IL_0066;
+			goto IL_0062;
 		}
 	}
 	{
 		HumanoidPoseDriver_ResetTrackingFiltersOnly_mC262C216A078512678F304C24739A8614B52F97A(__this, NULL);
 	}
 
-IL_0066:
+IL_0062:
 	{
-		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_9 = V_0;
-		NullCheck(L_9);
-		int64_t L_10 = L_9->___frame;
-		__this->___latestFrame = L_10;
-		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_11 = V_0;
-		NullCheck(L_11);
-		bool L_12 = L_11->___tracking;
-		if (L_12)
+		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_8 = V_0;
+		NullCheck(L_8);
+		int64_t L_9 = L_8->___frame;
+		__this->___latestFrame = L_9;
+		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_10 = V_0;
+		NullCheck(L_10);
+		bool L_11 = L_10->___tracking;
+		if (L_11)
 		{
-			goto IL_0091;
+			goto IL_008d;
 		}
 	}
 	{
-		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_13 = V_0;
-		NullCheck(L_13);
-		List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* L_14 = L_13->___points;
-		List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* L_15 = L_14;
-		if (L_15)
+		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_12 = V_0;
+		NullCheck(L_12);
+		List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* L_13 = L_12->___points;
+		List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* L_14 = L_13;
+		if (L_14)
 		{
-			G_B12_0 = L_15;
-			goto IL_0087;
+			G_B14_0 = L_14;
+			goto IL_0083;
 		}
-		G_B11_0 = L_15;
+		G_B13_0 = L_14;
 	}
 	{
-		G_B13_0 = 0;
-		goto IL_008f;
-	}
-
-IL_0087:
-	{
-		NullCheck(G_B12_0);
-		int32_t L_16;
-		L_16 = List_1_get_Count_m0D7D9F87C214AC725C2EBA41B1930426F14DC4C2_inline(G_B12_0, List_1_get_Count_m0D7D9F87C214AC725C2EBA41B1930426F14DC4C2_RuntimeMethod_var);
-		G_B13_0 = ((((int32_t)L_16) > ((int32_t)0))? 1 : 0);
+		G_B15_0 = 0;
+		goto IL_008b;
 	}
 
-IL_008f:
+IL_0083:
 	{
-		if (!G_B13_0)
+		NullCheck(G_B14_0);
+		int32_t L_15;
+		L_15 = List_1_get_Count_m0D7D9F87C214AC725C2EBA41B1930426F14DC4C2_inline(G_B14_0, List_1_get_Count_m0D7D9F87C214AC725C2EBA41B1930426F14DC4C2_RuntimeMethod_var);
+		G_B15_0 = ((((int32_t)L_15) > ((int32_t)0))? 1 : 0);
+	}
+
+IL_008b:
+	{
+		if (!G_B15_0)
 		{
-			goto IL_00db;
+			goto IL_00d7;
 		}
 	}
 
-IL_0091:
+IL_008d:
 	{
 		__this->___receivedTrackedPoseFrame = (bool)1;
 		__this->___pendingHorizontalExitDirection = 0;
@@ -2270,38 +2346,38 @@ IL_0091:
 		__this->___pendingBottomExit = (bool)0;
 		__this->___bottomExitInProgress = (bool)0;
 		__this->___bottomExitCompleted = (bool)0;
-		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_17 = V_0;
-		__this->___lastTrackedPose = L_17;
-		Il2CppCodeGenWriteBarrier((void**)(&__this->___lastTrackedPose), (void*)L_17);
-		float L_18;
-		L_18 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
-		__this->___lastTrackingTime = L_18;
+		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_16 = V_0;
+		__this->___lastTrackedPose = L_16;
+		Il2CppCodeGenWriteBarrier((void**)(&__this->___lastTrackedPose), (void*)L_16);
+		float L_17;
+		L_17 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
+		__this->___lastTrackingTime = L_17;
 		__this->___tracking = (bool)1;
 	}
 
-IL_00db:
+IL_00d7:
 	{
-		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_19 = __this->___lastTrackedPose;
-		if (!L_19)
+		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_18 = __this->___lastTrackedPose;
+		if (!L_18)
 		{
-			goto IL_0148;
+			goto IL_0144;
 		}
 	}
 	{
-		float L_20;
-		L_20 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
-		float L_21 = __this->___lastTrackingTime;
-		float L_22 = __this->___trackingTimeout;
-		if ((!(((float)((float)il2cpp_codegen_subtract(L_20, L_21))) > ((float)L_22))))
+		float L_19;
+		L_19 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
+		float L_20 = __this->___lastTrackingTime;
+		float L_21 = __this->___trackingTimeout;
+		if ((!(((float)((float)il2cpp_codegen_subtract(L_19, L_20))) > ((float)L_21))))
 		{
-			goto IL_011c;
+			goto IL_0118;
 		}
 	}
 	{
-		bool L_23 = __this->___tracking;
-		if (!L_23)
+		bool L_22 = __this->___tracking;
+		if (!L_22)
 		{
-			goto IL_010c;
+			goto IL_0108;
 		}
 	}
 	{
@@ -2309,300 +2385,300 @@ IL_00db:
 		HumanoidPoseDriver_ResetTrackingFiltersOnly_mC262C216A078512678F304C24739A8614B52F97A(__this, NULL);
 	}
 
-IL_010c:
+IL_0108:
 	{
-		bool L_24 = __this->___returnToRestPose;
-		if (!L_24)
+		bool L_23 = __this->___returnToRestPose;
+		if (!L_23)
 		{
-			goto IL_0148;
+			goto IL_0144;
 		}
 	}
 	{
 		HumanoidPoseDriver_ReturnToRest_m128710BC413BE2F08CEAAF5D8154671C8807B402(__this, NULL);
-		goto IL_0148;
+		goto IL_0144;
 	}
 
-IL_011c:
+IL_0118:
 	{
-		bool L_25 = __this->___horizontalExitInProgress;
+		bool L_24 = __this->___horizontalExitInProgress;
+		if (L_24)
+		{
+			goto IL_0144;
+		}
+	}
+	{
+		bool L_25 = __this->___horizontalExitCompleted;
 		if (L_25)
 		{
-			goto IL_0148;
+			goto IL_0144;
 		}
 	}
 	{
-		bool L_26 = __this->___horizontalExitCompleted;
+		bool L_26 = __this->___bottomExitInProgress;
 		if (L_26)
 		{
-			goto IL_0148;
+			goto IL_0144;
 		}
 	}
 	{
-		bool L_27 = __this->___bottomExitInProgress;
+		bool L_27 = __this->___bottomExitCompleted;
 		if (L_27)
 		{
-			goto IL_0148;
+			goto IL_0144;
 		}
 	}
 	{
-		bool L_28 = __this->___bottomExitCompleted;
-		if (L_28)
-		{
-			goto IL_0148;
-		}
-	}
-	{
-		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_29 = __this->___lastTrackedPose;
-		HumanoidPoseDriver_ApplyPose_m6A51F6BB38FED8FAB21D7ACD43D9953868F96286(__this, L_29, NULL);
+		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_28 = __this->___lastTrackedPose;
+		HumanoidPoseDriver_ApplyPose_m6A51F6BB38FED8FAB21D7ACD43D9953868F96286(__this, L_28, NULL);
 	}
 
-IL_0148:
+IL_0144:
 	{
 		HumanoidPoseDriver_CompleteHorizontalExitIfNeeded_m714FCD691E466C6D61BDADE28845E6F29E18BB53(__this, NULL);
 		HumanoidPoseDriver_CompleteBottomExitIfNeeded_m50C2C1EC091F2E554E3C5FDA0829ABAE40426F79(__this, NULL);
-		bool L_30 = __this->___debugLogging;
-		if (!L_30)
+		bool L_29 = __this->___debugLogging;
+		if (!L_29)
 		{
-			goto IL_0350;
+			goto IL_034c;
 		}
 	}
 	{
-		float L_31;
-		L_31 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
-		float L_32 = __this->___nextDebugLog;
-		if ((!(((float)L_31) >= ((float)L_32))))
+		float L_30;
+		L_30 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
+		float L_31 = __this->___nextDebugLog;
+		if ((!(((float)L_30) >= ((float)L_31))))
 		{
-			goto IL_0350;
+			goto IL_034c;
 		}
 	}
 	{
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_33 = (ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918*)(ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918*)SZArrayNew(ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918_il2cpp_TypeInfo_var, (uint32_t)((int32_t)35));
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_34 = L_33;
-		int64_t L_35 = __this->___latestFrame;
-		int64_t L_36 = L_35;
-		RuntimeObject* L_37 = Box(Int64_t092CFB123BE63C28ACDAF65C68F21A526050DBA3_il2cpp_TypeInfo_var, &L_36);
-		NullCheck(L_34);
-		ArrayElementTypeCheck (L_34, L_37);
-		(L_34)->SetAt(static_cast<il2cpp_array_size_t>(0), (RuntimeObject*)L_37);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_38 = L_34;
-		bool L_39 = __this->___tracking;
-		bool L_40 = L_39;
-		RuntimeObject* L_41 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_40);
-		NullCheck(L_38);
-		ArrayElementTypeCheck (L_38, L_41);
-		(L_38)->SetAt(static_cast<il2cpp_array_size_t>(1), (RuntimeObject*)L_41);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_42 = L_38;
-		int32_t L_43 = __this->___validPoints;
-		int32_t L_44 = L_43;
-		RuntimeObject* L_45 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_44);
-		NullCheck(L_42);
-		ArrayElementTypeCheck (L_42, L_45);
-		(L_42)->SetAt(static_cast<il2cpp_array_size_t>(2), (RuntimeObject*)L_45);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_46 = L_42;
-		int32_t L_47 = __this->___appliedBones;
-		int32_t L_48 = L_47;
-		RuntimeObject* L_49 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_48);
-		NullCheck(L_46);
-		ArrayElementTypeCheck (L_46, L_49);
-		(L_46)->SetAt(static_cast<il2cpp_array_size_t>(3), (RuntimeObject*)L_49);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_50 = L_46;
-		bool L_51 = __this->___headTracking;
-		bool L_52 = L_51;
-		RuntimeObject* L_53 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_52);
-		NullCheck(L_50);
-		ArrayElementTypeCheck (L_50, L_53);
-		(L_50)->SetAt(static_cast<il2cpp_array_size_t>(4), (RuntimeObject*)L_53);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_54 = L_50;
-		float L_55 = __this->___headYawDegrees;
-		float L_56 = L_55;
-		RuntimeObject* L_57 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_56);
-		NullCheck(L_54);
-		ArrayElementTypeCheck (L_54, L_57);
-		(L_54)->SetAt(static_cast<il2cpp_array_size_t>(5), (RuntimeObject*)L_57);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_58 = L_54;
-		float L_59 = __this->___headPitchDegrees;
-		float L_60 = L_59;
-		RuntimeObject* L_61 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_60);
-		NullCheck(L_58);
-		ArrayElementTypeCheck (L_58, L_61);
-		(L_58)->SetAt(static_cast<il2cpp_array_size_t>(6), (RuntimeObject*)L_61);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_62 = L_58;
-		float L_63 = __this->___headRollDegrees;
-		float L_64 = L_63;
-		RuntimeObject* L_65 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_64);
-		NullCheck(L_62);
-		ArrayElementTypeCheck (L_62, L_65);
-		(L_62)->SetAt(static_cast<il2cpp_array_size_t>(7), (RuntimeObject*)L_65);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_66 = L_62;
-		bool L_67 = __this->___bodyPositionTracking;
-		bool L_68 = L_67;
-		RuntimeObject* L_69 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_68);
-		NullCheck(L_66);
-		ArrayElementTypeCheck (L_66, L_69);
-		(L_66)->SetAt(static_cast<il2cpp_array_size_t>(8), (RuntimeObject*)L_69);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_70 = L_66;
-		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_71 = __this->___bodyPositionOffset;
-		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_72 = L_71;
-		RuntimeObject* L_73 = Box(Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2_il2cpp_TypeInfo_var, &L_72);
-		NullCheck(L_70);
-		ArrayElementTypeCheck (L_70, L_73);
-		(L_70)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)9)), (RuntimeObject*)L_73);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_74 = L_70;
-		float L_75 = __this->___bodyLeanDegrees;
-		float L_76 = L_75;
-		RuntimeObject* L_77 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_76);
-		NullCheck(L_74);
-		ArrayElementTypeCheck (L_74, L_77);
-		(L_74)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)10)), (RuntimeObject*)L_77);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_78 = L_74;
-		int32_t L_79 = __this->___bodyShoulderMode;
-		int32_t L_80 = L_79;
-		RuntimeObject* L_81 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_80);
-		NullCheck(L_78);
-		ArrayElementTypeCheck (L_78, L_81);
-		(L_78)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)11)), (RuntimeObject*)L_81);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_82 = L_78;
-		bool L_83 = __this->___handContactTracking;
-		bool L_84 = L_83;
-		RuntimeObject* L_85 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_84);
-		NullCheck(L_82);
-		ArrayElementTypeCheck (L_82, L_85);
-		(L_82)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)12)), (RuntimeObject*)L_85);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_86 = L_82;
-		float L_87 = __this->___wristSeparationRatio;
-		float L_88 = L_87;
-		RuntimeObject* L_89 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_88);
-		NullCheck(L_86);
-		ArrayElementTypeCheck (L_86, L_89);
-		(L_86)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)13)), (RuntimeObject*)L_89);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_90 = L_86;
-		float L_91 = __this->___leftArmRelaxWeight;
-		float L_92 = L_91;
-		RuntimeObject* L_93 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_92);
-		NullCheck(L_90);
-		ArrayElementTypeCheck (L_90, L_93);
-		(L_90)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)14)), (RuntimeObject*)L_93);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_94 = L_90;
-		float L_95 = __this->___rightArmRelaxWeight;
-		float L_96 = L_95;
-		RuntimeObject* L_97 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_96);
-		NullCheck(L_94);
-		ArrayElementTypeCheck (L_94, L_97);
-		(L_94)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)15)), (RuntimeObject*)L_97);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_98 = L_94;
-		String_t* L_99 = __this->___leftHandEvidenceState;
-		NullCheck(L_98);
-		ArrayElementTypeCheck (L_98, L_99);
-		(L_98)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)16)), (RuntimeObject*)L_99);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_100 = L_98;
-		String_t* L_101 = __this->___rightHandEvidenceState;
-		NullCheck(L_100);
-		ArrayElementTypeCheck (L_100, L_101);
-		(L_100)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)17)), (RuntimeObject*)L_101);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_102 = L_100;
-		String_t* L_103 = __this->___leftArmFilterState;
-		NullCheck(L_102);
-		ArrayElementTypeCheck (L_102, L_103);
-		(L_102)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)18)), (RuntimeObject*)L_103);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_104 = L_102;
-		String_t* L_105 = __this->___rightArmFilterState;
-		NullCheck(L_104);
-		ArrayElementTypeCheck (L_104, L_105);
-		(L_104)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)19)), (RuntimeObject*)L_105);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_106 = L_104;
-		String_t* L_107 = __this->___leftArmRollState;
-		NullCheck(L_106);
-		ArrayElementTypeCheck (L_106, L_107);
-		(L_106)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)20)), (RuntimeObject*)L_107);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_108 = L_106;
-		String_t* L_109 = __this->___rightArmRollState;
-		NullCheck(L_108);
-		ArrayElementTypeCheck (L_108, L_109);
-		(L_108)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)21)), (RuntimeObject*)L_109);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_110 = L_108;
-		String_t* L_111 = __this->___leftHandOrientationState;
-		NullCheck(L_110);
-		ArrayElementTypeCheck (L_110, L_111);
-		(L_110)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)22)), (RuntimeObject*)L_111);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_112 = L_110;
-		String_t* L_113 = __this->___rightHandOrientationState;
-		NullCheck(L_112);
-		ArrayElementTypeCheck (L_112, L_113);
-		(L_112)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)23)), (RuntimeObject*)L_113);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_114 = L_112;
-		String_t* L_115 = __this->___leftFingerState;
-		NullCheck(L_114);
-		ArrayElementTypeCheck (L_114, L_115);
-		(L_114)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)24)), (RuntimeObject*)L_115);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_116 = L_114;
-		String_t* L_117 = __this->___rightFingerState;
-		NullCheck(L_116);
-		ArrayElementTypeCheck (L_116, L_117);
-		(L_116)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)25)), (RuntimeObject*)L_117);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_118 = L_116;
-		String_t* L_119 = __this->___leftArmDepthState;
-		NullCheck(L_118);
-		ArrayElementTypeCheck (L_118, L_119);
-		(L_118)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)26)), (RuntimeObject*)L_119);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_120 = L_118;
-		String_t* L_121 = __this->___rightArmDepthState;
-		NullCheck(L_120);
-		ArrayElementTypeCheck (L_120, L_121);
-		(L_120)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)27)), (RuntimeObject*)L_121);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_122 = L_120;
-		String_t* L_123 = __this->___leftArmScreenState;
-		NullCheck(L_122);
-		ArrayElementTypeCheck (L_122, L_123);
-		(L_122)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)28)), (RuntimeObject*)L_123);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_124 = L_122;
-		String_t* L_125 = __this->___rightArmScreenState;
-		NullCheck(L_124);
-		ArrayElementTypeCheck (L_124, L_125);
-		(L_124)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)29)), (RuntimeObject*)L_125);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_126 = L_124;
-		int32_t L_127 = __this->___armCameraClampCount;
-		int32_t L_128 = L_127;
-		RuntimeObject* L_129 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_128);
-		NullCheck(L_126);
-		ArrayElementTypeCheck (L_126, L_129);
-		(L_126)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)30)), (RuntimeObject*)L_129);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_130 = L_126;
-		String_t* L_131 = __this->___lastArmCameraClamp;
-		NullCheck(L_130);
-		ArrayElementTypeCheck (L_130, L_131);
-		(L_130)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)31)), (RuntimeObject*)L_131);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_132 = L_130;
-		int32_t L_133 = __this->___anatomyClampCount;
-		int32_t L_134 = L_133;
-		RuntimeObject* L_135 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_134);
-		NullCheck(L_132);
-		ArrayElementTypeCheck (L_132, L_135);
-		(L_132)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)32)), (RuntimeObject*)L_135);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_136 = L_132;
-		String_t* L_137 = __this->___lastAnatomyClamp;
-		NullCheck(L_136);
-		ArrayElementTypeCheck (L_136, L_137);
-		(L_136)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)33)), (RuntimeObject*)L_137);
-		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_138 = L_136;
-		UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* L_139 = __this->___udpReceiver;
-		NullCheck(L_139);
-		int32_t L_140;
-		L_140 = UdpPoseReceiver_get_DroppedPackets_m07C2DC8DD4CFC0B3D9BC825DD3381E7B6BDFF97F_inline(L_139, NULL);
-		int32_t L_141 = L_140;
-		RuntimeObject* L_142 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_141);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_32 = (ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918*)(ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918*)SZArrayNew(ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918_il2cpp_TypeInfo_var, (uint32_t)((int32_t)35));
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_33 = L_32;
+		int64_t L_34 = __this->___latestFrame;
+		int64_t L_35 = L_34;
+		RuntimeObject* L_36 = Box(Int64_t092CFB123BE63C28ACDAF65C68F21A526050DBA3_il2cpp_TypeInfo_var, &L_35);
+		NullCheck(L_33);
+		ArrayElementTypeCheck (L_33, L_36);
+		(L_33)->SetAt(static_cast<il2cpp_array_size_t>(0), (RuntimeObject*)L_36);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_37 = L_33;
+		bool L_38 = __this->___tracking;
+		bool L_39 = L_38;
+		RuntimeObject* L_40 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_39);
+		NullCheck(L_37);
+		ArrayElementTypeCheck (L_37, L_40);
+		(L_37)->SetAt(static_cast<il2cpp_array_size_t>(1), (RuntimeObject*)L_40);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_41 = L_37;
+		int32_t L_42 = __this->___validPoints;
+		int32_t L_43 = L_42;
+		RuntimeObject* L_44 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_43);
+		NullCheck(L_41);
+		ArrayElementTypeCheck (L_41, L_44);
+		(L_41)->SetAt(static_cast<il2cpp_array_size_t>(2), (RuntimeObject*)L_44);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_45 = L_41;
+		int32_t L_46 = __this->___appliedBones;
+		int32_t L_47 = L_46;
+		RuntimeObject* L_48 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_47);
+		NullCheck(L_45);
+		ArrayElementTypeCheck (L_45, L_48);
+		(L_45)->SetAt(static_cast<il2cpp_array_size_t>(3), (RuntimeObject*)L_48);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_49 = L_45;
+		bool L_50 = __this->___headTracking;
+		bool L_51 = L_50;
+		RuntimeObject* L_52 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_51);
+		NullCheck(L_49);
+		ArrayElementTypeCheck (L_49, L_52);
+		(L_49)->SetAt(static_cast<il2cpp_array_size_t>(4), (RuntimeObject*)L_52);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_53 = L_49;
+		float L_54 = __this->___headYawDegrees;
+		float L_55 = L_54;
+		RuntimeObject* L_56 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_55);
+		NullCheck(L_53);
+		ArrayElementTypeCheck (L_53, L_56);
+		(L_53)->SetAt(static_cast<il2cpp_array_size_t>(5), (RuntimeObject*)L_56);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_57 = L_53;
+		float L_58 = __this->___headPitchDegrees;
+		float L_59 = L_58;
+		RuntimeObject* L_60 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_59);
+		NullCheck(L_57);
+		ArrayElementTypeCheck (L_57, L_60);
+		(L_57)->SetAt(static_cast<il2cpp_array_size_t>(6), (RuntimeObject*)L_60);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_61 = L_57;
+		float L_62 = __this->___headRollDegrees;
+		float L_63 = L_62;
+		RuntimeObject* L_64 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_63);
+		NullCheck(L_61);
+		ArrayElementTypeCheck (L_61, L_64);
+		(L_61)->SetAt(static_cast<il2cpp_array_size_t>(7), (RuntimeObject*)L_64);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_65 = L_61;
+		bool L_66 = __this->___bodyPositionTracking;
+		bool L_67 = L_66;
+		RuntimeObject* L_68 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_67);
+		NullCheck(L_65);
+		ArrayElementTypeCheck (L_65, L_68);
+		(L_65)->SetAt(static_cast<il2cpp_array_size_t>(8), (RuntimeObject*)L_68);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_69 = L_65;
+		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_70 = __this->___bodyPositionOffset;
+		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_71 = L_70;
+		RuntimeObject* L_72 = Box(Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2_il2cpp_TypeInfo_var, &L_71);
+		NullCheck(L_69);
+		ArrayElementTypeCheck (L_69, L_72);
+		(L_69)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)9)), (RuntimeObject*)L_72);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_73 = L_69;
+		float L_74 = __this->___bodyLeanDegrees;
+		float L_75 = L_74;
+		RuntimeObject* L_76 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_75);
+		NullCheck(L_73);
+		ArrayElementTypeCheck (L_73, L_76);
+		(L_73)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)10)), (RuntimeObject*)L_76);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_77 = L_73;
+		int32_t L_78 = __this->___bodyShoulderMode;
+		int32_t L_79 = L_78;
+		RuntimeObject* L_80 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_79);
+		NullCheck(L_77);
+		ArrayElementTypeCheck (L_77, L_80);
+		(L_77)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)11)), (RuntimeObject*)L_80);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_81 = L_77;
+		bool L_82 = __this->___handContactTracking;
+		bool L_83 = L_82;
+		RuntimeObject* L_84 = Box(Boolean_t09A6377A54BE2F9E6985A8149F19234FD7DDFE22_il2cpp_TypeInfo_var, &L_83);
+		NullCheck(L_81);
+		ArrayElementTypeCheck (L_81, L_84);
+		(L_81)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)12)), (RuntimeObject*)L_84);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_85 = L_81;
+		float L_86 = __this->___wristSeparationRatio;
+		float L_87 = L_86;
+		RuntimeObject* L_88 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_87);
+		NullCheck(L_85);
+		ArrayElementTypeCheck (L_85, L_88);
+		(L_85)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)13)), (RuntimeObject*)L_88);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_89 = L_85;
+		float L_90 = __this->___leftArmRelaxWeight;
+		float L_91 = L_90;
+		RuntimeObject* L_92 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_91);
+		NullCheck(L_89);
+		ArrayElementTypeCheck (L_89, L_92);
+		(L_89)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)14)), (RuntimeObject*)L_92);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_93 = L_89;
+		float L_94 = __this->___rightArmRelaxWeight;
+		float L_95 = L_94;
+		RuntimeObject* L_96 = Box(Single_t4530F2FF86FCB0DC29F35385CA1BD21BE294761C_il2cpp_TypeInfo_var, &L_95);
+		NullCheck(L_93);
+		ArrayElementTypeCheck (L_93, L_96);
+		(L_93)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)15)), (RuntimeObject*)L_96);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_97 = L_93;
+		String_t* L_98 = __this->___leftHandEvidenceState;
+		NullCheck(L_97);
+		ArrayElementTypeCheck (L_97, L_98);
+		(L_97)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)16)), (RuntimeObject*)L_98);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_99 = L_97;
+		String_t* L_100 = __this->___rightHandEvidenceState;
+		NullCheck(L_99);
+		ArrayElementTypeCheck (L_99, L_100);
+		(L_99)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)17)), (RuntimeObject*)L_100);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_101 = L_99;
+		String_t* L_102 = __this->___leftArmFilterState;
+		NullCheck(L_101);
+		ArrayElementTypeCheck (L_101, L_102);
+		(L_101)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)18)), (RuntimeObject*)L_102);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_103 = L_101;
+		String_t* L_104 = __this->___rightArmFilterState;
+		NullCheck(L_103);
+		ArrayElementTypeCheck (L_103, L_104);
+		(L_103)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)19)), (RuntimeObject*)L_104);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_105 = L_103;
+		String_t* L_106 = __this->___leftArmRollState;
+		NullCheck(L_105);
+		ArrayElementTypeCheck (L_105, L_106);
+		(L_105)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)20)), (RuntimeObject*)L_106);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_107 = L_105;
+		String_t* L_108 = __this->___rightArmRollState;
+		NullCheck(L_107);
+		ArrayElementTypeCheck (L_107, L_108);
+		(L_107)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)21)), (RuntimeObject*)L_108);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_109 = L_107;
+		String_t* L_110 = __this->___leftHandOrientationState;
+		NullCheck(L_109);
+		ArrayElementTypeCheck (L_109, L_110);
+		(L_109)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)22)), (RuntimeObject*)L_110);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_111 = L_109;
+		String_t* L_112 = __this->___rightHandOrientationState;
+		NullCheck(L_111);
+		ArrayElementTypeCheck (L_111, L_112);
+		(L_111)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)23)), (RuntimeObject*)L_112);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_113 = L_111;
+		String_t* L_114 = __this->___leftFingerState;
+		NullCheck(L_113);
+		ArrayElementTypeCheck (L_113, L_114);
+		(L_113)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)24)), (RuntimeObject*)L_114);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_115 = L_113;
+		String_t* L_116 = __this->___rightFingerState;
+		NullCheck(L_115);
+		ArrayElementTypeCheck (L_115, L_116);
+		(L_115)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)25)), (RuntimeObject*)L_116);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_117 = L_115;
+		String_t* L_118 = __this->___leftArmDepthState;
+		NullCheck(L_117);
+		ArrayElementTypeCheck (L_117, L_118);
+		(L_117)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)26)), (RuntimeObject*)L_118);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_119 = L_117;
+		String_t* L_120 = __this->___rightArmDepthState;
+		NullCheck(L_119);
+		ArrayElementTypeCheck (L_119, L_120);
+		(L_119)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)27)), (RuntimeObject*)L_120);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_121 = L_119;
+		String_t* L_122 = __this->___leftArmScreenState;
+		NullCheck(L_121);
+		ArrayElementTypeCheck (L_121, L_122);
+		(L_121)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)28)), (RuntimeObject*)L_122);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_123 = L_121;
+		String_t* L_124 = __this->___rightArmScreenState;
+		NullCheck(L_123);
+		ArrayElementTypeCheck (L_123, L_124);
+		(L_123)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)29)), (RuntimeObject*)L_124);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_125 = L_123;
+		int32_t L_126 = __this->___armCameraClampCount;
+		int32_t L_127 = L_126;
+		RuntimeObject* L_128 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_127);
+		NullCheck(L_125);
+		ArrayElementTypeCheck (L_125, L_128);
+		(L_125)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)30)), (RuntimeObject*)L_128);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_129 = L_125;
+		String_t* L_130 = __this->___lastArmCameraClamp;
+		NullCheck(L_129);
+		ArrayElementTypeCheck (L_129, L_130);
+		(L_129)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)31)), (RuntimeObject*)L_130);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_131 = L_129;
+		int32_t L_132 = __this->___anatomyClampCount;
+		int32_t L_133 = L_132;
+		RuntimeObject* L_134 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_133);
+		NullCheck(L_131);
+		ArrayElementTypeCheck (L_131, L_134);
+		(L_131)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)32)), (RuntimeObject*)L_134);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_135 = L_131;
+		String_t* L_136 = __this->___lastAnatomyClamp;
+		NullCheck(L_135);
+		ArrayElementTypeCheck (L_135, L_136);
+		(L_135)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)33)), (RuntimeObject*)L_136);
+		ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* L_137 = L_135;
+		UdpPoseReceiver_t1B862B9785EA57C2B395BC0A88CC8B90AEC26E10* L_138 = __this->___udpReceiver;
 		NullCheck(L_138);
-		ArrayElementTypeCheck (L_138, L_142);
-		(L_138)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)34)), (RuntimeObject*)L_142);
-		String_t* L_143;
-		L_143 = String_Format_m918500C1EFB475181349A79989BB79BB36102894(_stringLiteral1565F71E675DDE4F010AA61D28B6B52CA9ADCCE1, L_138, NULL);
+		int32_t L_139;
+		L_139 = UdpPoseReceiver_get_DroppedPackets_m07C2DC8DD4CFC0B3D9BC825DD3381E7B6BDFF97F_inline(L_138, NULL);
+		int32_t L_140 = L_139;
+		RuntimeObject* L_141 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_140);
+		NullCheck(L_137);
+		ArrayElementTypeCheck (L_137, L_141);
+		(L_137)->SetAt(static_cast<il2cpp_array_size_t>(((int32_t)34)), (RuntimeObject*)L_141);
+		String_t* L_142;
+		L_142 = String_Format_m918500C1EFB475181349A79989BB79BB36102894(_stringLiteral1565F71E675DDE4F010AA61D28B6B52CA9ADCCE1, L_137, NULL);
 		il2cpp_codegen_runtime_class_init_inline(Debug_t8394C7EEAECA3689C2C9B9DE9C7166D73596276F_il2cpp_TypeInfo_var);
-		Debug_Log_m06155ED25645EBBC06B4C8F05235EF41B1489C7E(L_143, __this, NULL);
-		float L_144;
-		L_144 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
-		__this->___nextDebugLog = ((float)il2cpp_codegen_add(L_144, (1.0f)));
+		Debug_Log_m06155ED25645EBBC06B4C8F05235EF41B1489C7E(L_142, __this, NULL);
+		float L_143;
+		L_143 = Time_get_unscaledTime_mAF4040B858903E1325D1C65B8BF1AC61460B2503(NULL);
+		__this->___nextDebugLog = ((float)il2cpp_codegen_add(L_143, (1.0f)));
 	}
 
-IL_0350:
+IL_034c:
 	{
 		return;
 	}

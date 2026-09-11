@@ -6752,7 +6752,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool U3CU3Ec__DisplayClass16_0_U3CCreateAvata
 		L_2 = U3CU3Ef__AnonymousType0_2_get_Value_m600F74B6ED26F37EF687035886A281CC96C724F9_inline(L_1, U3CU3Ef__AnonymousType0_2_get_Value_m600F74B6ED26F37EF687035886A281CC96C724F9_RuntimeMethod_var);
 		NullCheck(L_0);
 		bool L_3;
-		L_3 = InterfaceFuncInvoker1< bool, Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* >::Invoke(1, IDictionary_2_t87FB2B1E255DA1AE5DF7F83CFD99568B7D2C3CD0_il2cpp_TypeInfo_var, L_0, L_2);
+		L_3 = InterfaceFuncInvoker1< bool, Transform_tB27202C6F4E36D225EE28A13E4D662BF99785DB1* >::Invoke(3, IDictionary_2_t87FB2B1E255DA1AE5DF7F83CFD99568B7D2C3CD0_il2cpp_TypeInfo_var, L_0, L_2);
 		return L_3;
 	}
 }

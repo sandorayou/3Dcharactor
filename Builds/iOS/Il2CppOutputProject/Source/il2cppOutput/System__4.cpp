@@ -4468,7 +4468,7 @@ IL_00b0:
 		RuntimeObject* L_36 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_35);
 		NullCheck(L_33);
 		RuntimeObject* L_37;
-		L_37 = VirtualFuncInvoker1< RuntimeObject*, RuntimeObject* >::Invoke(21, L_33, L_36);
+		L_37 = VirtualFuncInvoker1< RuntimeObject*, RuntimeObject* >::Invoke(22, L_33, L_36);
 		V_5 = ((*(int32_t*)((int32_t*)(int32_t*)UnBox(L_37, Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var))));
 	}
 
@@ -6672,7 +6672,7 @@ IL_0042:
 		int32_t L_21 = L_20;
 		RuntimeObject* L_22 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_21);
 		NullCheck(L_12);
-		VirtualActionInvoker2< RuntimeObject*, RuntimeObject* >::Invoke(22, L_12, L_19, L_22);
+		VirtualActionInvoker2< RuntimeObject*, RuntimeObject* >::Invoke(23, L_12, L_19, L_22);
 		int32_t L_23 = V_9;
 		V_9 = ((int32_t)il2cpp_codegen_add(L_23, 1));
 	}
@@ -7097,7 +7097,7 @@ IL_0006:
 		RuntimeObject* L_5 = Box(Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var, &L_4);
 		NullCheck(L_2);
 		RuntimeObject* L_6;
-		L_6 = VirtualFuncInvoker1< RuntimeObject*, RuntimeObject* >::Invoke(21, L_2, L_5);
+		L_6 = VirtualFuncInvoker1< RuntimeObject*, RuntimeObject* >::Invoke(22, L_2, L_5);
 		return ((*(int32_t*)((int32_t*)(int32_t*)UnBox(L_6, Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var))));
 	}
 
@@ -12660,7 +12660,7 @@ IL_005e:
 		L_12 = Environment_GetEnvironmentVariables_m3C5400B01048535A472E52B6F2B25FA1F4C5B33E(NULL);
 		NullCheck(L_12);
 		RuntimeObject* L_13;
-		L_13 = InterfaceFuncInvoker0< RuntimeObject* >::Invoke(3, IDictionary_t6D03155AF1FA9083817AA5B6AD7DEEACC26AB220_il2cpp_TypeInfo_var, L_12);
+		L_13 = InterfaceFuncInvoker0< RuntimeObject* >::Invoke(4, IDictionary_t6D03155AF1FA9083817AA5B6AD7DEEACC26AB220_il2cpp_TypeInfo_var, L_12);
 		V_0 = L_13;
 	}
 	{
@@ -24006,7 +24006,7 @@ FINALLY_00a6:
 				Hashtable_tEFC3B6496E6747787D8BB761B51F2AE3A8CFFE2D* L_8 = V_1;
 				ArrayList_t7A8E5AF0C4378015B5731ABE2BED8F2782FEEF8A* L_9 = V_2;
 				NullCheck(L_8);
-				VirtualActionInvoker2< RuntimeObject*, RuntimeObject* >::Invoke(15, L_8, _stringLiteralDB6F6FF562E2A5AB8E52A5FC41A10D6F957FB5C8, L_9);
+				VirtualActionInvoker2< RuntimeObject*, RuntimeObject* >::Invoke(16, L_8, _stringLiteralDB6F6FF562E2A5AB8E52A5FC41A10D6F957FB5C8, L_9);
 				String_t* L_10 = ___0_password;
 				if (!L_10)
 				{

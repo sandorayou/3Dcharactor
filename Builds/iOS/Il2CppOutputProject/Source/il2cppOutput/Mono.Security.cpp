@@ -8983,7 +8983,7 @@ IL_005f:
 		RuntimeObject* L_40 = ___1_attributes;
 		NullCheck(L_40);
 		RuntimeObject* L_41;
-		L_41 = InterfaceFuncInvoker0< RuntimeObject* >::Invoke(3, IDictionary_t6D03155AF1FA9083817AA5B6AD7DEEACC26AB220_il2cpp_TypeInfo_var, L_40);
+		L_41 = InterfaceFuncInvoker0< RuntimeObject* >::Invoke(4, IDictionary_t6D03155AF1FA9083817AA5B6AD7DEEACC26AB220_il2cpp_TypeInfo_var, L_40);
 		V_5 = L_41;
 		goto IL_027f;
 	}
@@ -9399,7 +9399,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR ASN1_t33549D58797C9C33AA83F13AD184EAA00C584A6
 		RuntimeObject* L_23 = ___1_attributes;
 		NullCheck(L_23);
 		RuntimeObject* L_24;
-		L_24 = InterfaceFuncInvoker0< RuntimeObject* >::Invoke(3, IDictionary_t6D03155AF1FA9083817AA5B6AD7DEEACC26AB220_il2cpp_TypeInfo_var, L_23);
+		L_24 = InterfaceFuncInvoker0< RuntimeObject* >::Invoke(4, IDictionary_t6D03155AF1FA9083817AA5B6AD7DEEACC26AB220_il2cpp_TypeInfo_var, L_23);
 		V_5 = L_24;
 		goto IL_0206;
 	}

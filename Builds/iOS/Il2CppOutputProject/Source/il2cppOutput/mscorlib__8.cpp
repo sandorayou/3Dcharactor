@@ -2413,6 +2413,10 @@ struct InternalTaskOptions_tCE714823C2244D02E68D3F0EB682AD5C95EBBEAB
 {
 	int32_t ___value__;
 };
+struct LazyThreadSafetyMode_tDE3AEB8DBBF3C991FDD672F72ACA60FA324755D1 
+{
+	int32_t ___value__;
+};
 struct MidpointRounding_tD36CC4DADEF14C2D917E671961CEF65DB159DC30 
 {
 	int32_t ___value__;
@@ -11008,6 +11012,14 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void AutoResetEvent__ctor_mB7C8CD30C5BE11A2C8
 		return;
 	}
 }
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

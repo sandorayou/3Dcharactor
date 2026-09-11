@@ -1,5 +1,7 @@
 import Foundation
 import AVFoundation
+import ReplayKit
+import Photos
 
 #if canImport(RTMPHaishinKit)
 import RTMPHaishinKit
@@ -88,6 +90,13 @@ final class UnityLivePublisher {
     }
 }
 
+final class UnityScreenRecorder {
+    static let shared = UnityScreenRecorder()
+    private let recorder = RPScreenRecorder.shared()
+    func start() -> Int { guard recorder.isAvailable, !recorder.isRecording else { return -1 }; recorder.startRecording { error in if let error { NSLog("[Recorder] %@", error.localizedDescription) } }; return 0 }
+    func stop() { guard recorder.isRecording else { return }; recorder.stopRecording { preview, error in if let error { NSLog("[Recorder] %@", error.localizedDescription); return }; guard let preview else { return }; preview.previewControllerDelegate = nil; preview.exportedVideoQuality = .high; preview.saveVideo(to: .photoLibrary) { saveError in if let saveError { NSLog("[Recorder] save failed %@", saveError.localizedDescription) } } } }
+}
+
 @_cdecl("NativeStart")
 public func nativeStart(_ url: UnsafePointer<CChar>, _ key: UnsafePointer<CChar>, _ width: Int32,
                         _ height: Int32, _ fps: Int32, _ videoKbps: Int32, _ audioKbps: Int32) -> Int32 {
@@ -103,3 +112,5 @@ public func nativeStart(_ url: UnsafePointer<CChar>, _ key: UnsafePointer<CChar>
 @_cdecl("NativeSetMuted") public func nativeSetMuted(_ muted: Int32) {
     UnityLivePublisher.shared.setMuted(muted != 0)
 }
+@_cdecl("NativeStartRecording") public func nativeStartRecording() -> Int32 { return Int32(UnityScreenRecorder.shared.start()) }
+@_cdecl("NativeStopRecording") public func nativeStopRecording() { UnityScreenRecorder.shared.stop() }
