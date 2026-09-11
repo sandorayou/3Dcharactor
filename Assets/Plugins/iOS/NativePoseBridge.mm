@@ -136,6 +136,7 @@ static BOOL s_paused;
 static BOOL s_stopping;
 
 static void UpdateVideoOrientation() {
+    s_previewLayer.frame = UnityGetGLViewController().view.bounds;
     AVCaptureVideoOrientation orientation = AVCaptureVideoOrientationPortrait;
     UIInterfaceOrientation ui = UIApplication.sharedApplication.statusBarOrientation;
     if (ui == UIInterfaceOrientationLandscapeLeft) orientation = AVCaptureVideoOrientationLandscapeLeft;
@@ -222,7 +223,6 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
         unityView.opaque = NO;
         unityView.backgroundColor = UIColor.clearColor;
         s_previewLayer.frame = unityView.bounds;
-        s_previewLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
         [unityView.layer insertSublayer:s_previewLayer atIndex:0];
         UpdateVideoOrientation();
     });
