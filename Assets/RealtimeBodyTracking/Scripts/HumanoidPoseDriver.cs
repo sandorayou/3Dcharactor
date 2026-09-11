@@ -5,13 +5,11 @@ using VRM;
 
 namespace RealtimeBodyTracking
 {
-    [RequireComponent(typeof(UdpPoseReceiver))]
     public sealed class HumanoidPoseDriver : MonoBehaviour
     {
         private const bool InputCoordinatesNeedMirror = false;
         [Header("References")]
         [SerializeField] private Animator targetAnimator;
-        [SerializeField] private UdpPoseReceiver udpReceiver;
         private LocalPosePacketSource localPoseSource;
         [SerializeField] private Camera trackingCamera;
         [Header("Camera Framing")]
@@ -312,7 +310,6 @@ namespace RealtimeBodyTracking
 
         private void Awake()
         {
-            if (udpReceiver == null) udpReceiver = GetComponent<UdpPoseReceiver>();
             localPoseSource = GetComponent<LocalPosePacketSource>();
 #if UNITY_IOS
             if (localPoseSource == null) localPoseSource = gameObject.AddComponent<IOSNativePoseSource>();
@@ -390,7 +387,7 @@ namespace RealtimeBodyTracking
 #if UNITY_IOS || UNITY_ANDROID
             var hasPacket = localPoseSource != null && localPoseSource.TryTakeLatest(out packet);
 #else
-            var hasPacket = udpReceiver != null && udpReceiver.TryTakeLatest(out packet);
+            var hasPacket = localPoseSource != null && localPoseSource.TryTakeLatest(out packet);
 #endif
             if (hasPacket)
             {
@@ -435,7 +432,7 @@ namespace RealtimeBodyTracking
 
             if (debugLogging && Time.unscaledTime >= nextDebugLog)
             {
-                Debug.Log($"Pose UDP frame={latestFrame}, tracking={tracking}, points={validPoints}, appliedBones={appliedBones}, headTracking={headTracking}, headYaw={headYawDegrees:F1}, headPitch={headPitchDegrees:F1}, headRoll={headRollDegrees:F1}, bodyPosition={bodyPositionTracking}, offset={bodyPositionOffset}, bodyLean={bodyLeanDegrees:F1}, shoulderMode={bodyShoulderMode}, handContact={handContactTracking}, wristRatio={wristSeparationRatio:F2}, armRelax=({leftArmRelaxWeight:F2},{rightArmRelaxWeight:F2}), handEvidenceL=[{leftHandEvidenceState}], handEvidenceR=[{rightHandEvidenceState}], armFilterL=[{leftArmFilterState}], armFilterR=[{rightArmFilterState}], armRollL=[{leftArmRollState}], armRollR=[{rightArmRollState}], handPoseL=[{leftHandOrientationState}], handPoseR=[{rightHandOrientationState}], fingersL=[{leftFingerState}], fingersR=[{rightFingerState}], armDepthL=[{leftArmDepthState}], armDepthR=[{rightArmDepthState}], armScreenL=[{leftArmScreenState}], armScreenR=[{rightArmScreenState}], armCameraClamps={armCameraClampCount}, lastArmCameraClamp={lastArmCameraClamp}, anatomyClamps={anatomyClampCount}, lastClamp={lastAnatomyClamp}, dropped={udpReceiver.DroppedPackets}", this);
+                Debug.Log($"Pose frame={latestFrame}, tracking={tracking}, points={validPoints}, appliedBones={appliedBones}, headTracking={headTracking}, headYaw={headYawDegrees:F1}, headPitch={headPitchDegrees:F1}, headRoll={headRollDegrees:F1}, bodyPosition={bodyPositionTracking}, offset={bodyPositionOffset}, bodyLean={bodyLeanDegrees:F1}, shoulderMode={bodyShoulderMode}, handContact={handContactTracking}", this);
                 nextDebugLog = Time.unscaledTime + 1f;
             }
         }
