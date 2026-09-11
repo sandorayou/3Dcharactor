@@ -74,7 +74,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
         CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
         [pixelate setValue:source forKey:kCIInputImageKey];
         [pixelate setValue:@(s_mosaicScale) forKey:kCIInputScaleKey];
-        [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent) y:CGRectGetMidY(source.extent)] forKey:kCIInputCenterKey];
+        [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent) Y:CGRectGetMidY(source.extent)] forKey:kCIInputCenterKey];
         CIImage *processed = [pixelate.outputImage imageByCroppingToRect:source.extent];
         CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
         if (frame != nil) dispatch_async(dispatch_get_main_queue(), ^{
