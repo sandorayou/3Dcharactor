@@ -24,6 +24,7 @@ namespace RealtimeBodyTracking
         public void OnNativeCameraPermissionGranted(string ignored)
         {
 #if UNITY_IOS && !UNITY_EDITOR
+            if (!isActiveAndEnabled) return;
             var result = NativePoseCaptureStart(gameObject.name);
             if (result != 0) Debug.LogError($"Native iOS camera start failed after permission: {result}", this);
 #endif
@@ -44,8 +45,16 @@ namespace RealtimeBodyTracking
         private void OnEnable()
         {
 #if UNITY_IOS && !UNITY_EDITOR
+            var camera = Camera.main;
+            if (camera != null)
+            {
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                var color = camera.backgroundColor;
+                color.a = 0f;
+                camera.backgroundColor = color;
+            }
             var result = NativePoseCaptureStart(gameObject.name);
-            if (result != 0) Debug.LogError($"Native iOS camera start failed: {result}", this);
+            if (result != 0 && result != -6) Debug.LogError($"Native iOS camera start failed: {result}", this);
 #endif
         }
 

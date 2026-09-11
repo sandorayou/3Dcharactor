@@ -59,13 +59,25 @@ static NativePoseCaptureDelegate *s_delegate;
 static NativePoseResultDelegate *s_resultDelegate;
 static AVCaptureVideoPreviewLayer *s_previewLayer;
 static BOOL s_paused;
+static BOOL s_stopping;
+
+static void UpdateVideoOrientation() {
+    AVCaptureVideoOrientation orientation = AVCaptureVideoOrientationPortrait;
+    UIInterfaceOrientation ui = UIApplication.sharedApplication.statusBarOrientation;
+    if (ui == UIInterfaceOrientationLandscapeLeft) orientation = AVCaptureVideoOrientationLandscapeLeft;
+    else if (ui == UIInterfaceOrientationLandscapeRight) orientation = AVCaptureVideoOrientationLandscapeRight;
+    AVCaptureConnection *video = [s_output connectionWithMediaType:AVMediaTypeVideo];
+    if (video.isVideoOrientationSupported) video.videoOrientation = orientation;
+    AVCaptureConnection *preview = s_previewLayer.connection;
+    if (preview.isVideoOrientationSupported) preview.videoOrientation = orientation;
+}
 
 static void NotifyCameraState(NSString *message) {
     if (s_unityObject != nil) UnitySendMessage(s_unityObject.UTF8String, "OnNativeCameraState", message.UTF8String);
 }
 
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
-    if (s_session != nil) return 1;
+    if (s_session != nil || s_stopping) return 1;
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
     if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] == AVAuthorizationStatusNotDetermined) {
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
@@ -121,9 +133,12 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     s_previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
     dispatch_async(dispatch_get_main_queue(), ^{
         UIView *unityView = UnityGetGLViewController().view;
+        unityView.opaque = NO;
+        unityView.backgroundColor = UIColor.clearColor;
         s_previewLayer.frame = unityView.bounds;
         s_previewLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
         [unityView.layer insertSublayer:s_previewLayer atIndex:0];
+        UpdateVideoOrientation();
     });
     [s_session startRunning];
     NotifyCameraState(@"camera_started");
@@ -138,6 +153,7 @@ extern "C" void NativePoseCaptureSetPaused(int paused) {
 }
 
 extern "C" void NativePoseCaptureStop() {
+    s_stopping = YES;
     [s_session stopRunning];
     [s_output setSampleBufferDelegate:nil queue:NULL];
     [s_previewLayer removeFromSuperlayer];
@@ -149,4 +165,5 @@ extern "C" void NativePoseCaptureStop() {
     s_unityObject = nil;
     s_queue = nil;
     s_session = nil;
+    s_stopping = NO;
 }
