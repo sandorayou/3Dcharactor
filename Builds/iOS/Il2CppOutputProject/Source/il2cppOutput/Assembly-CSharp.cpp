@@ -1738,13 +1738,14 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_Awake_m0BEE32C3BE081F
 
 IL_0025:
 	{
+		__this->___avatarMirror = (bool)0;
 		Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* L_4 = __this->___targetAnimator;
 		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
 		bool L_5;
 		L_5 = Object_op_Equality_mB6120F782D83091EF56A198FCEBCF066DB4A9605(L_4, (Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C*)NULL, NULL);
 		if (!L_5)
 		{
-			goto IL_003f;
+			goto IL_0046;
 		}
 	}
 	{
@@ -1754,7 +1755,7 @@ IL_0025:
 		Il2CppCodeGenWriteBarrier((void**)(&__this->___targetAnimator), (void*)L_6);
 	}
 
-IL_003f:
+IL_0046:
 	{
 		Camera_tA92CC927D7439999BC82DBEDC0AA45B470F9E184* L_7 = __this->___trackingCamera;
 		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
@@ -1762,7 +1763,7 @@ IL_003f:
 		L_8 = Object_op_Equality_mB6120F782D83091EF56A198FCEBCF066DB4A9605(L_7, (Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C*)NULL, NULL);
 		if (!L_8)
 		{
-			goto IL_0058;
+			goto IL_005f;
 		}
 	}
 	{
@@ -1772,7 +1773,7 @@ IL_003f:
 		Il2CppCodeGenWriteBarrier((void**)(&__this->___trackingCamera), (void*)L_9);
 	}
 
-IL_0058:
+IL_005f:
 	{
 		return;
 	}

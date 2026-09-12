@@ -22,6 +22,13 @@ static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
 static NSArray<NSValue *> *s_posePrivacyPoints;
 static NSArray<NSValue *> *s_handPrivacyPoints;
+static NSMutableDictionary<NSNumber *, CIImage *> *s_pendingCameraFrames;
+static NSObject *FrameGate() {
+    static NSObject *gate;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ gate = [NSObject new]; });
+    return gate;
+}
 static CGPoint s_leftPoseWrist;
 static CGPoint s_rightPoseWrist;
 static BOOL s_hasLeftPoseWrist;
@@ -96,6 +103,77 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
     [expand setValue:@18 forKey:kCIInputRadiusKey];
     return [expand.outputImage imageByCroppingToRect:extent];
 }
+
+static CIImage *WindowsStylePersonMask(MPPMask *mask, CGRect extent) {
+    if (mask == nil || mask.width <= 0 || mask.height <= 0) return nil;
+    const NSInteger width = mask.width, height = mask.height;
+    NSMutableData *thresholded = [NSMutableData dataWithLength:width * height];
+    uint8_t *bytes = (uint8_t *)thresholded.mutableBytes;
+    const float *confidence = mask.float32Data;
+    for (NSInteger i = 0; i < width * height; ++i)
+        bytes[i] = confidence[i] > .18f ? 255 : 0;
+    CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
+    CGContextRef bitmap = CGBitmapContextCreate(bytes, width, height, 8, width, gray, kCGImageAlphaNone);
+    CGColorSpaceRelease(gray);
+    CGImageRef image = CGBitmapContextCreateImage(bitmap);
+    CGContextRelease(bitmap);
+    CIImage *result = [CIImage imageWithCGImage:image];
+    CGImageRelease(image);
+    result = [result imageByApplyingTransform:CGAffineTransformMakeScale(
+        extent.size.width / width, extent.size.height / height)];
+    CIFilter *dilate = [CIFilter filterWithName:@"CIMorphologyMaximum"];
+    [dilate setValue:result forKey:kCIInputImageKey];
+    [dilate setValue:@(60.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
+    CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
+    [blur setValue:dilate.outputImage forKey:kCIInputImageKey];
+    [blur setValue:@(20.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
+    CIFilter *amplify = [CIFilter filterWithName:@"CIColorMatrix"];
+    [amplify setValue:blur.outputImage forKey:kCIInputImageKey];
+    [amplify setValue:[CIVector vectorWithX:2 Y:0 Z:0 W:0] forKey:@"inputRVector"];
+    [amplify setValue:[CIVector vectorWithX:0 Y:2 Z:0 W:0] forKey:@"inputGVector"];
+    [amplify setValue:[CIVector vectorWithX:0 Y:0 Z:2 W:0] forKey:@"inputBVector"];
+    return [amplify.outputImage imageByCroppingToRect:extent];
+}
+
+static CIImage *WindowsStyleMosaic(CIImage *source) {
+    CGRect extent = source.extent;
+    CIFilter *downsample = [CIFilter filterWithName:@"CILanczosScaleTransform"];
+    CGFloat scale = 8.0 / extent.size.height;
+    [downsample setValue:source forKey:kCIInputImageKey];
+    [downsample setValue:@(scale) forKey:kCIInputScaleKey];
+    [downsample setValue:@((10.0 / extent.size.width) / scale) forKey:kCIInputAspectRatioKey];
+    CGImageRef tinyImage = [s_ciContext createCGImage:downsample.outputImage fromRect:CGRectMake(0, 0, 10, 8)];
+    if (tinyImage == nil) return source;
+    CIImage *tiny = [[CIImage imageWithCGImage:tinyImage] imageBySamplingNearest];
+    CGImageRelease(tinyImage);
+    return [[tiny imageByApplyingTransform:CGAffineTransformMakeScale(
+        extent.size.width / 10.0, extent.size.height / 8.0)] imageByCroppingToRect:extent];
+}
+
+static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInteger timestamp) {
+    CIImage *source = nil;
+    @synchronized(FrameGate()) {
+        source = s_pendingCameraFrames[@(timestamp)];
+        for (NSNumber *key in [s_pendingCameraFrames.allKeys copy])
+            if (key.longLongValue <= timestamp) [s_pendingCameraFrames removeObjectForKey:key];
+    }
+    if (source == nil || s_backgroundLayer == nil) return;
+    if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
+    CIImage *processed = source;
+    CIImage *mask = WindowsStylePersonMask(result.segmentationMasks.firstObject, source.extent);
+    if (mask != nil) {
+        CIFilter *blend = [CIFilter filterWithName:@"CIBlendWithMask"];
+        [blend setValue:WindowsStyleMosaic(source) forKey:kCIInputImageKey];
+        [blend setValue:source forKey:kCIInputBackgroundImageKey];
+        [blend setValue:mask forKey:kCIInputMaskImageKey];
+        processed = [blend.outputImage imageByCroppingToRect:source.extent];
+    }
+    CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
+    if (frame != nil) dispatch_async(dispatch_get_main_queue(), ^{
+        s_backgroundLayer.contents = (__bridge id)frame;
+        CGImageRelease(frame);
+    });
+}
 // Each detector completes independently. Publish only matching capture timestamps.
 static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timestamp) {
     static NSMutableDictionary *pending;
@@ -146,35 +224,20 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     if (pixelBuffer == nil) return;
 
-    CFTimeInterval now = CACurrentMediaTime();
-    if (s_backgroundLayer != nil && now - s_lastBackgroundFrame >= (1.0 / 15.0)) {
-        s_lastBackgroundFrame = now;
-        if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
-        CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
-        CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
-        [pixelate setValue:source forKey:kCIInputImageKey];
-        CGFloat coarseScale = MAX(s_mosaicScale, MIN(source.extent.size.width / 10.0, source.extent.size.height / 8.0));
-        [pixelate setValue:@(coarseScale) forKey:kCIInputScaleKey];
-        [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent) Y:CGRectGetMidY(source.extent)] forKey:kCIInputCenterKey];
-        CIImage *obscured = [pixelate.outputImage imageByCroppingToRect:source.extent];
-        CIFilter *blend = [CIFilter filterWithName:@"CIBlendWithMask"];
-        [blend setValue:obscured forKey:kCIInputImageKey];
-        [blend setValue:source forKey:kCIInputBackgroundImageKey];
-        [blend setValue:PrivacyMask(pixelBuffer, source.extent) forKey:kCIInputMaskImageKey];
-        CIImage *processed = [blend.outputImage imageByCroppingToRect:source.extent];
-        CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
-        if (frame != nil) dispatch_async(dispatch_get_main_queue(), ^{
-            s_backgroundLayer.contents = (__bridge id)frame;
-            CGImageRelease(frame);
-        });
-    }
-
     if (s_landmarker == nil || s_unityObject == nil) return;
     s_width = (int)CVPixelBufferGetWidth(pixelBuffer);
     s_height = (int)CVPixelBufferGetHeight(pixelBuffer);
     MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:pixelBuffer error:nil];
     if (image == nil) return;
     NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
+    @synchronized(FrameGate()) {
+        if (s_pendingCameraFrames == nil) s_pendingCameraFrames = [NSMutableDictionary dictionary];
+        s_pendingCameraFrames[@(timestamp)] = [CIImage imageWithCVPixelBuffer:pixelBuffer];
+        while (s_pendingCameraFrames.count > 8) {
+            NSNumber *oldest = [[s_pendingCameraFrames.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
+            [s_pendingCameraFrames removeObjectForKey:oldest];
+        }
+    }
     [s_landmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_handLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_faceLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
@@ -190,6 +253,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 @implementation NativePoseResultDelegate
 - (void)poseLandmarker:(MPPPoseLandmarker *)landmarker didFinishDetectionWithResult:(MPPPoseLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
     if (result == nil || s_unityObject == nil) return;
+    DisplaySynchronizedBackground(result, timestamp);
     NSArray *points = result.landmarks.firstObject;
     NSArray<MPPLandmark *> *world = result.worldLandmarks.firstObject;
     NSArray *names = @[@"nose", @"left_eye_inner", @"left_eye", @"left_eye_outer", @"right_eye_inner", @"right_eye", @"right_eye_outer", @"left_ear", @"right_ear", @"mouth_left", @"mouth_right", @"left_shoulder", @"right_shoulder", @"left_elbow", @"right_elbow", @"left_wrist", @"right_wrist", @"left_pinky", @"right_pinky", @"left_index", @"right_index", @"left_thumb", @"right_thumb", @"left_hip", @"right_hip", @"left_knee", @"right_knee", @"left_ankle", @"right_ankle", @"left_heel", @"right_heel", @"left_foot_index", @"right_foot_index"];
@@ -355,6 +419,7 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     options.baseOptions.modelAssetPath = modelPath;
     options.runningMode = MPPRunningModeLiveStream;
     options.numPoses = 1;
+    options.shouldOutputSegmentationMasks = YES;
     s_resultDelegate = [NativePoseResultDelegate new];
     options.poseLandmarkerLiveStreamDelegate = s_resultDelegate;
     s_landmarker = [[MPPPoseLandmarker alloc] initWithOptions:options error:nil];
@@ -447,6 +512,7 @@ extern "C" void NativePoseCaptureStop() {
     [s_backgroundLayer removeFromSuperlayer];
     s_backgroundLayer = nil;
     s_ciContext = nil;
+    @synchronized(FrameGate()) { [s_pendingCameraFrames removeAllObjects]; s_pendingCameraFrames = nil; }
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;

@@ -313,6 +313,9 @@ namespace RealtimeBodyTracking
             localPoseSource = GetComponent<LocalPosePacketSource>();
 #if UNITY_IOS
             if (localPoseSource == null) localPoseSource = gameObject.AddComponent<IOSNativePoseSource>();
+            // MediaPipe receives the same already-mirrored front-camera frames that
+            // are displayed behind Unity, so anatomical left/right must not be swapped.
+            avatarMirror = false;
 #endif
             if (targetAnimator == null) targetAnimator = GetComponentInChildren<Animator>();
             if (trackingCamera == null) trackingCamera = Camera.main;
