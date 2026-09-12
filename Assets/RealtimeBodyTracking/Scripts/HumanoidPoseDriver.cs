@@ -516,9 +516,11 @@ namespace RealtimeBodyTracking
             if (enableArms)
             {
                 // Keep clavicles at their local rest pose so they inherit the chest
-                // roll. Resetting their world rotation here cancelled shoulder tilt.
+                // roll, then add the small anatomical lift caused by a raised arm.
                 ReturnBoneToParentRest(HumanBodyBones.LeftShoulder);
                 ReturnBoneToParentRest(HumanBodyBones.RightShoulder);
+                ApplyTrackedShoulderLift(pose, true);
+                ApplyTrackedShoulderLift(pose, false);
                 var faceObserved = PoseInputMapper.TryReadHeadFacing(pose, InputCoordinatesNeedMirror, headMinConfidence, out _);
                 if (faceObserved) lastReliableFaceTime = Time.unscaledTime;
                 // A hand aimed at the camera commonly occludes an eye or ear. Face
@@ -1143,6 +1145,26 @@ namespace RealtimeBodyTracking
                 ReturnBoneToRest(handBone);
             }
             UpdateArmScreenDiagnostics(left, pose, handBone, hasStableWrist);
+        }
+
+        private void ApplyTrackedShoulderLift(PosePacket pose, bool avatarLeft)
+        {
+            var shoulderBone = avatarLeft ? HumanBodyBones.LeftShoulder : HumanBodyBones.RightShoulder;
+            var shoulder = targetAnimator.GetBoneTransform(shoulderBone);
+            var upperArm = targetAnimator.GetBoneTransform(
+                avatarLeft ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
+            if (shoulder == null || upperArm == null) return;
+            var side = SourceSide(avatarLeft);
+            if (!pose.TryGetImage(side + "_shoulder", .35f, out var sourceShoulder) ||
+                !pose.TryGetImage(side + "_elbow", .35f, out var sourceElbow)) return;
+            var rise = Mathf.Clamp01((sourceShoulder.y - sourceElbow.y - .03f) / .30f);
+            if (rise <= .001f) return;
+            var restDirection = upperArm.position - shoulder.position;
+            if (restDirection.sqrMagnitude < .000001f) return;
+            var liftedDirection = Quaternion.AngleAxis(
+                (avatarLeft ? -1f : 1f) * Mathf.Lerp(0f, 18f, rise),
+                trackingCamera != null ? trackingCamera.transform.forward : Vector3.forward) * restDirection;
+            ApplyCurrentBoneDirection(shoulderBone, shoulder, upperArm, liftedDirection.normalized);
         }
 
         private void ApplyTwoBoneArm(HumanBodyBones upperBone, HumanBodyBones lowerBone, HumanBodyBones handBone,

@@ -76,6 +76,7 @@ extern void HumanoidPoseDriver_ApplyRestBoneRoll_m11E88BB98ABD7ADBFE503A121E0001
 extern void HumanoidPoseDriver_ApplyRawTrackerArm_m139CCD4B1A6A5AB59882DDA32F5A91CEFA543589 (void);
 extern void HumanoidPoseDriver_SolveTrackerArm_m78E97408171FFFC7BDF645E4AE45D548DC396ECF (void);
 extern void HumanoidPoseDriver_ApplyCalibratedIkArm_m66DEABC98545D4C632745BCF2F7D16DFFF0B66C7 (void);
+extern void HumanoidPoseDriver_ApplyTrackedShoulderLift_m5853A6FFEF139C29D5DCE1451E4B0BE36EA8387F (void);
 extern void HumanoidPoseDriver_ApplyTwoBoneArm_mE41703B5AF84945AD6900481B9A0C4864C6C7722 (void);
 extern void HumanoidPoseDriver_LogUpperArmDepthFailure_mA2BABE24CCD1CACBFB0C76747A2608329A4040EA (void);
 extern void HumanoidPoseDriver_LogForearmDepthFailure_mC7057051325233AFA9DF1D881AA757AED7CEB3F8 (void);
@@ -490,7 +491,7 @@ extern void U3CExchangeAndCreateU3Ed__9_U3CU3Em__Finally1_m123006062DB13A88B6873
 extern void U3CExchangeAndCreateU3Ed__9_System_Collections_Generic_IEnumeratorU3CSystem_ObjectU3E_get_Current_m6D59C410605007E75F84A881915251A5BAC548E9 (void);
 extern void U3CExchangeAndCreateU3Ed__9_System_Collections_IEnumerator_Reset_m9DE696731D2BB2D0E431D211B948238520671408 (void);
 extern void U3CExchangeAndCreateU3Ed__9_System_Collections_IEnumerator_get_Current_m9B8EB275657B8D582A8E34AE84295FE6B3BDD7AB (void);
-static Il2CppMethodPointer s_methodPointers[479] = 
+static Il2CppMethodPointer s_methodPointers[480] = 
 {
 	UnitySourceGeneratedAssemblyMonoScriptTypes_v1_Get_mBEB95BEB954BB63E9710BBC7AD5E78C4CB0A0033,
 	UnitySourceGeneratedAssemblyMonoScriptTypes_v1__ctor_mE70FB23ACC1EA12ABC948AA22C2E78B2D0AA39B1,
@@ -556,6 +557,7 @@ static Il2CppMethodPointer s_methodPointers[479] =
 	HumanoidPoseDriver_ApplyRawTrackerArm_m139CCD4B1A6A5AB59882DDA32F5A91CEFA543589,
 	HumanoidPoseDriver_SolveTrackerArm_m78E97408171FFFC7BDF645E4AE45D548DC396ECF,
 	HumanoidPoseDriver_ApplyCalibratedIkArm_m66DEABC98545D4C632745BCF2F7D16DFFF0B66C7,
+	HumanoidPoseDriver_ApplyTrackedShoulderLift_m5853A6FFEF139C29D5DCE1451E4B0BE36EA8387F,
 	HumanoidPoseDriver_ApplyTwoBoneArm_mE41703B5AF84945AD6900481B9A0C4864C6C7722,
 	HumanoidPoseDriver_LogUpperArmDepthFailure_mA2BABE24CCD1CACBFB0C76747A2608329A4040EA,
 	HumanoidPoseDriver_LogForearmDepthFailure_mC7057051325233AFA9DF1D881AA757AED7CEB3F8,
@@ -985,19 +987,19 @@ extern void U3CStartTwitchSocketU3Ed__15_MoveNext_mA2EC6E42FF8A20CC3FA04FDACC60A
 extern void U3CStartTwitchSocketU3Ed__15_SetStateMachine_mB44F3448640A8EF6A24B542FC764D6B1A0ED196E_AdjustorThunk (void);
 static Il2CppTokenAdjustorThunkPair s_adjustorThunks[11] = 
 {
-	{ 0x060000D7, UpperBodyPose__ctor_m4B68636ADB64F60E3BC5D9FF20F77D01518C527D_AdjustorThunk },
-	{ 0x060000D8, ArmPose__ctor_mF4C095189B46DB208D0A2EA3B8D579395F40D8DE_AdjustorThunk },
-	{ 0x060000D9, ScreenBodyPose__ctor_m65711CA6C90A006057AD60D6E87370F57EE22A55_AdjustorThunk },
-	{ 0x0600010B, ArmSolveDiagnostics__ctor_mCDCAA7EC4A6CA111BB31DD3712960A3B7EF593A3_AdjustorThunk },
-	{ 0x0600010C, ArmSolveDiagnostics_ToString_m9282CCB076C5EDADB03ED1C6726E3CE1030DB1C8_AdjustorThunk },
-	{ 0x06000128, U3CReadTwitchU3Ed__17_MoveNext_m3C92BE1260B8A804CC3028C3A631D8F0A0CD9A36_AdjustorThunk },
-	{ 0x06000129, U3CReadTwitchU3Ed__17_SetStateMachine_mB552CAFF374A3F91861A42C2741EC22360ADC3D7_AdjustorThunk },
-	{ 0x06000130, U3CSendTwitchU3Ed__16_MoveNext_m65EF8A7C13E85FF978B60F309A1C5B7368092A85_AdjustorThunk },
-	{ 0x06000131, U3CSendTwitchU3Ed__16_SetStateMachine_m14D91033A79912B6C0F8E514EF3B2CFD71AD0F04_AdjustorThunk },
-	{ 0x06000132, U3CStartTwitchSocketU3Ed__15_MoveNext_mA2EC6E42FF8A20CC3FA04FDACC60A7BE13D8A367_AdjustorThunk },
-	{ 0x06000133, U3CStartTwitchSocketU3Ed__15_SetStateMachine_mB44F3448640A8EF6A24B542FC764D6B1A0ED196E_AdjustorThunk },
+	{ 0x060000D8, UpperBodyPose__ctor_m4B68636ADB64F60E3BC5D9FF20F77D01518C527D_AdjustorThunk },
+	{ 0x060000D9, ArmPose__ctor_mF4C095189B46DB208D0A2EA3B8D579395F40D8DE_AdjustorThunk },
+	{ 0x060000DA, ScreenBodyPose__ctor_m65711CA6C90A006057AD60D6E87370F57EE22A55_AdjustorThunk },
+	{ 0x0600010C, ArmSolveDiagnostics__ctor_mCDCAA7EC4A6CA111BB31DD3712960A3B7EF593A3_AdjustorThunk },
+	{ 0x0600010D, ArmSolveDiagnostics_ToString_m9282CCB076C5EDADB03ED1C6726E3CE1030DB1C8_AdjustorThunk },
+	{ 0x06000129, U3CReadTwitchU3Ed__17_MoveNext_m3C92BE1260B8A804CC3028C3A631D8F0A0CD9A36_AdjustorThunk },
+	{ 0x0600012A, U3CReadTwitchU3Ed__17_SetStateMachine_mB552CAFF374A3F91861A42C2741EC22360ADC3D7_AdjustorThunk },
+	{ 0x06000131, U3CSendTwitchU3Ed__16_MoveNext_m65EF8A7C13E85FF978B60F309A1C5B7368092A85_AdjustorThunk },
+	{ 0x06000132, U3CSendTwitchU3Ed__16_SetStateMachine_m14D91033A79912B6C0F8E514EF3B2CFD71AD0F04_AdjustorThunk },
+	{ 0x06000133, U3CStartTwitchSocketU3Ed__15_MoveNext_mA2EC6E42FF8A20CC3FA04FDACC60A7BE13D8A367_AdjustorThunk },
+	{ 0x06000134, U3CStartTwitchSocketU3Ed__15_SetStateMachine_mB44F3448640A8EF6A24B542FC764D6B1A0ED196E_AdjustorThunk },
 };
-static const int32_t s_InvokerIndices[479] = 
+static const int32_t s_InvokerIndices[480] = 
 {
 	9487,
 	6558,
@@ -1063,6 +1065,7 @@ static const int32_t s_InvokerIndices[479] =
 	1364,
 	6653,
 	1364,
+	2800,
 	122,
 	131,
 	131,
@@ -1483,7 +1486,7 @@ IL2CPP_EXTERN_C const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule;
 const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule = 
 {
 	"Assembly-CSharp.dll",
-	479,
+	480,
 	s_methodPointers,
 	11,
 	s_adjustorThunks,

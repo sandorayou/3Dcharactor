@@ -22,7 +22,8 @@ static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
 static NSArray<NSValue *> *s_posePrivacyPoints;
 static NSArray<NSValue *> *s_handPrivacyPoints;
-static NSMutableDictionary<NSNumber *, CIImage *> *s_pendingCameraFrames;
+static NSMutableDictionary<NSNumber *, NSDictionary *> *s_pendingCameraFrames;
+static NSMutableDictionary<NSNumber *, UIImage *> *s_pendingProcessedFrames;
 static NSObject *FrameGate() {
     static NSObject *gate;
     static dispatch_once_t once;
@@ -151,16 +152,26 @@ static CIImage *WindowsStyleMosaic(CIImage *source) {
 }
 
 static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInteger timestamp) {
-    CIImage *source = nil;
+    NSDictionary *captured = nil;
     @synchronized(FrameGate()) {
-        source = s_pendingCameraFrames[@(timestamp)];
+        captured = s_pendingCameraFrames[@(timestamp)];
         for (NSNumber *key in [s_pendingCameraFrames.allKeys copy])
             if (key.longLongValue <= timestamp) [s_pendingCameraFrames removeObjectForKey:key];
     }
+    CIImage *source = captured[@"source"];
     if (source == nil || s_backgroundLayer == nil) return;
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
     CIImage *processed = source;
     CIImage *mask = WindowsStylePersonMask(result.segmentationMasks.firstObject, source.extent);
+    CIImage *skinAndTrackerMask = captured[@"privacy"];
+    if (mask != nil && skinAndTrackerMask != nil) {
+        CIFilter *unionFilter = [CIFilter filterWithName:@"CIMaximumCompositing"];
+        [unionFilter setValue:mask forKey:kCIInputImageKey];
+        [unionFilter setValue:skinAndTrackerMask forKey:kCIInputBackgroundImageKey];
+        mask = [unionFilter.outputImage imageByCroppingToRect:source.extent];
+    } else if (mask == nil) {
+        mask = skinAndTrackerMask;
+    }
     if (mask != nil) {
         CIFilter *blend = [CIFilter filterWithName:@"CIBlendWithMask"];
         [blend setValue:WindowsStyleMosaic(source) forKey:kCIInputImageKey];
@@ -169,10 +180,18 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
         processed = [blend.outputImage imageByCroppingToRect:source.extent];
     }
     CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
-    if (frame != nil) dispatch_async(dispatch_get_main_queue(), ^{
-        s_backgroundLayer.contents = (__bridge id)frame;
+    if (frame != nil) {
+        UIImage *image = [UIImage imageWithCGImage:frame];
         CGImageRelease(frame);
-    });
+        @synchronized(FrameGate()) {
+            if (s_pendingProcessedFrames == nil) s_pendingProcessedFrames = [NSMutableDictionary dictionary];
+            s_pendingProcessedFrames[@(timestamp)] = image;
+            while (s_pendingProcessedFrames.count > 8) {
+                NSNumber *oldest = [[s_pendingProcessedFrames.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
+                [s_pendingProcessedFrames removeObjectForKey:oldest];
+            }
+        }
+    }
 }
 // Each detector completes independently. Publish only matching capture timestamps.
 static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timestamp) {
@@ -199,7 +218,15 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
             NSData *data = [NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];
             NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
             NSString *receiver = [s_unityObject copy];
+            UIImage *background = nil;
+            @synchronized(FrameGate()) {
+                background = s_pendingProcessedFrames[@(timestamp)];
+                for (NSNumber *old in [s_pendingProcessedFrames.allKeys copy])
+                    if (old.longLongValue <= timestamp) [s_pendingProcessedFrames removeObjectForKey:old];
+            }
             dispatch_async(dispatch_get_main_queue(), ^{
+                if (background != nil && s_backgroundLayer != nil)
+                    s_backgroundLayer.contents = (__bridge id)background.CGImage;
                 if (receiver && [receiver isEqualToString:s_unityObject] && json)
                     UnitySendMessage(receiver.UTF8String, "OnNativePoseJson", json.UTF8String);
             });
@@ -232,7 +259,9 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
     @synchronized(FrameGate()) {
         if (s_pendingCameraFrames == nil) s_pendingCameraFrames = [NSMutableDictionary dictionary];
-        s_pendingCameraFrames[@(timestamp)] = [CIImage imageWithCVPixelBuffer:pixelBuffer];
+        CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
+        CIImage *privacy = PrivacyMask(pixelBuffer, source.extent);
+        s_pendingCameraFrames[@(timestamp)] = @{@"source": source, @"privacy": privacy};
         while (s_pendingCameraFrames.count > 8) {
             NSNumber *oldest = [[s_pendingCameraFrames.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
             [s_pendingCameraFrames removeObjectForKey:oldest];
@@ -429,6 +458,9 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (!handPath || !facePath) return -7;
     MPPHandLandmarkerOptions *handOptions = [MPPHandLandmarkerOptions new];
     handOptions.baseOptions.modelAssetPath = handPath; handOptions.runningMode = MPPRunningModeLiveStream; handOptions.numHands = 2;
+    handOptions.minHandDetectionConfidence = .35f;
+    handOptions.minHandPresenceConfidence = .35f;
+    handOptions.minTrackingConfidence = .35f;
     s_handDelegate = [NativeHandResultDelegate new]; handOptions.handLandmarkerLiveStreamDelegate = s_handDelegate;
     s_handLandmarker = [[MPPHandLandmarker alloc] initWithOptions:handOptions error:nil];
     MPPFaceLandmarkerOptions *faceOptions = [MPPFaceLandmarkerOptions new];
@@ -512,7 +544,10 @@ extern "C" void NativePoseCaptureStop() {
     [s_backgroundLayer removeFromSuperlayer];
     s_backgroundLayer = nil;
     s_ciContext = nil;
-    @synchronized(FrameGate()) { [s_pendingCameraFrames removeAllObjects]; s_pendingCameraFrames = nil; }
+    @synchronized(FrameGate()) {
+        [s_pendingCameraFrames removeAllObjects]; s_pendingCameraFrames = nil;
+        [s_pendingProcessedFrames removeAllObjects]; s_pendingProcessedFrames = nil;
+    }
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;
