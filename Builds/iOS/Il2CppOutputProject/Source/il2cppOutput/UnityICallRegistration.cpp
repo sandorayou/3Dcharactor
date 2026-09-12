@@ -462,10 +462,6 @@ void RegisterAllStrippedInternalCalls()
 		void Register_UnityEngine_Camera_WorldToViewportPoint_Injected();
 		Register_UnityEngine_Camera_WorldToViewportPoint_Injected();
 
-		//System.Void UnityEngine.Camera::get_backgroundColor_Injected(UnityEngine.Color&)
-		void Register_UnityEngine_Camera_get_backgroundColor_Injected();
-		Register_UnityEngine_Camera_get_backgroundColor_Injected();
-
 		//System.Void UnityEngine.Camera::get_pixelRect_Injected(UnityEngine.Rect&)
 		void Register_UnityEngine_Camera_get_pixelRect_Injected();
 		Register_UnityEngine_Camera_get_pixelRect_Injected();

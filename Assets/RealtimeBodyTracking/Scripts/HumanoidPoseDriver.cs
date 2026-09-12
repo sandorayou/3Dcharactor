@@ -432,7 +432,7 @@ namespace RealtimeBodyTracking
 
             if (debugLogging && Time.unscaledTime >= nextDebugLog)
             {
-                Debug.Log($"Pose frame={latestFrame}, tracking={tracking}, points={validPoints}, appliedBones={appliedBones}, headTracking={headTracking}, headYaw={headYawDegrees:F1}, headPitch={headPitchDegrees:F1}, headRoll={headRollDegrees:F1}, bodyPosition={bodyPositionTracking}, offset={bodyPositionOffset}, bodyLean={bodyLeanDegrees:F1}, shoulderMode={bodyShoulderMode}, handContact={handContactTracking}", this);
+                Debug.Log($"Pose frame={latestFrame}, tracking={tracking}, points={validPoints}, appliedBones={appliedBones}, headTracking={headTracking}, headYaw={headYawDegrees:F1}, headPitch={headPitchDegrees:F1}, headRoll={headRollDegrees:F1}, bodyPosition={bodyPositionTracking}, offset={bodyPositionOffset}, bodyLean={bodyLeanDegrees:F1}, shoulderMode={bodyShoulderMode}, handContact={handContactTracking}, framing={cameraFramingState}", this);
                 nextDebugLog = Time.unscaledTime + 1f;
             }
         }
@@ -2556,7 +2556,14 @@ namespace RealtimeBodyTracking
             // Python already removes the square inference letterbox and reports
             // coordinates normalized to the original camera image. Map 0..1 directly
             // to Unity so the camera and game-view edges line up.
+            // The native iOS sample buffer and background layer are already mirrored
+            // together for the front camera. A second X flip separates the avatar
+            // from the person it should cover.
+#if UNITY_IOS && !UNITY_EDITOR
+            var x = imagePoint.x;
+#else
             var x = 1f - imagePoint.x;
+#endif
             var y = 1f - imagePoint.y;
             return new Vector2(x, y);
         }

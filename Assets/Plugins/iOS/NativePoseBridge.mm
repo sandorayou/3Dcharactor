@@ -111,6 +111,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
             NSMutableDictionary *combined = [parts[@"pose"] mutableCopy];
             NSMutableArray *points = [combined[@"points"] mutableCopy];
             [points addObjectsFromArray:parts[@"hand"][@"points"]];
+            [points addObjectsFromArray:parts[@"face"][@"points"]];
             combined[@"points"] = points;
             combined[@"hand_count"] = parts[@"hand"][@"hand_count"] ?: @0;
             combined[@"left_hand_points"] = parts[@"hand"][@"left_hand_points"] ?: @0;
@@ -277,9 +278,22 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 - (void)faceLandmarker:(MPPFaceLandmarker *)landmarker didFinishDetectionWithResult:(MPPFaceLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
     if (!result || !s_unityObject) return;
     NSMutableArray *blend = [NSMutableArray array];
+    NSMutableArray *points = [NSMutableArray array];
     if (result.faceBlendshapes.count > 0) for (MPPCategory *c in result.faceBlendshapes.firstObject.categories)
         [blend addObject:@{@"name": c.categoryName ?: @"", @"score": @(c.score)}];
-    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": @[]};
+    // Match the Windows packet: these two image-space anchors drive continuous
+    // camera framing so the avatar face stays on top of the captured face.
+    NSArray<MPPNormalizedLandmark *> *face = result.faceLandmarks.firstObject;
+    if (face.count > 152) {
+        NSArray<NSString *> *names = @[@"face_top", @"face_chin"];
+        NSArray<NSNumber *> *indices = @[@10, @152];
+        for (NSUInteger i = 0; i < indices.count; ++i) {
+            MPPNormalizedLandmark *p = face[indices[i].unsignedIntegerValue];
+            [points addObject:@{@"name": names[i], @"x": @0.0, @"y": @0.0, @"z": @0.0,
+                                @"confidence": @1.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
+        }
+    }
+    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": points};
     SubmitResult(@"face", packet, timestamp);
 }
 @end
@@ -389,6 +403,7 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
         UIView *unityView = UnityGetGLViewController().view;
         unityView.opaque = NO;
         unityView.backgroundColor = UIColor.clearColor;
+        unityView.layer.opaque = NO;
         s_backgroundLayer = [CALayer layer];
         s_backgroundLayer.contentsGravity = kCAGravityResizeAspectFill;
         s_backgroundLayer.masksToBounds = YES;

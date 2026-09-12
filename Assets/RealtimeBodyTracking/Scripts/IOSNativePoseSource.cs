@@ -76,9 +76,7 @@ namespace RealtimeBodyTracking
             if (camera != null)
             {
                 camera.clearFlags = CameraClearFlags.SolidColor;
-                var color = camera.backgroundColor;
-                color.a = 0f;
-                camera.backgroundColor = color;
+                camera.backgroundColor = Color.clear;
             }
             var result = NativePoseCaptureStart(gameObject.name);
             if (result != 0 && result != -6) Debug.LogError($"Native iOS camera start failed: {result}", this);
