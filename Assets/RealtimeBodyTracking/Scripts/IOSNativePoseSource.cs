@@ -28,7 +28,7 @@ namespace RealtimeBodyTracking
             if (latest != null && Time.unscaledTime >= nextStatusLog)
             {
                 nextStatusLog = Time.unscaledTime + 2f;
-                Debug.Log($"[Tracking] frame={latest.frame} points={latest.points?.Count ?? 0} blendshapes={latest.face_blendshapes?.Count ?? 0}", this);
+                Debug.Log($"[Tracking] frame={latest.frame} points={latest.points?.Count ?? 0} hands={latest.hand_count} left={latest.left_hand_points} right={latest.right_hand_points} blendshapes={latest.face_blendshapes?.Count ?? 0}", this);
             }
         }
 

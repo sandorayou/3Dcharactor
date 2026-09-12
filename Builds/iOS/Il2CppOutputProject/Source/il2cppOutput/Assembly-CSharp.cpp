@@ -337,6 +337,9 @@ struct PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473  : public RuntimeObj
 	int32_t ___source_width;
 	int32_t ___source_height;
 	bool ___tracking;
+	int32_t ___hand_count;
+	int32_t ___left_hand_points;
+	int32_t ___right_hand_points;
 	PoseRotation_tB0B4EDF2E1572B7D99692CF94FF7D5DB6B61DE0A* ___head_rotation;
 	List_1_t9B0E3B333365D06998BCC5C922071009DF587B96* ___face_blendshapes;
 	List_1_tA2FC45C11B58E3D310711DEF3CC0E39540A28979* ___points;

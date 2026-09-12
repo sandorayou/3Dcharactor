@@ -9,6 +9,8 @@ namespace RealtimeBodyTracking
         private bool visible = true;
         private Vector2 scroll;
         private GUIStyle textStyle;
+        private float copyPressStarted = -1f;
+        private string copyStatus = "ログ全文を長押しコピー";
 
         private void Awake()
         {
@@ -35,6 +37,21 @@ namespace RealtimeBodyTracking
                 GUIUtility.systemCopyBuffer = RuntimeLogCapture.GetText();
             if (GUILayout.Button("閉じる", GUILayout.Width(110), GUILayout.Height(44))) visible = false;
             GUILayout.EndHorizontal();
+            var holdingCopy = GUILayout.RepeatButton(copyStatus, GUILayout.Height(48));
+            if (holdingCopy)
+            {
+                if (copyPressStarted < 0f) copyPressStarted = Time.unscaledTime;
+                if (Time.unscaledTime - copyPressStarted >= .8f && copyStatus != "コピーしました")
+                {
+                    GUIUtility.systemCopyBuffer = RuntimeLogCapture.GetText();
+                    copyStatus = "コピーしました";
+                }
+            }
+            else if (copyPressStarted >= 0f)
+            {
+                copyPressStarted = -1f;
+                if (copyStatus == "コピーしました") copyStatus = "ログ全文を長押しコピー";
+            }
             scroll = GUILayout.BeginScrollView(scroll, GUI.skin.box);
             GUILayout.Label(RuntimeLogCapture.GetText(), textStyle);
             GUILayout.EndScrollView();

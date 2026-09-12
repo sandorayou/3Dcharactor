@@ -47,6 +47,9 @@ namespace RealtimeBodyTracking
         public int source_width;
         public int source_height;
         public bool tracking;
+        public int hand_count;
+        public int left_hand_points;
+        public int right_hand_points;
         public PoseRotation head_rotation;
         public List<FaceBlendshape> face_blendshapes;
         public List<PosePoint> points;
