@@ -313,6 +313,10 @@ namespace RealtimeBodyTracking
             localPoseSource = GetComponent<LocalPosePacketSource>();
 #if UNITY_IOS
             if (localPoseSource == null) localPoseSource = gameObject.AddComponent<IOSNativePoseSource>();
+            // The front-camera preview is mirrored only when it is presented.
+            // MediaPipe coordinates remain in the raw camera space, so do not swap
+            // anatomical sides a second time on iOS.
+            avatarMirror = false;
 #endif
             if (targetAnimator == null) targetAnimator = GetComponentInChildren<Animator>();
             if (trackingCamera == null) trackingCamera = Camera.main;
@@ -2081,7 +2085,11 @@ namespace RealtimeBodyTracking
 
         private Vector2 ToPreviewViewport(Vector3 image)
         {
+#if UNITY_IOS && !UNITY_EDITOR
+            return new Vector2(image.x, 1f - image.y);
+#else
             return new Vector2(1f - image.x, 1f - image.y);
+#endif
         }
 
         private static bool IsInsideExtendedArmImage(Vector3 image, float margin)
@@ -2598,10 +2606,13 @@ namespace RealtimeBodyTracking
             // Python already removes the square inference letterbox and reports
             // coordinates normalized to the original camera image. Map 0..1 directly
             // to Unity so the camera and game-view edges line up.
-            // The native iOS sample buffer and background layer are already mirrored
-            // together for the front camera. A second X flip separates the avatar
-            // from the person it should cover.
+            // iOS mirrors the displayed camera layer while MediaPipe keeps raw image
+            // coordinates, so its X value already maps to the mirrored preview.
+#if UNITY_IOS && !UNITY_EDITOR
+            var x = imagePoint.x;
+#else
             var x = 1f - imagePoint.x;
+#endif
             var y = 1f - imagePoint.y;
             if (sourceWidth > 0 && sourceHeight > 0 && trackingCamera != null)
             {

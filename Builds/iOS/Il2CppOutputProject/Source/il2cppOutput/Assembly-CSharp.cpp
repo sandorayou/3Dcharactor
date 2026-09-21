@@ -1739,7 +1739,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_Awake_m0BEE32C3BE081F
 
 IL_0025:
 	{
-		__this->___avatarMirror = (bool)1;
+		__this->___avatarMirror = (bool)0;
 		Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* L_4 = __this->___targetAnimator;
 		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
 		bool L_5;
