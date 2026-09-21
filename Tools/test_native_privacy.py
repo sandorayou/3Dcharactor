@@ -75,9 +75,12 @@ int main(void) {
     assert "UIImage *image = s_lastSafeBackgroundImage" in bridge
     assert "point.visibility.floatValue >= .15f" in bridge
     assert "if (points.count < 17 || skin.length != width * height) return nil;" in bridge
-    assert "{11,23}" not in pose and "{24,26}" not in pose
+    assert "{11,23}" in pose and "{24,26}" in pose
     assert "s_backgroundLayer.contents = (__bridge id)image.CGImage" in display
-    assert "must not wait for hand and face callbacks" in display
+    assert "Publish from the pose callback itself" in display
+    submit = bridge.split("static void SubmitResult", 1)[1].split("@interface NativePoseCaptureDelegate", 1)[0]
+    assert "parts.count == 3" not in submit
+    assert "handAge <= 150" in submit and "faceAge <= 150" in submit
     assert "CIColor colorWithRed:0 green:0 blue:0" not in bridge
     print("PASS: compiled native skin/intersection core; neutral ramp, bone-only, skin-only, edge exclusion; frame/fail-closed wiring")
 

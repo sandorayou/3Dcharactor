@@ -56,9 +56,20 @@ namespace RealtimeBodyTracking
                     }
                     catch (System.Exception error) { Debug.LogError("[Tracking] Copy failed: " + error.Message); }
                 }
+                if (GUILayout.Button("位置誤差をコピー", GUILayout.Height(44)))
+                {
+                    source.StopRecording();
+                    try
+                    {
+                        if (System.IO.File.Exists(source.AlignmentRecording.FilePath))
+                            GUIUtility.systemCopyBuffer = System.IO.File.ReadAllText(source.AlignmentRecording.FilePath);
+                    }
+                    catch (System.Exception error) { Debug.LogError("[Tracking] Alignment copy failed: " + error.Message); }
+                }
                 GUILayout.EndHorizontal();
                 GUILayout.Label(source.Recording.Status + " / " + source.Recording.Frames + " frames", textStyle);
                 GUILayout.Label(source.Recording.FilePath ?? "画像なし・最大6000フレーム / 8 MiB", textStyle);
+                GUILayout.Label(source.AlignmentRecording.FilePath ?? "位置誤差ログは記録開始時に作成", textStyle);
             }
             var holdingCopy = GUILayout.RepeatButton(copyStatus, GUILayout.Height(48));
             if (holdingCopy)

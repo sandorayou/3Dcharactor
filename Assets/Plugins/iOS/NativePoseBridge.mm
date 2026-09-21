@@ -29,6 +29,10 @@ static UIInterfaceOrientation s_lastVideoOrientation = UIInterfaceOrientationUnk
 static void UpdateVideoOrientation(void);
 static NSMutableDictionary<NSNumber *, NSDictionary *> *s_pendingCameraFrames;
 static NSMutableDictionary<NSNumber *, UIImage *> *s_pendingProcessedFrames;
+static NSDictionary *s_latestHandPacket;
+static NSDictionary *s_latestFacePacket;
+static NSInteger s_latestHandTimestamp;
+static NSInteger s_latestFaceTimestamp;
 static NSObject *FrameGate() {
     static NSObject *gate;
     static dispatch_once_t once;
@@ -150,21 +154,22 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     NSArray<MPPNormalizedLandmark *> *points = result.landmarks.firstObject;
     const size_t width = (size_t)extent.size.width, height = (size_t)extent.size.height;
     if (points.count < 17 || skin.length != width * height) return nil;
-    // Privacy is intentionally limited to the upper body. One valid shoulder
-    // or arm is enough to produce a partial mask; weak landmarks are skipped
+    // One valid tracked point is enough to produce a partial mask; weak points
+    // are skipped
     // edge-by-edge instead of failing the complete frame.
-    const NSUInteger upperBodyIndices[] = {
+    const NSUInteger trackedBodyIndices[] = {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+        23, 24, 25, 26, 27, 28, 29, 30, 31, 32
     };
-    BOOL hasValidUpperBodyPoint = NO;
-    for (NSUInteger i = 0; i < sizeof(upperBodyIndices) / sizeof(upperBodyIndices[0]); ++i) {
-        if (upperBodyIndices[i] < points.count && ReliablePrivacyPoint(points[upperBodyIndices[i]])) {
-            hasValidUpperBodyPoint = YES;
+    BOOL hasValidTrackedPoint = NO;
+    for (NSUInteger i = 0; i < sizeof(trackedBodyIndices) / sizeof(trackedBodyIndices[0]); ++i) {
+        if (trackedBodyIndices[i] < points.count && ReliablePrivacyPoint(points[trackedBodyIndices[i]])) {
+            hasValidTrackedPoint = YES;
             break;
         }
     }
-    if (!hasValidUpperBodyPoint) return nil;
+    if (!hasValidTrackedPoint) return nil;
     NSMutableData *data = [NSMutableData dataWithLength:width * height];
     CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
     CGContextRef context = CGBitmapContextCreate(data.mutableBytes, width, height, 8, width, gray, kCGImageAlphaNone);
@@ -178,7 +183,9 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     const NSUInteger edges[][2] = {
         {0,1},{1,2},{2,3},{3,7},{0,4},{4,5},{5,6},{6,8},{9,10},
         {11,12},{11,13},{13,15},{15,17},{15,19},{15,21},{17,19},
-        {12,14},{14,16},{16,18},{16,20},{16,22}
+        {12,14},{14,16},{16,18},{16,20},{16,22},{18,20},
+        {11,23},{12,24},{23,24},{23,25},{25,27},{27,29},{29,31},{27,31},
+        {24,26},{26,28},{28,30},{30,32},{28,32}
     };
     for (const auto &edge : edges) {
         if (edge[1] >= points.count || !ReliablePrivacyPoint(points[edge[0]]) || !ReliablePrivacyPoint(points[edge[1]])) continue;
@@ -187,8 +194,8 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
         CGContextAddLineToPoint(context, b.x * width, (1-b.y) * height);
         CGContextStrokePath(context);
     }
-    for (NSUInteger i = 0; i < sizeof(upperBodyIndices) / sizeof(upperBodyIndices[0]); ++i) {
-        NSUInteger index = upperBodyIndices[i];
+    for (NSUInteger i = 0; i < sizeof(trackedBodyIndices) / sizeof(trackedBodyIndices[0]); ++i) {
+        NSUInteger index = trackedBodyIndices[i];
         if (index >= points.count || !ReliablePrivacyPoint(points[index])) continue;
         MPPNormalizedLandmark *point = points[index];
         CGFloat x = point.x * width, y = (1-point.y) * height;
@@ -262,53 +269,47 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
         });
     }
 }
-// Each detector completes independently. Publish only matching capture timestamps.
+// Pose drives the body and must never wait for optional hand/face detectors.
+// Supplemental results are reused only for a short interval.
 static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timestamp) {
-    static NSMutableDictionary *pending;
     static NSObject *gate;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ pending = [NSMutableDictionary dictionary]; gate = [NSObject new]; });
+    dispatch_once(&once, ^{ gate = [NSObject new]; });
     @synchronized(gate) {
-        NSNumber *key = @(timestamp);
-        NSMutableDictionary *parts = pending[key];
-        if (!parts) { parts = [NSMutableDictionary dictionary]; pending[key] = parts; }
-        parts[kind] = packet;
-        if (parts.count == 3) {
-            NSMutableDictionary *combined = [parts[@"pose"] mutableCopy];
-            NSMutableArray *points = [combined[@"points"] mutableCopy];
-            [points addObjectsFromArray:parts[@"hand"][@"points"]];
-            [points addObjectsFromArray:parts[@"face"][@"points"]];
-            combined[@"points"] = points;
-            combined[@"hand_count"] = parts[@"hand"][@"hand_count"] ?: @0;
-            combined[@"left_hand_points"] = parts[@"hand"][@"left_hand_points"] ?: @0;
-            combined[@"right_hand_points"] = parts[@"hand"][@"right_hand_points"] ?: @0;
-            combined[@"face_blendshapes"] = parts[@"face"][@"face_blendshapes"];
-            if (parts[@"face"][@"head_rotation"] != nil)
-                combined[@"head_rotation"] = parts[@"face"][@"head_rotation"];
-            combined[@"frame"] = @(s_frame++);
-            NSData *data = [NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];
-            NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            NSString *receiver = [s_unityObject copy];
-            UIImage *background = nil;
-            @synchronized(FrameGate()) {
-                background = s_pendingProcessedFrames[@(timestamp)];
-                for (NSNumber *old in [s_pendingProcessedFrames.allKeys copy])
-                    if (old.longLongValue <= timestamp) [s_pendingProcessedFrames removeObjectForKey:old];
-            }
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (background != nil && s_backgroundLayer != nil)
-                    s_backgroundLayer.contents = (__bridge id)background.CGImage;
-                if (receiver && [receiver isEqualToString:s_unityObject] && json)
-                    UnitySendMessage(receiver.UTF8String, "OnNativePoseJson", json.UTF8String);
-            });
-            for (NSNumber *old in [pending.allKeys copy])
-                if (old.longLongValue <= timestamp) [pending removeObjectForKey:old];
+        if ([kind isEqualToString:@"hand"]) {
+            s_latestHandPacket = packet;
+            s_latestHandTimestamp = timestamp;
+            return;
         }
-        // Live-stream detectors can drop frames independently. Bound incomplete frames.
-        while (pending.count > 8) {
-            NSNumber *oldest = [[pending.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
-            [pending removeObjectForKey:oldest];
+        if ([kind isEqualToString:@"face"]) {
+            s_latestFacePacket = packet;
+            s_latestFaceTimestamp = timestamp;
+            return;
         }
+        NSMutableDictionary *combined = [packet mutableCopy];
+        NSMutableArray *points = [combined[@"points"] mutableCopy] ?: [NSMutableArray array];
+        NSInteger handAge = timestamp >= s_latestHandTimestamp
+            ? timestamp - s_latestHandTimestamp : s_latestHandTimestamp - timestamp;
+        NSInteger faceAge = timestamp >= s_latestFaceTimestamp
+            ? timestamp - s_latestFaceTimestamp : s_latestFaceTimestamp - timestamp;
+        NSDictionary *hand = s_latestHandPacket != nil && handAge <= 150 ? s_latestHandPacket : nil;
+        NSDictionary *face = s_latestFacePacket != nil && faceAge <= 150 ? s_latestFacePacket : nil;
+        if (hand[@"points"] != nil) [points addObjectsFromArray:hand[@"points"]];
+        if (face[@"points"] != nil) [points addObjectsFromArray:face[@"points"]];
+        combined[@"points"] = points;
+        combined[@"hand_count"] = hand[@"hand_count"] ?: @0;
+        combined[@"left_hand_points"] = hand[@"left_hand_points"] ?: @0;
+        combined[@"right_hand_points"] = hand[@"right_hand_points"] ?: @0;
+        combined[@"face_blendshapes"] = face[@"face_blendshapes"] ?: @[];
+        if (face[@"head_rotation"] != nil) combined[@"head_rotation"] = face[@"head_rotation"];
+        combined[@"frame"] = @(s_frame++);
+        NSData *data = [NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];
+        NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        NSString *receiver = [s_unityObject copy];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (receiver && [receiver isEqualToString:s_unityObject] && json)
+                UnitySendMessage(receiver.UTF8String, "OnNativePoseJson", json.UTF8String);
+        });
     }
 }
 
@@ -513,6 +514,8 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
     s_lastSafeBackgroundImage = nil;
+    s_latestHandPacket = nil; s_latestFacePacket = nil;
+    s_latestHandTimestamp = 0; s_latestFaceTimestamp = 0;
     if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] == AVAuthorizationStatusNotDetermined) {
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -628,6 +631,8 @@ extern "C" void NativePoseCaptureStop() {
     s_backgroundLayer = nil;
     s_ciContext = nil;
     s_lastSafeBackgroundImage = nil;
+    s_latestHandPacket = nil; s_latestFacePacket = nil;
+    s_latestHandTimestamp = 0; s_latestFaceTimestamp = 0;
     @synchronized(FrameGate()) {
         [s_pendingCameraFrames removeAllObjects]; s_pendingCameraFrames = nil;
         [s_pendingProcessedFrames removeAllObjects]; s_pendingProcessedFrames = nil;
