@@ -22,6 +22,8 @@ static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
 static NSArray<NSValue *> *s_posePrivacyPoints;
 static NSArray<NSValue *> *s_handPrivacyPoints;
+static UIInterfaceOrientation s_lastVideoOrientation = UIInterfaceOrientationUnknown;
+static void UpdateVideoOrientation(void);
 static NSMutableDictionary<NSNumber *, NSDictionary *> *s_pendingCameraFrames;
 static NSMutableDictionary<NSNumber *, UIImage *> *s_pendingProcessedFrames;
 static NSObject *FrameGate() {
@@ -58,8 +60,13 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
             float b = p[0], g = p[1], r = p[2];
             float cb = 128.0f - .168736f * r - .331264f * g + .5f * b;
             float cr = 128.0f + .5f * r - .418688f * g - .081312f * b;
-            BOOL rgbSkin = r > 55 && g > 30 && b > 15 && r > g * 1.04f && r > b * 1.08f && MAX(r, MAX(g, b)) - MIN(r, MIN(g, b)) > 12;
-            BOOL chromaSkin = cb >= 75 && cb <= 135 && cr >= 130 && cr <= 180 && r > g;
+            // Restrict colour-only privacy detection to brighter exposed skin.
+            // Dark brown furniture/clothing is covered by neither this mask nor
+            // the colour threshold, while tracked people remain protected by
+            // the pose and segmentation masks below.
+            BOOL rgbSkin = r > 95 && g > 55 && b > 35 && r > g * 1.06f && r > b * 1.10f &&
+                           MAX(r, MAX(g, b)) - MIN(r, MIN(g, b)) > 18;
+            BOOL chromaSkin = cb >= 78 && cb <= 125 && cr >= 135 && cr <= 175 && r > g;
             mask[y * width + x] = (rgbSkin && chromaSkin) ? 255 : 0;
         }
     }
@@ -102,6 +109,55 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
     CIFilter *expand = [CIFilter filterWithName:@"CIGaussianBlur"];
     [expand setValue:result forKey:kCIInputImageKey];
     [expand setValue:@18 forKey:kCIInputRadiusKey];
+    return [expand.outputImage imageByCroppingToRect:extent];
+}
+
+static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent) {
+    NSArray<MPPNormalizedLandmark *> *points = result.landmarks.firstObject;
+    if (points.count < 29) return nil;
+    const size_t width = 160, height = 120;
+    NSMutableData *data = [NSMutableData dataWithLength:width * height];
+    CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
+    CGContextRef context = CGBitmapContextCreate(data.mutableBytes, width, height, 8, width, gray, kCGImageAlphaNone);
+    CGColorSpaceRelease(gray);
+    CGContextSetGrayFillColor(context, 1, 1);
+    CGContextSetGrayStrokeColor(context, 1, 1);
+    CGContextSetLineCap(context, kCGLineCapRound);
+    CGContextSetLineJoin(context, kCGLineJoinRound);
+
+    CGPoint (^point)(NSUInteger) = ^CGPoint(NSUInteger index) {
+        MPPNormalizedLandmark *p = points[index];
+        return CGPointMake(p.x * width, (1.0 - p.y) * height);
+    };
+    const int links[][2] = {{0,11},{0,12},{11,12},{11,13},{13,15},{12,14},{14,16},
+                             {11,23},{12,24},{23,24},{23,25},{25,27},{24,26},{26,28}};
+    CGContextSetLineWidth(context, 24);
+    for (NSUInteger i = 0; i < sizeof(links) / sizeof(links[0]); ++i) {
+        CGPoint a = point(links[i][0]), b = point(links[i][1]);
+        CGContextMoveToPoint(context, a.x, a.y);
+        CGContextAddLineToPoint(context, b.x, b.y);
+        CGContextStrokePath(context);
+    }
+    CGPoint shoulderL = point(11), shoulderR = point(12), hipR = point(24), hipL = point(23);
+    CGContextBeginPath(context);
+    CGContextMoveToPoint(context, shoulderL.x, shoulderL.y);
+    CGContextAddLineToPoint(context, shoulderR.x, shoulderR.y);
+    CGContextAddLineToPoint(context, hipR.x, hipR.y);
+    CGContextAddLineToPoint(context, hipL.x, hipL.y);
+    CGContextClosePath(context);
+    CGContextFillPath(context);
+    CGPoint nose = point(0);
+    CGContextFillEllipseInRect(context, CGRectMake(nose.x - 18, nose.y - 22, 36, 44));
+
+    CGImageRef image = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    CIImage *mask = [CIImage imageWithCGImage:image];
+    CGImageRelease(image);
+    mask = [mask imageByApplyingTransform:CGAffineTransformMakeScale(
+        extent.size.width / width, extent.size.height / height)];
+    CIFilter *expand = [CIFilter filterWithName:@"CIMorphologyMaximum"];
+    [expand setValue:mask forKey:kCIInputImageKey];
+    [expand setValue:@(12.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
     return [expand.outputImage imageByCroppingToRect:extent];
 }
 
@@ -164,6 +220,17 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     CIImage *processed = source;
     CIImage *mask = WindowsStylePersonMask(result.segmentationMasks.firstObject, source.extent);
     CIImage *skinAndTrackerMask = captured[@"privacy"];
+    CIImage *currentPoseMask = CurrentPosePrivacyMask(result, source.extent);
+    if (currentPoseMask != nil) {
+        if (skinAndTrackerMask != nil) {
+            CIFilter *poseUnion = [CIFilter filterWithName:@"CIMaximumCompositing"];
+            [poseUnion setValue:currentPoseMask forKey:kCIInputImageKey];
+            [poseUnion setValue:skinAndTrackerMask forKey:kCIInputBackgroundImageKey];
+            skinAndTrackerMask = [poseUnion.outputImage imageByCroppingToRect:source.extent];
+        } else {
+            skinAndTrackerMask = currentPoseMask;
+        }
+    }
     if (mask != nil && skinAndTrackerMask != nil) {
         CIFilter *unionFilter = [CIFilter filterWithName:@"CIMaximumCompositing"];
         [unionFilter setValue:mask forKey:kCIInputImageKey];
@@ -248,6 +315,10 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 - (void)captureOutput:(AVCaptureOutput *)output
  didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         fromConnection:(AVCaptureConnection *)connection {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIInterfaceOrientation orientation = UIApplication.sharedApplication.statusBarOrientation;
+        if (orientation != s_lastVideoOrientation) UpdateVideoOrientation();
+    });
     CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     if (pixelBuffer == nil) return;
 
@@ -403,6 +474,7 @@ static void UpdateVideoOrientation() {
     s_backgroundLayer.frame = unityView.frame;
     AVCaptureVideoOrientation orientation = AVCaptureVideoOrientationPortrait;
     UIInterfaceOrientation ui = UIApplication.sharedApplication.statusBarOrientation;
+    s_lastVideoOrientation = ui;
     if (ui == UIInterfaceOrientationLandscapeLeft) orientation = AVCaptureVideoOrientationLandscapeLeft;
     else if (ui == UIInterfaceOrientationLandscapeRight) orientation = AVCaptureVideoOrientationLandscapeRight;
     AVCaptureConnection *video = [s_output connectionWithMediaType:AVMediaTypeVideo];
