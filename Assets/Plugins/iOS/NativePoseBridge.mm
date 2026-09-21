@@ -218,6 +218,12 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     if (source == nil || s_backgroundLayer == nil) return;
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
     CIImage *processed = source;
+    BOOL hasReliablePose = result.landmarks.firstObject.count >= 29;
+    // Privacy is fail-closed: if body tracking is lost, never reveal an
+    // unprotected camera frame while the avatar can no longer cover it.
+    if (!hasReliablePose) {
+        processed = WindowsStyleMosaic(source);
+    }
     CIImage *mask = WindowsStylePersonMask(result.segmentationMasks.firstObject, source.extent);
     CIImage *skinAndTrackerMask = captured[@"privacy"];
     CIImage *currentPoseMask = CurrentPosePrivacyMask(result, source.extent);
@@ -239,7 +245,7 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     } else if (mask == nil) {
         mask = skinAndTrackerMask;
     }
-    if (mask != nil) {
+    if (hasReliablePose && mask != nil) {
         CIFilter *blend = [CIFilter filterWithName:@"CIBlendWithMask"];
         [blend setValue:WindowsStyleMosaic(source) forKey:kCIInputImageKey];
         [blend setValue:source forKey:kCIInputBackgroundImageKey];
