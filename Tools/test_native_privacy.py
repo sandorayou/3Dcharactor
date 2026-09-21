@@ -45,11 +45,11 @@ int main(void) {
     for (int i = 0; i < 6; ++i) assert(bone[i] == expected[i]);
     // Same-frame skin seeds expand to nearby dark facial features, while a
     // light achromatic background stays excluded from the final mask.
-    unsigned char faceBone[49], faceSkin[49] = {0}, faceEligible[49], faceOutput[49] = {0};
+    unsigned char faceBone[49], faceSkin[49] = {0}, faceEligible[49], faceHorizontal[49] = {0}, faceOutput[49] = {0};
     for (int i = 0; i < 49; ++i) { faceBone[i] = 255; faceEligible[i] = 255; }
     faceSkin[24] = 255;
     faceEligible[0] = 0; faceEligible[1] = 0; faceEligible[7] = 0; faceEligible[17] = 0;
-    ExpandPrivacyMask(faceBone, faceSkin, faceEligible, 7, 7, 2, faceOutput);
+    ExpandPrivacyMask(faceBone, faceSkin, faceEligible, 7, 7, 2, faceHorizontal, faceOutput);
     assert(faceOutput[24] == 255 && faceOutput[10] == 255); // skin and nearby eye/mouth
     assert(faceOutput[0] == 0 && faceOutput[1] == 0 && faceOutput[7] == 0 && faceOutput[17] == 0); // white background
     // Exhaustive neutral ramp stays excluded at every bone coverage value.
@@ -76,10 +76,11 @@ int main(void) {
     # and never scales/dilates/unions its output with an earlier-frame mask.
     pose = bridge.split("static CIImage *CurrentPosePrivacyMask", 1)[1].split("static CIImage *WindowsStyleMosaic", 1)[0]
     display = bridge.split("static void DisplaySynchronizedBackground", 1)[1].split("// Each detector", 1)[0]
-    assert pose.index("CGContextFlush(context)") < pose.index("IntersectPrivacyMask(") < pose.index("CGBitmapContextCreateImage(context)")
+    assert pose.index("CGContextFlush(context)") < pose.index("ExpandPrivacyMask(") < pose.index("CGBitmapContextCreateImage(context)")
     assert "CGAffineTransformMakeScale" not in pose
     assert "CIMorphology" not in bridge and "CIMaximumCompositing" not in bridge
-    assert 'CurrentPosePrivacyMask(result, source.extent, captured[@"privacy"])' in bridge
+    assert 'CurrentPosePrivacyMask(result, source.extent,' in bridge
+    assert 'captured[@"privacy"], captured[@"eligible"]' in bridge
     assert "mask[y * width + x] = PrivacySkinPixel" in bridge
     # The native bridge must retain a last safe frame on tracking loss instead
     # of replacing the camera layer with a black image.

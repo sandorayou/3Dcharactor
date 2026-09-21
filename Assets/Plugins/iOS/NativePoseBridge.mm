@@ -79,27 +79,29 @@ static bool PrivacyEligiblePixel(float r, float g, float b) {
 }
 static void ExpandPrivacyMask(const unsigned char *bone, const unsigned char *skin,
                               const unsigned char *eligible, size_t width, size_t height,
-                              size_t radius, unsigned char *output) {
-    const size_t radiusSquared = radius * radius;
+                              size_t radius, unsigned char *horizontal,
+                              unsigned char *output) {
+    // Two separable passes avoid a radius-squared search for every video pixel.
     for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            const size_t offset = y * width + x;
+            bool nearSkin = false;
+            const size_t x0 = x > radius ? x - radius : 0;
+            const size_t x1 = x + radius < width ? x + radius : width - 1;
+            for (size_t sx = x0; sx <= x1; ++sx)
+                if (skin[y * width + sx]) { nearSkin = true; break; }
+            horizontal[offset] = nearSkin ? 255 : 0;
+        }
+    }
+    for (size_t y = 0; y < height; ++y) {
+        const size_t y0 = y > radius ? y - radius : 0;
+        const size_t y1 = y + radius < height ? y + radius : height - 1;
         for (size_t x = 0; x < width; ++x) {
             const size_t offset = y * width + x;
             if (!bone[offset] || !eligible[offset]) { output[offset] = 0; continue; }
             bool nearSkin = false;
-            const size_t y0 = y > radius ? y - radius : 0;
-            const size_t y1 = y + radius < height ? y + radius : height - 1;
-            const size_t x0 = x > radius ? x - radius : 0;
-            const size_t x1 = x + radius < width ? x + radius : width - 1;
-            for (size_t sy = y0; sy <= y1 && !nearSkin; ++sy) {
-                for (size_t sx = x0; sx <= x1; ++sx) {
-                    const size_t dx = sx > x ? sx - x : x - sx;
-                    const size_t dy = sy > y ? sy - y : y - sy;
-                    if (dx * dx + dy * dy <= radiusSquared && skin[sy * width + sx]) {
-                        nearSkin = true;
-                        break;
-                    }
-                }
-            }
+            for (size_t sy = y0; sy <= y1; ++sy)
+                if (horizontal[sy * width + x]) { nearSkin = true; break; }
             output[offset] = nearSkin ? bone[offset] : 0;
         }
     }
@@ -259,10 +261,12 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     // while remaining inside the bone neighborhood. The eligible gate removes
     // light achromatic background pixels without dropping dark facial features.
     CGContextFlush(context);
+    NSMutableData *horizontal = [NSMutableData dataWithLength:width * height];
     NSMutableData *expanded = [NSMutableData dataWithLength:width * height];
     ExpandPrivacyMask((const uint8_t *)data.bytes, (const uint8_t *)skin.bytes,
                       (const uint8_t *)eligible.bytes, width, height,
                       MAX((size_t)4, (size_t)(MAX(width, height) * .035f)),
+                      (uint8_t *)horizontal.mutableBytes,
                       (uint8_t *)expanded.mutableBytes);
     memcpy(data.mutableBytes, expanded.bytes, width * height);
     CGImageRef image = CGBitmapContextCreateImage(context);
