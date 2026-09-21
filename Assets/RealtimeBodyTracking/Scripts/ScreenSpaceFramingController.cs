@@ -124,15 +124,20 @@ namespace RealtimeBodyTracking
             float x = imagePoint.x;
             float y = 1f - imagePoint.y;
 
-            if (targetAspect > sourceAspect)
+            // The native iOS background uses aspect-fill.  Convert from the
+            // uncropped camera image into the visible viewport, including the
+            // part cropped off each edge.  The previous code applied the
+            // aspect-fit transform, which shifted landmarks vertically on a
+            // portrait device and made the avatar drift away from the camera.
+            if (targetAspect < sourceAspect)
             {
-                float contentWidth = sourceAspect / targetAspect;
-                x = 0.5f + (x - 0.5f) * contentWidth;
+                float visibleSourceWidth = targetAspect / sourceAspect;
+                x = 0.5f + (x - 0.5f) / visibleSourceWidth;
             }
-            else
+            else if (targetAspect > sourceAspect)
             {
-                float contentHeight = targetAspect / sourceAspect;
-                y = 0.5f + (y - 0.5f) * contentHeight;
+                float visibleSourceHeight = sourceAspect / targetAspect;
+                y = 0.5f + (y - 0.5f) / visibleSourceHeight;
             }
 
             return new Vector2(x, y);
