@@ -36,6 +36,9 @@ static class Program
             Check(Near(p.x,.5f+(mirror?.1f:-.1f)*(4f/3f)/(9f/16f))&&Near(p.y,.75f),"portrait horizontal crop");
             p=PoseInputMapper.ImageToViewport(new Vector2(.25f,.4f),640,480,16f/9f,mirror);
             Check(Near(p.x,mirror?.75f:.25f)&&Near(p.y,.5f+.1f*(16f/9f)/(4f/3f)),"landscape vertical crop");
+            var leftShoulder = PoseInputMapper.ImageToViewport(new Vector2(.4f,.4f),640,480,9f/16f,mirror);
+            var rightShoulder = PoseInputMapper.ImageToViewport(new Vector2(.6f,.4f),640,480,9f/16f,mirror);
+            Check(Near(Vector2.Distance(leftShoulder,rightShoulder), .2f*(4f/3f)/(9f/16f)), "portrait shoulder width uses visible crop");
         }
         Console.WriteLine($"PASS: {checks} tracking assertions (production PoseInputMapper/PosePacket)");
     }

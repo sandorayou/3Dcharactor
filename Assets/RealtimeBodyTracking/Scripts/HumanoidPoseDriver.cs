@@ -2774,16 +2774,17 @@ namespace RealtimeBodyTracking
                 !pose.TryGetImage("right_shoulder", .55f, out var right))
                 return false;
 
-            // Keep the size calculation used by tracker-video-avatar-overlay: the
-            // camera image occupies only part of a wider Unity viewport, so compare
-            // shoulder widths in that fitted viewport rather than raw image space.
-            var sourceAspect = pose.source_height > 0
-                ? (float)pose.source_width / pose.source_height
-                : 4f / 3f;
-            var viewportScaleX = trackingCamera.aspect > sourceAspect
-                ? sourceAspect / trackingCamera.aspect
-                : 1f;
-            width = Mathf.Abs(right.x - left.x) * viewportScaleX;
+            // Use the same aspect-fill and front/rear mirror transform as the
+            // placement path. The old raw-X calculation missed the horizontal
+            // crop on portrait displays, so framing used one shoulder scale while
+            // the avatar anchor used another and the character drifted in size.
+            var leftViewport = PoseInputMapper.ImageToViewport(
+                new Vector2(left.x, left.y), pose.source_width, pose.source_height,
+                trackingCamera != null ? trackingCamera.aspect : 0f, PreviewMirrored);
+            var rightViewport = PoseInputMapper.ImageToViewport(
+                new Vector2(right.x, right.y), pose.source_width, pose.source_height,
+                trackingCamera != null ? trackingCamera.aspect : 0f, PreviewMirrored);
+            width = Vector2.Distance(leftViewport, rightViewport);
             return width >= .03f;
         }
 
