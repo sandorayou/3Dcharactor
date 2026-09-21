@@ -1739,7 +1739,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_Awake_m0BEE32C3BE081F
 
 IL_0025:
 	{
-		__this->___avatarMirror = (bool)0;
+		__this->___avatarMirror = (bool)1;
 		Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* L_4 = __this->___targetAnimator;
 		il2cpp_codegen_runtime_class_init_inline(Object_tC12DECB6760A7F2CBF65D9DCF18D044C2D97152C_il2cpp_TypeInfo_var);
 		bool L_5;
@@ -13770,7 +13770,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D
 {
 	{
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_0 = ___0_image;
-		float L_1 = L_0.___x;
+		float L_1 = ((float)il2cpp_codegen_subtract((1.0f), L_0.___x));
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 L_2 = ___0_image;
 		float L_3 = L_2.___y;
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_4;

@@ -112,6 +112,29 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
     return [expand.outputImage imageByCroppingToRect:extent];
 }
 
+static NSDictionary *HeadRotationFromPose(NSArray<MPPNormalizedLandmark *> *points) {
+    if (points.count < 13) return nil;
+    MPPNormalizedLandmark *nose = points[0];
+    MPPNormalizedLandmark *leftEye = points[2];
+    MPPNormalizedLandmark *rightEye = points[5];
+    MPPNormalizedLandmark *leftEar = points[7];
+    MPPNormalizedLandmark *rightEar = points[8];
+    CGFloat faceWidth = hypot(rightEar.x - leftEar.x, rightEar.y - leftEar.y);
+    if (faceWidth < .02) return nil;
+    CGFloat centerX = (leftEar.x + rightEar.x) * .5;
+    CGFloat eyeY = (leftEye.y + rightEye.y) * .5;
+    CGFloat yaw = MAX(-.85, MIN(.85, (nose.x - centerX) / faceWidth * 1.8));
+    CGFloat pitch = MAX(-.60, MIN(.60, (nose.y - eyeY) / faceWidth * 1.2 - .32));
+    CGFloat roll = -atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+    CGFloat cx = cos(pitch * .5), sx = sin(pitch * .5);
+    CGFloat cy = cos(yaw * .5), sy = sin(yaw * .5);
+    CGFloat cz = cos(roll * .5), sz = sin(roll * .5);
+    return @{@"x": @(sx * cy * cz - cx * sy * sz),
+             @"y": @(cx * sy * cz + sx * cy * sz),
+             @"z": @(cx * cy * sz - sx * sy * cz),
+             @"w": @(cx * cy * cz + sx * sy * sz)};
+}
+
 static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent) {
     NSArray<MPPNormalizedLandmark *> *points = result.landmarks.firstObject;
     if (points.count < 29) return nil;
@@ -131,7 +154,7 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     };
     const int links[][2] = {{0,11},{0,12},{11,12},{11,13},{13,15},{12,14},{14,16},
                              {11,23},{12,24},{23,24},{23,25},{25,27},{24,26},{26,28}};
-    CGContextSetLineWidth(context, 24);
+    CGContextSetLineWidth(context, 12);
     for (NSUInteger i = 0; i < sizeof(links) / sizeof(links[0]); ++i) {
         CGPoint a = point(links[i][0]), b = point(links[i][1]);
         CGContextMoveToPoint(context, a.x, a.y);
@@ -157,7 +180,7 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
         extent.size.width / width, extent.size.height / height)];
     CIFilter *expand = [CIFilter filterWithName:@"CIMorphologyMaximum"];
     [expand setValue:mask forKey:kCIInputImageKey];
-    [expand setValue:@(12.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
+    [expand setValue:@(5.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
     return [expand.outputImage imageByCroppingToRect:extent];
 }
 
@@ -180,10 +203,10 @@ static CIImage *WindowsStylePersonMask(MPPMask *mask, CGRect extent) {
         extent.size.width / width, extent.size.height / height)];
     CIFilter *dilate = [CIFilter filterWithName:@"CIMorphologyMaximum"];
     [dilate setValue:result forKey:kCIInputImageKey];
-    [dilate setValue:@(60.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
+    [dilate setValue:@(10.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
     CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
     [blur setValue:dilate.outputImage forKey:kCIInputImageKey];
-    [blur setValue:@(20.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
+    [blur setValue:@(3.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
     CIFilter *amplify = [CIFilter filterWithName:@"CIColorMatrix"];
     [amplify setValue:blur.outputImage forKey:kCIInputImageKey];
     [amplify setValue:[CIVector vectorWithX:2 Y:0 Z:0 W:0] forKey:@"inputRVector"];
@@ -193,18 +216,13 @@ static CIImage *WindowsStylePersonMask(MPPMask *mask, CGRect extent) {
 }
 
 static CIImage *WindowsStyleMosaic(CIImage *source) {
-    CGRect extent = source.extent;
-    CIFilter *downsample = [CIFilter filterWithName:@"CILanczosScaleTransform"];
-    CGFloat scale = 8.0 / extent.size.height;
-    [downsample setValue:source forKey:kCIInputImageKey];
-    [downsample setValue:@(scale) forKey:kCIInputScaleKey];
-    [downsample setValue:@((10.0 / extent.size.width) / scale) forKey:kCIInputAspectRatioKey];
-    CGImageRef tinyImage = [s_ciContext createCGImage:downsample.outputImage fromRect:CGRectMake(0, 0, 10, 8)];
-    if (tinyImage == nil) return source;
-    CIImage *tiny = [[CIImage imageWithCGImage:tinyImage] imageBySamplingNearest];
-    CGImageRelease(tinyImage);
-    return [[tiny imageByApplyingTransform:CGAffineTransformMakeScale(
-        extent.size.width / 10.0, extent.size.height / 8.0)] imageByCroppingToRect:extent];
+    CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
+    [pixelate setValue:source forKey:kCIInputImageKey];
+    [pixelate setValue:@(MAX(8.0, s_mosaicScale)) forKey:kCIInputScaleKey];
+    [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent)
+                                           Y:CGRectGetMidY(source.extent)]
+                 forKey:kCIInputCenterKey];
+    return [pixelate.outputImage imageByCroppingToRect:source.extent];
 }
 
 static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInteger timestamp) {
@@ -380,7 +398,9 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
         if (s_hasLeftPoseWrist) { MPPNormalizedLandmark *p = points[15]; s_leftPoseWrist = CGPointMake(p.x, p.y); }
         if (s_hasRightPoseWrist) { MPPNormalizedLandmark *p = points[16]; s_rightPoseWrist = CGPointMake(p.x, p.y); }
     }
-    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints};
+    NSMutableDictionary *packet = [@{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints} mutableCopy];
+    NSDictionary *headRotation = HeadRotationFromPose(points);
+    if (headRotation != nil) packet[@"head_rotation"] = headRotation;
     SubmitResult(@"pose", packet, timestamp);
 }
 @end
@@ -487,8 +507,11 @@ static void UpdateVideoOrientation() {
     if (video.isVideoOrientationSupported) video.videoOrientation = orientation;
     if (video.isVideoMirroringSupported) {
         video.automaticallyAdjustsVideoMirroring = NO;
-        video.videoMirrored = s_useFrontCamera;
+        video.videoMirrored = NO;
     }
+    s_backgroundLayer.affineTransform = s_useFrontCamera
+        ? CGAffineTransformMakeScale(-1.0, 1.0)
+        : CGAffineTransformIdentity;
 }
 
 static AVCaptureDevice *CameraDevice(BOOL front) {

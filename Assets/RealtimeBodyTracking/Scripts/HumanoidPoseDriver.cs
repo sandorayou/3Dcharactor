@@ -313,9 +313,6 @@ namespace RealtimeBodyTracking
             localPoseSource = GetComponent<LocalPosePacketSource>();
 #if UNITY_IOS
             if (localPoseSource == null) localPoseSource = gameObject.AddComponent<IOSNativePoseSource>();
-            // MediaPipe receives the same already-mirrored front-camera frames that
-            // are displayed behind Unity, so anatomical left/right must not be swapped.
-            avatarMirror = false;
 #endif
             if (targetAnimator == null) targetAnimator = GetComponentInChildren<Animator>();
             if (trackingCamera == null) trackingCamera = Camera.main;
@@ -681,23 +678,30 @@ namespace RealtimeBodyTracking
         {
             if (!pose.TryGetHeadRotation(out var absoluteHeadRotation))
             {
-                if (filteredHeadRotationInitialized &&
-                    Time.unscaledTime - lastHeadRotationTime <= faceHoldTime)
+                if (TryEstimateHeadRotationFromLandmarks(pose, out absoluteHeadRotation))
                 {
-                    headTracking = true;
-                    ApplyHeadRotation(HumanBodyBones.Neck, filteredHeadRotation, neckRotationWeight);
-                    ApplyHeadRotation(HumanBodyBones.Head, filteredHeadRotation, 1f);
+                    lastHeadRotationTime = Time.unscaledTime;
+                }
+                else
+                {
+                    if (filteredHeadRotationInitialized &&
+                        Time.unscaledTime - lastHeadRotationTime <= faceHoldTime)
+                    {
+                        headTracking = true;
+                        ApplyHeadRotation(HumanBodyBones.Neck, filteredHeadRotation, neckRotationWeight);
+                        ApplyHeadRotation(HumanBodyBones.Head, filteredHeadRotation, 1f);
+                        return;
+                    }
+                    headTracking = false;
+                    headYawDegrees = 0f;
+                    headPitchDegrees = 0f;
+                    headRollDegrees = 0f;
+                    ReturnBoneToRest(HumanBodyBones.Neck);
+                    ReturnBoneToRest(HumanBodyBones.Head);
+                    filteredHeadRotation = Quaternion.identity;
+                    filteredHeadRotationInitialized = false;
                     return;
                 }
-                headTracking = false;
-                headYawDegrees = 0f;
-                headPitchDegrees = 0f;
-                headRollDegrees = 0f;
-                ReturnBoneToRest(HumanBodyBones.Neck);
-                ReturnBoneToRest(HumanBodyBones.Head);
-                filteredHeadRotation = Quaternion.identity;
-                filteredHeadRotationInitialized = false;
-                return;
             }
             lastHeadRotationTime = Time.unscaledTime;
             if (mirrorHeadRotation)
@@ -734,6 +738,19 @@ namespace RealtimeBodyTracking
             headRollDegrees = roll;
             ApplyHeadRotation(HumanBodyBones.Neck, filteredHeadRotation, neckRotationWeight);
             ApplyHeadRotation(HumanBodyBones.Head, filteredHeadRotation, 1f);
+        }
+
+        private bool TryEstimateHeadRotationFromLandmarks(PosePacket pose, out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+            if (!PoseInputMapper.TryReadHeadFacing(
+                    pose, InputCoordinatesNeedMirror, headMinConfidence, out var facing)) return false;
+            PoseInputMapper.TryReadHeadRoll(
+                pose, InputCoordinatesNeedMirror, headMinConfidence, out var roll);
+            var yaw = Mathf.Clamp(facing.x * 420f, -50f, 50f);
+            var pitch = Mathf.Clamp(-facing.y * 180f, -35f, 35f);
+            rotation = Quaternion.Euler(pitch, yaw, -roll);
+            return true;
         }
 
         private void ApplyHeadRotation(HumanBodyBones bone, Quaternion relativeRotation, float weight)
@@ -2584,11 +2601,7 @@ namespace RealtimeBodyTracking
             // The native iOS sample buffer and background layer are already mirrored
             // together for the front camera. A second X flip separates the avatar
             // from the person it should cover.
-#if UNITY_IOS && !UNITY_EDITOR
-            var x = imagePoint.x;
-#else
             var x = 1f - imagePoint.x;
-#endif
             var y = 1f - imagePoint.y;
             if (sourceWidth > 0 && sourceHeight > 0 && trackingCamera != null)
             {
