@@ -33,6 +33,9 @@ int main(void) {
     assert(!PrivacySkinPixel(0,0,0));
     assert(!PrivacySkinPixel(60,40,30));
     assert(!PrivacySkinPixel(0,0,255));
+    assert(!PrivacyEligiblePixel(255,255,255));
+    assert(!PrivacyEligiblePixel(220,220,220));
+    assert(PrivacyEligiblePixel(40,40,40)); // eye/hair detail remains covered
     // Skin outside the expanded bones is untouched; bone-only white and
     // antialiased white edge pixels remain untouched even next to skin.
     unsigned char bone[] = {255, 0, 255, 255, 128, 64};
@@ -40,6 +43,15 @@ int main(void) {
     const unsigned char expected[] = {255, 0, 0, 255, 0, 64};
     IntersectPrivacyMask(bone, skin, 6);
     for (int i = 0; i < 6; ++i) assert(bone[i] == expected[i]);
+    // Same-frame skin seeds expand to nearby dark facial features, while a
+    // light achromatic background stays excluded from the final mask.
+    unsigned char faceBone[49], faceSkin[49] = {0}, faceEligible[49], faceOutput[49] = {0};
+    for (int i = 0; i < 49; ++i) { faceBone[i] = 255; faceEligible[i] = 255; }
+    faceSkin[24] = 255;
+    faceEligible[0] = 0; faceEligible[1] = 0; faceEligible[7] = 0; faceEligible[17] = 0;
+    ExpandPrivacyMask(faceBone, faceSkin, faceEligible, 7, 7, 2, faceOutput);
+    assert(faceOutput[24] == 255 && faceOutput[10] == 255); // skin and nearby eye/mouth
+    assert(faceOutput[0] == 0 && faceOutput[1] == 0 && faceOutput[7] == 0 && faceOutput[17] == 0); // white background
     // Exhaustive neutral ramp stays excluded at every bone coverage value.
     for (int gray = 0; gray < 256; ++gray) {
         assert(!PrivacySkinPixel(gray,gray,gray));
@@ -74,7 +86,10 @@ int main(void) {
     assert "s_lastSafeBackgroundImage" in bridge
     assert "UIImage *image = s_lastSafeBackgroundImage" in bridge
     assert "point.visibility.floatValue >= .15f" in bridge
-    assert "if (points.count < 17 || skin.length != width * height) return nil;" in bridge
+    assert "eligible.length != width * height" in bridge
+    assert "ExpandPrivacyMask" in bridge
+    assert "captured[@\"eligible\"]" in bridge
+    assert "MAX(32.0, s_mosaicScale)" in bridge
     assert "{11,23}" in pose and "{24,26}" in pose
     assert "s_backgroundLayer.contents = (__bridge id)image.CGImage" in display
     assert "Publish from the pose callback itself" in display

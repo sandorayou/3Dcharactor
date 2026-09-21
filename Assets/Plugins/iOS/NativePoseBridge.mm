@@ -69,6 +69,41 @@ static bool PrivacySkinPixel(float r, float g, float b) {
 static void IntersectPrivacyMask(unsigned char *bone, const unsigned char *skin, size_t count) {
     for (size_t i = 0; i < count; ++i) bone[i] = skin[i] ? bone[i] : 0;
 }
+static bool PrivacyEligiblePixel(float r, float g, float b) {
+    // Keep dark eyes, eyebrows and mouth pixels eligible so that expanding a
+    // skin seed can hide the complete face. Light achromatic pixels are the
+    // usual white wall/background and must never become privacy pixels.
+    float maximum = fmaxf(r, fmaxf(g, b)), minimum = fminf(r, fminf(g, b));
+    float saturation = maximum <= 0 ? 0 : (maximum - minimum) / maximum * 255.0f;
+    return !(maximum >= 180.0f && saturation <= 42.0f);
+}
+static void ExpandPrivacyMask(const unsigned char *bone, const unsigned char *skin,
+                              const unsigned char *eligible, size_t width, size_t height,
+                              size_t radius, unsigned char *output) {
+    const size_t radiusSquared = radius * radius;
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            const size_t offset = y * width + x;
+            if (!bone[offset] || !eligible[offset]) { output[offset] = 0; continue; }
+            bool nearSkin = false;
+            const size_t y0 = y > radius ? y - radius : 0;
+            const size_t y1 = y + radius < height ? y + radius : height - 1;
+            const size_t x0 = x > radius ? x - radius : 0;
+            const size_t x1 = x + radius < width ? x + radius : width - 1;
+            for (size_t sy = y0; sy <= y1 && !nearSkin; ++sy) {
+                for (size_t sx = x0; sx <= x1; ++sx) {
+                    const size_t dx = sx > x ? sx - x : x - sx;
+                    const size_t dy = sy > y ? sy - y : y - sy;
+                    if (dx * dx + dy * dy <= radiusSquared && skin[sy * width + sx]) {
+                        nearSkin = true;
+                        break;
+                    }
+                }
+            }
+            output[offset] = nearSkin ? bone[offset] : 0;
+        }
+    }
+}
 // END PORTABLE PRIVACY CORE
 
 static NSData *PrivacyMask(CVPixelBufferRef pixelBuffer) {
@@ -150,10 +185,29 @@ static BOOL ReliablePrivacyPoint(MPPNormalizedLandmark *point) {
            point.visibility.floatValue >= .15f;
 }
 
-static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent, NSData *skin) {
+static NSData *PrivacyEligibleMask(CVPixelBufferRef pixelBuffer) {
+    const size_t width = CVPixelBufferGetWidth(pixelBuffer);
+    const size_t height = CVPixelBufferGetHeight(pixelBuffer);
+    NSMutableData *data = [NSMutableData dataWithLength:width * height];
+    uint8_t *mask = (uint8_t *)data.mutableBytes;
+    CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+    const uint8_t *pixels = (const uint8_t *)CVPixelBufferGetBaseAddress(pixelBuffer);
+    const size_t stride = CVPixelBufferGetBytesPerRow(pixelBuffer);
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            const uint8_t *p = pixels + y * stride + x * 4;
+            mask[y * width + x] = PrivacyEligiblePixel(p[2], p[1], p[0]) ? 255 : 0;
+        }
+    }
+    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+    return data;
+}
+
+static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent,
+                                       NSData *skin, NSData *eligible) {
     NSArray<MPPNormalizedLandmark *> *points = result.landmarks.firstObject;
     const size_t width = (size_t)extent.size.width, height = (size_t)extent.size.height;
-    if (points.count < 17 || skin.length != width * height) return nil;
+    if (points.count < 17 || skin.length != width * height || eligible.length != width * height) return nil;
     // One valid tracked point is enough to produce a partial mask; weak points
     // are skipped
     // edge-by-edge instead of failing the complete frame.
@@ -201,10 +255,16 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
         CGFloat x = point.x * width, y = (1-point.y) * height;
         CGContextFillEllipseInRect(context, CGRectMake(x-radius, y-radius, radius*2, radius*2));
     }
-    // Apply the exact-resolution skin gate LAST, after stroke expansion and
-    // antialiasing, so white/neutral pixels cannot re-enter the final mask.
+    // Expand same-frame skin seeds over nearby eyes, mouth and facial skin,
+    // while remaining inside the bone neighborhood. The eligible gate removes
+    // light achromatic background pixels without dropping dark facial features.
     CGContextFlush(context);
-    IntersectPrivacyMask((uint8_t *)data.mutableBytes, (const uint8_t *)skin.bytes, width * height);
+    NSMutableData *expanded = [NSMutableData dataWithLength:width * height];
+    ExpandPrivacyMask((const uint8_t *)data.bytes, (const uint8_t *)skin.bytes,
+                      (const uint8_t *)eligible.bytes, width, height,
+                      MAX((size_t)4, (size_t)(MAX(width, height) * .035f)),
+                      (uint8_t *)expanded.mutableBytes);
+    memcpy(data.mutableBytes, expanded.bytes, width * height);
     CGImageRef image = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
     if (image == nil) return nil;
@@ -216,7 +276,9 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
 static CIImage *WindowsStyleMosaic(CIImage *source) {
     CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
     [pixelate setValue:source forKey:kCIInputImageKey];
-    [pixelate setValue:@(MAX(8.0, s_mosaicScale)) forKey:kCIInputScaleKey];
+    // CIPixellate produces a constant-color square for each block. Keep a
+    // privacy-safe minimum so eyes and mouth cannot survive as fine detail.
+    [pixelate setValue:@(MAX(32.0, s_mosaicScale)) forKey:kCIInputScaleKey];
     [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent)
                                            Y:CGRectGetMidY(source.extent)]
                  forKey:kCIInputCenterKey];
@@ -233,7 +295,8 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     CIImage *source = captured[@"source"];
     if (source == nil || s_backgroundLayer == nil) return;
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
-    CIImage *mask = CurrentPosePrivacyMask(result, source.extent, captured[@"privacy"]);
+    CIImage *mask = CurrentPosePrivacyMask(result, source.extent,
+                                           captured[@"privacy"], captured[@"eligible"]);
     // Tracking loss: keep the last privacy-processed frame. A black
     // replacement made the camera background appear to stop working whenever
     // one pose frame was incomplete.
@@ -337,7 +400,8 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
         if (s_pendingCameraFrames == nil) s_pendingCameraFrames = [NSMutableDictionary dictionary];
         CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
         NSData *privacy = PrivacyMask(pixelBuffer);
-        s_pendingCameraFrames[@(timestamp)] = @{@"source": source, @"privacy": privacy};
+        NSData *eligible = PrivacyEligibleMask(pixelBuffer);
+        s_pendingCameraFrames[@(timestamp)] = @{@"source": source, @"privacy": privacy, @"eligible": eligible};
         while (s_pendingCameraFrames.count > 8) {
             NSNumber *oldest = [[s_pendingCameraFrames.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
             [s_pendingCameraFrames removeObjectForKey:oldest];
@@ -620,7 +684,7 @@ extern "C" void NativePoseCaptureSetFrontCamera(int front) {
 }
 
 extern "C" void NativePoseCaptureSetMosaicScale(float scale) {
-    s_mosaicScale = MAX(2.0, scale);
+    s_mosaicScale = MAX(32.0, scale);
 }
 
 extern "C" void NativePoseCaptureStop() {
