@@ -63,12 +63,22 @@ int main(void) {
     # Check that production consumes the tested function after bone rasterization
     # and never scales/dilates/unions its output with an earlier-frame mask.
     pose = bridge.split("static CIImage *CurrentPosePrivacyMask", 1)[1].split("static CIImage *WindowsStyleMosaic", 1)[0]
+    display = bridge.split("static void DisplaySynchronizedBackground", 1)[1].split("// Each detector", 1)[0]
     assert pose.index("CGContextFlush(context)") < pose.index("IntersectPrivacyMask(") < pose.index("CGBitmapContextCreateImage(context)")
     assert "CGAffineTransformMakeScale" not in pose
     assert "CIMorphology" not in bridge and "CIMaximumCompositing" not in bridge
     assert 'CurrentPosePrivacyMask(result, source.extent, captured[@"privacy"])' in bridge
     assert "mask[y * width + x] = PrivacySkinPixel" in bridge
-    assert "CIColor colorWithRed:0 green:0 blue:0" in bridge
+    # The native bridge must retain a last safe frame on tracking loss instead
+    # of replacing the camera layer with a black image.
+    assert "s_lastSafeBackgroundImage" in bridge
+    assert "UIImage *image = s_lastSafeBackgroundImage" in bridge
+    assert "point.visibility.floatValue >= .15f" in bridge
+    assert "if (points.count < 17 || skin.length != width * height) return nil;" in bridge
+    assert "{11,23}" not in pose and "{24,26}" not in pose
+    assert "s_backgroundLayer.contents = (__bridge id)image.CGImage" in display
+    assert "must not wait for hand and face callbacks" in display
+    assert "CIColor colorWithRed:0 green:0 blue:0" not in bridge
     print("PASS: compiled native skin/intersection core; neutral ramp, bone-only, skin-only, edge exclusion; frame/fail-closed wiring")
 
 

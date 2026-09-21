@@ -20,6 +20,9 @@ static CGFloat s_mosaicScale = 36.0;
 static CALayer *s_backgroundLayer;
 static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
+// Keep the last frame that was successfully privacy-masked. A detector can
+// miss a frame without making the previously safe camera image unsafe.
+static UIImage *s_lastSafeBackgroundImage;
 static NSArray<NSValue *> *s_posePrivacyPoints;
 static NSArray<NSValue *> *s_handPrivacyPoints;
 static UIInterfaceOrientation s_lastVideoOrientation = UIInterfaceOrientationUnknown;
@@ -138,16 +141,30 @@ static NSDictionary *HeadRotationFromFaceMatrix(MPPTransformMatrix *matrix) {
 static BOOL ReliablePrivacyPoint(MPPNormalizedLandmark *point) {
     return isfinite(point.x) && isfinite(point.y) &&
            point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1 &&
-           point.visibility.floatValue >= .5f;
+           // Visibility is per landmark. Do not discard the complete upper
+           // body because one wrist/elbow is temporarily low confidence.
+           point.visibility.floatValue >= .15f;
 }
 
 static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent, NSData *skin) {
     NSArray<MPPNormalizedLandmark *> *points = result.landmarks.firstObject;
     const size_t width = (size_t)extent.size.width, height = (size_t)extent.size.height;
-    if (points.count < 29 || skin.length != width * height) return nil;
-    // Both shoulders and hips must be valid before revealing a live frame.
-    for (NSNumber *index in @[@11, @12, @23, @24])
-        if (!ReliablePrivacyPoint(points[index.unsignedIntegerValue])) return nil;
+    if (points.count < 17 || skin.length != width * height) return nil;
+    // Privacy is intentionally limited to the upper body. One valid shoulder
+    // or arm is enough to produce a partial mask; weak landmarks are skipped
+    // edge-by-edge instead of failing the complete frame.
+    const NSUInteger upperBodyIndices[] = {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
+    };
+    BOOL hasValidUpperBodyPoint = NO;
+    for (NSUInteger i = 0; i < sizeof(upperBodyIndices) / sizeof(upperBodyIndices[0]); ++i) {
+        if (upperBodyIndices[i] < points.count && ReliablePrivacyPoint(points[upperBodyIndices[i]])) {
+            hasValidUpperBodyPoint = YES;
+            break;
+        }
+    }
+    if (!hasValidUpperBodyPoint) return nil;
     NSMutableData *data = [NSMutableData dataWithLength:width * height];
     CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
     CGContextRef context = CGBitmapContextCreate(data.mutableBytes, width, height, 8, width, gray, kCGImageAlphaNone);
@@ -161,9 +178,7 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     const NSUInteger edges[][2] = {
         {0,1},{1,2},{2,3},{3,7},{0,4},{4,5},{5,6},{6,8},{9,10},
         {11,12},{11,13},{13,15},{15,17},{15,19},{15,21},{17,19},
-        {12,14},{14,16},{16,18},{16,20},{16,22},{18,20},
-        {11,23},{12,24},{23,24},{23,25},{25,27},{27,29},{29,31},{27,31},
-        {24,26},{26,28},{28,30},{30,32},{28,32}
+        {12,14},{14,16},{16,18},{16,20},{16,22}
     };
     for (const auto &edge : edges) {
         if (edge[1] >= points.count || !ReliablePrivacyPoint(points[edge[0]]) || !ReliablePrivacyPoint(points[edge[1]])) continue;
@@ -172,8 +187,10 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
         CGContextAddLineToPoint(context, b.x * width, (1-b.y) * height);
         CGContextStrokePath(context);
     }
-    for (MPPNormalizedLandmark *point in points) {
-        if (!ReliablePrivacyPoint(point)) continue;
+    for (NSUInteger i = 0; i < sizeof(upperBodyIndices) / sizeof(upperBodyIndices[0]); ++i) {
+        NSUInteger index = upperBodyIndices[i];
+        if (index >= points.count || !ReliablePrivacyPoint(points[index])) continue;
+        MPPNormalizedLandmark *point = points[index];
         CGFloat x = point.x * width, y = (1-point.y) * height;
         CGContextFillEllipseInRect(context, CGRectMake(x-radius, y-radius, radius*2, radius*2));
     }
@@ -210,20 +227,24 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     if (source == nil || s_backgroundLayer == nil) return;
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
     CIImage *mask = CurrentPosePrivacyMask(result, source.extent, captured[@"privacy"]);
-    // Tracking loss: suppress the live image entirely. Full-frame pixelation
-    // both leaks silhouettes and wrongly mosaics white backgrounds.
-    CIImage *processed = [[CIImage imageWithColor:[CIColor colorWithRed:0 green:0 blue:0]] imageByCroppingToRect:source.extent];
+    // Tracking loss: keep the last privacy-processed frame. A black
+    // replacement made the camera background appear to stop working whenever
+    // one pose frame was incomplete.
+    UIImage *image = s_lastSafeBackgroundImage;
     if (mask != nil) {
         CIFilter *blend = [CIFilter filterWithName:@"CIBlendWithMask"];
         [blend setValue:WindowsStyleMosaic(source) forKey:kCIInputImageKey];
         [blend setValue:source forKey:kCIInputBackgroundImageKey];
         [blend setValue:mask forKey:kCIInputMaskImageKey];
-        processed = [blend.outputImage imageByCroppingToRect:source.extent];
+        CIImage *processed = [blend.outputImage imageByCroppingToRect:source.extent];
+        CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
+        if (frame != nil) {
+            image = [UIImage imageWithCGImage:frame];
+            CGImageRelease(frame);
+            s_lastSafeBackgroundImage = image;
+        }
     }
-    CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
-    if (frame != nil) {
-        UIImage *image = [UIImage imageWithCGImage:frame];
-        CGImageRelease(frame);
+    if (image != nil) {
         @synchronized(FrameGate()) {
             if (s_pendingProcessedFrames == nil) s_pendingProcessedFrames = [NSMutableDictionary dictionary];
             s_pendingProcessedFrames[@(timestamp)] = image;
@@ -232,6 +253,13 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
                 [s_pendingProcessedFrames removeObjectForKey:oldest];
             }
         }
+        // Publish from the pose callback itself. The camera preview must not
+        // wait for hand and face callbacks, which can legitimately miss an
+        // independent live-stream frame.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (s_backgroundLayer != nil)
+                s_backgroundLayer.contents = (__bridge id)image.CGImage;
+        });
     }
 }
 // Each detector completes independently. Publish only matching capture timestamps.
@@ -328,8 +356,9 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 @end
 @implementation NativePoseResultDelegate
 - (void)poseLandmarker:(MPPPoseLandmarker *)landmarker didFinishDetectionWithResult:(MPPPoseLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
-    if (result == nil || s_unityObject == nil) return;
+    if (s_unityObject == nil) return;
     DisplaySynchronizedBackground(result, timestamp);
+    if (result == nil) return;
     NSArray *points = result.landmarks.firstObject;
     NSArray<MPPLandmark *> *world = result.worldLandmarks.firstObject;
     NSArray *names = @[@"nose", @"left_eye_inner", @"left_eye", @"left_eye_outer", @"right_eye_inner", @"right_eye", @"right_eye_outer", @"left_ear", @"right_ear", @"mouth_left", @"mouth_right", @"left_shoulder", @"right_shoulder", @"left_elbow", @"right_elbow", @"left_wrist", @"right_wrist", @"left_pinky", @"right_pinky", @"left_index", @"right_index", @"left_thumb", @"right_thumb", @"left_hip", @"right_hip", @"left_knee", @"right_knee", @"left_ankle", @"right_ankle", @"left_heel", @"right_heel", @"left_foot_index", @"right_foot_index"];
@@ -483,6 +512,7 @@ extern "C" void NativePoseCaptureStop();
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
+    s_lastSafeBackgroundImage = nil;
     if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] == AVAuthorizationStatusNotDetermined) {
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -597,6 +627,7 @@ extern "C" void NativePoseCaptureStop() {
     [s_backgroundLayer removeFromSuperlayer];
     s_backgroundLayer = nil;
     s_ciContext = nil;
+    s_lastSafeBackgroundImage = nil;
     @synchronized(FrameGate()) {
         [s_pendingCameraFrames removeAllObjects]; s_pendingCameraFrames = nil;
         [s_pendingProcessedFrames removeAllObjects]; s_pendingProcessedFrames = nil;
