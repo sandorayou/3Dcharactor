@@ -16,15 +16,65 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetMosaicScale(float scale);
 #endif
         [SerializeField] private bool useFrontCamera = true;
+        public bool UseFrontCamera => useFrontCamera;
         [SerializeField, Range(2f, 80f)] private float mosaicScale = 36f;
         private PosePacket latest;
         private float nextStatusLog;
+        [SerializeField] private TextAsset replayJsonl;
+        private System.IO.StringReader replayReader;
+        private float nextReplayFrame;
+        public TrackingJsonlRecorder Recording { get; } = new TrackingJsonlRecorder();
+
+        // Assign a copied JSONL as a .txt TextAsset; runs without an attached iPhone.
+        [ContextMenu("Tracking/Replay assigned JSONL at 30 fps")]
+        public void StartReplay()
+        {
+            StopReplay();
+            StopRecording();
+            if (replayJsonl == null || replayJsonl.bytes.Length > 8 * 1024 * 1024) return;
+            replayReader = new System.IO.StringReader(replayJsonl.text);
+            latest = null;
+            nextReplayFrame = Time.unscaledTime;
+        }
+
+        [ContextMenu("Tracking/Stop replay")]
+        public void StopReplay()
+        {
+            replayReader?.Dispose();
+            replayReader = null;
+            latest = null;
+        }
+
+        private void Update()
+        {
+            if (replayReader == null || Time.unscaledTime < nextReplayFrame) return;
+            var json = replayReader.ReadLine();
+            if (json == null) { StopReplay(); return; }
+            nextReplayFrame = Time.unscaledTime + 1f / 30f;
+            AcceptPoseJson(json);
+        }
+
+        public void StartRecording()
+        {
+            StopReplay();
+            Recording.Start(System.IO.Path.Combine(Application.persistentDataPath, "TrackingLogs"));
+        }
+
+        public void StopRecording() { Recording.Stop(); }
 
         public void OnNativePoseJson(string json)
+        {
+            if (replayReader != null) return;
+            AcceptPoseJson(json);
+        }
+
+        private void AcceptPoseJson(string json)
         {
             if (string.IsNullOrEmpty(json)) return;
             try { latest = JsonUtility.FromJson<PosePacket>(json); }
             catch (System.ArgumentException error) { Debug.LogError("[Tracking] Invalid packet: " + error.Message, this); return; }
+            if (latest != null && Recording.IsRecording)
+                Recording.Append(JsonUtility.ToJson(latest));
             if (latest != null && Time.unscaledTime >= nextStatusLog)
             {
                 nextStatusLog = Time.unscaledTime + 2f;
@@ -85,6 +135,8 @@ namespace RealtimeBodyTracking
 
         private void OnDisable()
         {
+            StopReplay();
+            StopRecording();
 #if UNITY_IOS && !UNITY_EDITOR
             NativePoseCaptureStop();
 #endif
@@ -92,6 +144,7 @@ namespace RealtimeBodyTracking
 
         private void OnApplicationPause(bool paused)
         {
+            if (paused) StopRecording();
 #if UNITY_IOS && !UNITY_EDITOR
             NativePoseCaptureSetPaused(paused ? 1 : 0);
 #endif

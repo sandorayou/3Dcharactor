@@ -37,6 +37,29 @@ namespace RealtimeBodyTracking
                 GUIUtility.systemCopyBuffer = RuntimeLogCapture.GetText();
             if (GUILayout.Button("閉じる", GUILayout.Width(110), GUILayout.Height(44))) visible = false;
             GUILayout.EndHorizontal();
+            var source = Object.FindObjectOfType<IOSNativePoseSource>();
+            if (source != null)
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button(source.Recording.IsRecording ? "記録停止" : "新規記録（前回を上書き）", GUILayout.Height(44)))
+                {
+                    if (source.Recording.IsRecording) source.StopRecording();
+                    else source.StartRecording();
+                }
+                if (GUILayout.Button("記録JSONをコピー", GUILayout.Height(44)))
+                {
+                    source.StopRecording();
+                    try
+                    {
+                        if (System.IO.File.Exists(source.Recording.FilePath))
+                            GUIUtility.systemCopyBuffer = System.IO.File.ReadAllText(source.Recording.FilePath);
+                    }
+                    catch (System.Exception error) { Debug.LogError("[Tracking] Copy failed: " + error.Message); }
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.Label(source.Recording.Status + " / " + source.Recording.Frames + " frames", textStyle);
+                GUILayout.Label(source.Recording.FilePath ?? "画像なし・最大6000フレーム / 8 MiB", textStyle);
+            }
             var holdingCopy = GUILayout.RepeatButton(copyStatus, GUILayout.Height(48));
             if (holdingCopy)
             {

@@ -65,6 +65,19 @@ namespace RealtimeBodyTracking
 
     public static class PoseInputMapper
     {
+        public static Vector2 ImageToViewport(Vector2 image, int width, int height, float viewportAspect, bool mirror)
+        {
+            var point = new Vector2(mirror ? 1f - image.x : image.x, 1f - image.y);
+            if (width <= 0 || height <= 0 || viewportAspect <= 0f) return point;
+            var sourceAspect = (float)width / height;
+            // The native preview fills its layer and crops the excess image.
+            if (viewportAspect < sourceAspect)
+                point.x = .5f + (point.x - .5f) * sourceAspect / viewportAspect;
+            else
+                point.y = .5f + (point.y - .5f) * viewportAspect / sourceAspect;
+            return point;
+        }
+
         public static bool TryGet(PosePacket pose, string name, bool mirror, out Vector3 position)
         {
             return TryGet(pose, name, mirror, 0.001f, out position);
@@ -95,8 +108,8 @@ namespace RealtimeBodyTracking
 
         public static bool TryReadUpperBody(PosePacket pose, bool mirror, float bodyMinConfidence, out UpperBodyPose upperBody)
         {
-            if (!TryGet(pose, "left_shoulder", mirror, out var leftShoulder) ||
-                !TryGet(pose, "right_shoulder", mirror, out var rightShoulder))
+            if (!TryGet(pose, "left_shoulder", mirror, bodyMinConfidence, out var leftShoulder) ||
+                !TryGet(pose, "right_shoulder", mirror, bodyMinConfidence, out var rightShoulder))
             {
                 upperBody = default;
                 return false;
@@ -259,6 +272,10 @@ namespace RealtimeBodyTracking
             left = MapImagePoint(left, mirror);
             right = MapImagePoint(right, mirror);
             var lateral = right - left;
+            // A shoulder/eye line is an undirected roll axis. Anatomical right is
+            // screen-left in an unmirrored front view; atan2 alone returns +/-180
+            // there and flips sign whenever near-level landmark noise crosses zero.
+            if (lateral.x < 0f) lateral = -lateral;
             roll = Mathf.Atan2(lateral.y, lateral.x) * Mathf.Rad2Deg;
             return Mathf.Abs(lateral.x) > (hasEyes ? .025f : .04f);
         }

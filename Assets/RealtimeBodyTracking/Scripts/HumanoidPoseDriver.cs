@@ -2083,13 +2083,13 @@ namespace RealtimeBodyTracking
             return shoulderViewport.z > 0f && targetViewport.z > 0f;
         }
 
+        private bool PreviewMirrored => localPoseSource is IOSNativePoseSource native
+            ? native.UseFrontCamera : true;
+
         private Vector2 ToPreviewViewport(Vector3 image)
         {
-#if UNITY_IOS && !UNITY_EDITOR
-            return new Vector2(image.x, 1f - image.y);
-#else
-            return new Vector2(1f - image.x, 1f - image.y);
-#endif
+            return SourceImageToViewport(image,
+                lastTrackedPose?.source_width ?? 0, lastTrackedPose?.source_height ?? 0);
         }
 
         private static bool IsInsideExtendedArmImage(Vector3 image, float margin)
@@ -2603,33 +2603,8 @@ namespace RealtimeBodyTracking
 
         private Vector2 SourceImageToViewport(Vector2 imagePoint, int sourceWidth, int sourceHeight)
         {
-            // Python already removes the square inference letterbox and reports
-            // coordinates normalized to the original camera image. Map 0..1 directly
-            // to Unity so the camera and game-view edges line up.
-            // iOS mirrors the displayed camera layer while MediaPipe keeps raw image
-            // coordinates, so its X value already maps to the mirrored preview.
-#if UNITY_IOS && !UNITY_EDITOR
-            var x = imagePoint.x;
-#else
-            var x = 1f - imagePoint.x;
-#endif
-            var y = 1f - imagePoint.y;
-            if (sourceWidth > 0 && sourceHeight > 0 && trackingCamera != null)
-            {
-                var sourceAspect = (float)sourceWidth / sourceHeight;
-                var viewportAspect = trackingCamera.aspect;
-                if (viewportAspect < sourceAspect)
-                {
-                    var visibleSourceWidth = viewportAspect / sourceAspect;
-                    x = .5f + (x - .5f) / visibleSourceWidth;
-                }
-                else if (viewportAspect > sourceAspect)
-                {
-                    var visibleSourceHeight = sourceAspect / viewportAspect;
-                    y = .5f + (y - .5f) / visibleSourceHeight;
-                }
-            }
-            return new Vector2(x, y);
+            return PoseInputMapper.ImageToViewport(imagePoint, sourceWidth, sourceHeight,
+                trackingCamera != null ? trackingCamera.aspect : 0f, PreviewMirrored);
         }
 
         private void CompleteHorizontalExitIfNeeded()
