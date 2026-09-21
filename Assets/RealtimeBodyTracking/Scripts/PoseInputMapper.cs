@@ -63,6 +63,26 @@ namespace RealtimeBodyTracking
         }
     }
 
+    public readonly struct ScreenAlignmentSolution
+    {
+        public readonly Vector2 SourceCenter;
+        public readonly Vector2 AvatarCenter;
+        public readonly float SourceWidth;
+        public readonly float AvatarWidth;
+        public readonly float TargetDepth;
+
+        public ScreenAlignmentSolution(
+            Vector2 sourceCenter, Vector2 avatarCenter,
+            float sourceWidth, float avatarWidth, float targetDepth)
+        {
+            SourceCenter = sourceCenter;
+            AvatarCenter = avatarCenter;
+            SourceWidth = sourceWidth;
+            AvatarWidth = avatarWidth;
+            TargetDepth = targetDepth;
+        }
+    }
+
     public static class PoseInputMapper
     {
         public static Vector2 ImageToViewport(Vector2 image, int width, int height, float viewportAspect, bool mirror)
@@ -76,6 +96,67 @@ namespace RealtimeBodyTracking
             else
                 point.y = .5f + (point.y - .5f) * viewportAspect / sourceAspect;
             return point;
+        }
+
+        public static bool TryReadPreviewShoulders(
+            PosePacket pose, float viewportAspect, bool previewMirrored, float minConfidence,
+            out Vector2 leftShoulder, out Vector2 rightShoulder)
+        {
+            leftShoulder = default;
+            rightShoulder = default;
+            if (pose == null ||
+                !pose.TryGetImage("left_shoulder", minConfidence, out var left) ||
+                !pose.TryGetImage("right_shoulder", minConfidence, out var right) ||
+                !IsFiniteImagePoint(left) || !IsFiniteImagePoint(right))
+                return false;
+
+            leftShoulder = ImageToViewport(
+                new Vector2(left.x, left.y), pose.source_width, pose.source_height,
+                viewportAspect, previewMirrored);
+            rightShoulder = ImageToViewport(
+                new Vector2(right.x, right.y), pose.source_width, pose.source_height,
+                viewportAspect, previewMirrored);
+            return Vector2.Distance(leftShoulder, rightShoulder) >= .01f;
+        }
+
+        public static bool TrySolveScreenAlignment(
+            Vector2 sourceLeft, Vector2 sourceRight,
+            Vector2 avatarLeft, Vector2 avatarRight,
+            float currentDepth, float minimumDepth, float maximumDepth,
+            out ScreenAlignmentSolution solution)
+        {
+            solution = default;
+            var sourceWidth = Vector2.Distance(sourceLeft, sourceRight);
+            var avatarWidth = Vector2.Distance(avatarLeft, avatarRight);
+            if (!IsFinite(sourceWidth) || !IsFinite(avatarWidth) || !IsFinite(currentDepth) ||
+                sourceWidth < .01f || avatarWidth < .0001f || currentDepth <= .05f)
+                return false;
+
+            var targetDepth = Mathf.Clamp(
+                currentDepth * avatarWidth / sourceWidth,
+                Mathf.Max(minimumDepth, .05f), Mathf.Max(maximumDepth, minimumDepth));
+            solution = new ScreenAlignmentSolution(
+                (sourceLeft + sourceRight) * .5f,
+                (avatarLeft + avatarRight) * .5f,
+                sourceWidth, avatarWidth, targetDepth);
+            return true;
+        }
+
+        private static bool IsFiniteImagePoint(Vector3 point)
+        {
+            return IsFinite(point.x) && IsFinite(point.y);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        public static bool SourceIsLeftForAvatarSide(bool avatarLeft, bool displayedPreviewMirrored)
+        {
+            // A mirrored preview swaps which anatomical limb is drawn under each
+            // screen-space avatar limb. Rear/unmirrored preview preserves it.
+            return avatarLeft != displayedPreviewMirrored;
         }
 
         public static bool TryGet(PosePacket pose, string name, bool mirror, out Vector3 position)

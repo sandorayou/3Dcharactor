@@ -64,6 +64,7 @@ namespace RealtimeBodyTracking
         private float cameraDistanceVelocity;
 
         private double lastSubmitTime;
+        private bool previewMirrored;
 
         public bool IsInitialized => isInitialized;
 
@@ -113,39 +114,20 @@ namespace RealtimeBodyTracking
 
         private Vector2 SourceToViewport(Vector2 imagePoint, int sourceWidth, int sourceHeight, Camera cam)
         {
-            if (sourceWidth <= 0 || sourceHeight <= 0 || cam == null)
-            {
-                return new Vector2(imagePoint.x, 1f - imagePoint.y);
-            }
-
-            float sourceAspect = (float)sourceWidth / sourceHeight;
-            float targetAspect = cam.aspect;
-
-            float x = imagePoint.x;
-            float y = 1f - imagePoint.y;
-
-            // The native iOS background uses aspect-fill.  Convert from the
-            // uncropped camera image into the visible viewport, including the
-            // part cropped off each edge.  The previous code applied the
-            // aspect-fit transform, which shifted landmarks vertically on a
-            // portrait device and made the avatar drift away from the camera.
-            if (targetAspect < sourceAspect)
-            {
-                float visibleSourceWidth = targetAspect / sourceAspect;
-                x = 0.5f + (x - 0.5f) / visibleSourceWidth;
-            }
-            else if (targetAspect > sourceAspect)
-            {
-                float visibleSourceHeight = sourceAspect / targetAspect;
-                y = 0.5f + (y - 0.5f) / visibleSourceHeight;
-            }
-
-            return new Vector2(x, y);
+            return PoseInputMapper.ImageToViewport(
+                imagePoint, sourceWidth, sourceHeight,
+                cam != null ? cam.aspect : 0f, previewMirrored);
         }
 
         public void SubmitMeasurement(PosePacket pose)
         {
+            SubmitMeasurement(pose, mirrorFramingX);
+        }
+
+        public void SubmitMeasurement(PosePacket pose, bool displayedPreviewMirrored)
+        {
             if (!isInitialized || pose == null) return;
+            previewMirrored = displayedPreviewMirrored;
 
             double now = Time.unscaledTimeAsDouble;
             float measurementDeltaTime = (float)Math.Max(0.001, now - lastSubmitTime);
@@ -166,27 +148,17 @@ namespace RealtimeBodyTracking
             int sourceW = pose.source_width > 0 ? pose.source_width : 640;
             int sourceH = pose.source_height > 0 ? pose.source_height : 480;
 
-            if (hasLeftShoulder && hasRightShoulder)
+            if (hasLeftShoulder && hasRightShoulder &&
+                PoseInputMapper.TryReadPreviewShoulders(
+                    pose, camera.aspect, previewMirrored, framingMinConfidence,
+                    out var leftViewport, out var rightViewport))
             {
-                Vector2 leftImg = new Vector2(leftShoulderPos.x, leftShoulderPos.y);
-                Vector2 rightImg = new Vector2(rightShoulderPos.x, rightShoulderPos.y);
-
-                if (mirrorFramingX)
-                {
-                    leftImg.x = 1f - leftImg.x;
-                    rightImg.x = 1f - rightImg.x;
-                }
-
-                Vector2 leftViewport = SourceToViewport(leftImg, sourceW, sourceH, camera);
-                Vector2 rightViewport = SourceToViewport(rightImg, sourceW, sourceH, camera);
-
                 Vector2 viewportAnchor = (leftViewport + rightViewport) * 0.5f;
                 float rawWidth = Vector2.Distance(leftViewport, rightViewport);
 
                 if (hasNose)
                 {
                     Vector2 noseRaw = new Vector2(nosePos.x, nosePos.y);
-                    if (mirrorFramingX) noseRaw.x = 1f - noseRaw.x;
                     Vector2 faceViewport = SourceToViewport(noseRaw, sourceW, sourceH, camera);
                     faceToShoulderOffset = faceViewport - viewportAnchor;
                     hasFaceToShoulderOffset = true;
@@ -202,7 +174,6 @@ namespace RealtimeBodyTracking
             {
                 // Fallback: Face only
                 Vector2 noseRaw = new Vector2(nosePos.x, nosePos.y);
-                if (mirrorFramingX) noseRaw.x = 1f - noseRaw.x;
                 Vector2 faceViewport = SourceToViewport(noseRaw, sourceW, sourceH, camera);
                 Vector2 estimatedShoulderViewport = faceViewport - faceToShoulderOffset;
 

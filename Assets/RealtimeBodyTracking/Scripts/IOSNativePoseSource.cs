@@ -24,6 +24,20 @@ namespace RealtimeBodyTracking
         private System.IO.StringReader replayReader;
         private float nextReplayFrame;
         public TrackingJsonlRecorder Recording { get; } = new TrackingJsonlRecorder();
+        public TrackingJsonlRecorder AlignmentRecording { get; } = new TrackingJsonlRecorder();
+
+        [System.Serializable]
+        private sealed class AlignmentDiagnostic
+        {
+            public long frame;
+            public bool tracked;
+            public bool front_camera;
+            public float source_center_x;
+            public float source_center_y;
+            public float avatar_center_x;
+            public float avatar_center_y;
+            public float maximum_shoulder_error;
+        }
 
         // Assign a copied JSONL as a .txt TextAsset; runs without an attached iPhone.
         [ContextMenu("Tracking/Replay assigned JSONL at 30 fps")]
@@ -54,13 +68,40 @@ namespace RealtimeBodyTracking
             AcceptPoseJson(json);
         }
 
+        [ContextMenu("Tracking/Start diagnostic recording")]
         public void StartRecording()
         {
             StopReplay();
-            Recording.Start(System.IO.Path.Combine(Application.persistentDataPath, "TrackingLogs"));
+            var directory = System.IO.Path.Combine(Application.persistentDataPath, "TrackingLogs");
+            Recording.Start(directory);
+            AlignmentRecording.Start(System.IO.Path.Combine(directory, "Alignment"));
         }
 
-        public void StopRecording() { Recording.Stop(); }
+        [ContextMenu("Tracking/Stop diagnostic recording")]
+        public void StopRecording()
+        {
+            Recording.Stop();
+            AlignmentRecording.Stop();
+        }
+
+        public void RecordAlignmentDiagnostic(
+            long frame, bool tracked, Vector2 sourceCenter, Vector2 avatarCenter, float maximumError)
+        {
+            if (!AlignmentRecording.IsRecording) return;
+            var diagnostic = new AlignmentDiagnostic
+            {
+                frame = frame,
+                tracked = tracked,
+                front_camera = useFrontCamera,
+                source_center_x = sourceCenter.x,
+                source_center_y = sourceCenter.y,
+                avatar_center_x = avatarCenter.x,
+                avatar_center_y = avatarCenter.y,
+                maximum_shoulder_error = float.IsNaN(maximumError) || float.IsInfinity(maximumError)
+                    ? -1f : maximumError,
+            };
+            AlignmentRecording.Append(JsonUtility.ToJson(diagnostic));
+        }
 
         public void OnNativePoseJson(string json)
         {
