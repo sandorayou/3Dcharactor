@@ -16,7 +16,7 @@ static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
 static BOOL s_useFrontCamera = YES;
-static CGFloat s_mosaicScale = 28.0;
+static CGFloat s_mosaicScale = 36.0;
 static CALayer *s_backgroundLayer;
 static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
@@ -68,7 +68,12 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
                 else hue = 60.0f * ((r - g) / delta + 4.0f);
                 if (hue < 0) hue += 360.0f;
             }
-            BOOL skin = hue <= 50.0f && saturation >= 35.0f && saturation <= 180.0f && maximum >= 70.0f;
+            // The iPhone camera makes neutral walls slightly warm. Require stronger
+            // chroma and a brighter, narrower skin hue than the desktop baseline so
+            // white walls and dark brown objects do not enter the privacy mask.
+            BOOL skin = hue >= 4.0f && hue <= 45.0f &&
+                        saturation >= 55.0f && saturation <= 180.0f &&
+                        maximum >= 105.0f && r > g;
             mask[y * width + x] = skin ? 255 : 0;
         }
     }
@@ -89,11 +94,11 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
     }
     for (NSValue *value in pose) {
         CGPoint p = value.CGPointValue;
-        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 6, (1.0 - p.y) * height - 6, 12, 12));
+        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 5, (1.0 - p.y) * height - 5, 10, 10));
     }
     for (NSValue *value in hands) {
         CGPoint p = value.CGPointValue;
-        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 6, (1.0 - p.y) * height - 6, 12, 12));
+        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 5, (1.0 - p.y) * height - 5, 10, 10));
     }
     CGImageRef maskImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
@@ -101,7 +106,7 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
     CGImageRelease(maskImage);
     CIFilter *expand = [CIFilter filterWithName:@"CIMorphologyMaximum"];
     [expand setValue:result forKey:kCIInputImageKey];
-    [expand setValue:@12 forKey:kCIInputRadiusKey];
+    [expand setValue:@10 forKey:kCIInputRadiusKey];
     return [expand.outputImage imageByCroppingToRect:extent];
 }
 
@@ -168,7 +173,7 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     for (MPPNormalizedLandmark *point in points) {
         CGFloat x = point.x * width;
         CGFloat y = (1.0 - point.y) * height;
-        CGContextFillEllipseInRect(context, CGRectMake(x - 6, y - 6, 12, 12));
+        CGContextFillEllipseInRect(context, CGRectMake(x - 5, y - 5, 10, 10));
     }
 
     CGImageRef image = CGBitmapContextCreateImage(context);
@@ -179,7 +184,7 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
         extent.size.width / width, extent.size.height / height)];
     CIFilter *expand = [CIFilter filterWithName:@"CIMorphologyMaximum"];
     [expand setValue:mask forKey:kCIInputImageKey];
-    [expand setValue:@12 forKey:kCIInputRadiusKey];
+    [expand setValue:@10 forKey:kCIInputRadiusKey];
     return [expand.outputImage imageByCroppingToRect:extent];
 }
 

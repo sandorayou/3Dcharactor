@@ -16,7 +16,7 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetMosaicScale(float scale);
 #endif
         [SerializeField] private bool useFrontCamera = true;
-        [SerializeField, Range(2f, 80f)] private float mosaicScale = 28f;
+        [SerializeField, Range(2f, 80f)] private float mosaicScale = 36f;
         private PosePacket latest;
         private float nextStatusLog;
 

@@ -11699,7 +11699,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void IOSNativePoseSource__ctor_m763FD00FB6917
 {
 	{
 		__this->___useFrontCamera = (bool)1;
-		__this->___mosaicScale = (28.0f);
+		__this->___mosaicScale = (36.0f);
 		MonoBehaviour__ctor_m592DB0105CA0BC97AA1C5F4AD27B12D68A3B7C1E(__this, NULL);
 		return;
 	}
