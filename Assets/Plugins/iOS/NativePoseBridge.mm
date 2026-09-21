@@ -16,7 +16,7 @@ static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
 static BOOL s_useFrontCamera = YES;
-static CGFloat s_mosaicScale = 24.0;
+static CGFloat s_mosaicScale = 28.0;
 static CALayer *s_backgroundLayer;
 static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
@@ -58,16 +58,18 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
             size_t sx = MIN(sourceWidth - 1, x * sourceWidth / width);
             const uint8_t *p = pixels + sy * stride + sx * 4;
             float b = p[0], g = p[1], r = p[2];
-            float cb = 128.0f - .168736f * r - .331264f * g + .5f * b;
-            float cr = 128.0f + .5f * r - .418688f * g - .081312f * b;
-            // Restrict colour-only privacy detection to brighter exposed skin.
-            // Dark brown furniture/clothing is covered by neither this mask nor
-            // the colour threshold, while tracked people remain protected by
-            // the pose and segmentation masks below.
-            BOOL rgbSkin = r > 95 && g > 55 && b > 35 && r > g * 1.06f && r > b * 1.10f &&
-                           MAX(r, MAX(g, b)) - MIN(r, MIN(g, b)) > 18;
-            BOOL chromaSkin = cb >= 78 && cb <= 125 && cr >= 135 && cr <= 175 && r > g;
-            mask[y * width + x] = (rgbSkin && chromaSkin) ? 255 : 0;
+            float maximum = MAX(r, MAX(g, b)), minimum = MIN(r, MIN(g, b));
+            float delta = maximum - minimum;
+            float saturation = maximum <= 0 ? 0 : delta / maximum * 255.0f;
+            float hue = 0;
+            if (delta > .001f) {
+                if (maximum == r) hue = 60.0f * fmodf((g - b) / delta, 6.0f);
+                else if (maximum == g) hue = 60.0f * ((b - r) / delta + 2.0f);
+                else hue = 60.0f * ((r - g) / delta + 4.0f);
+                if (hue < 0) hue += 360.0f;
+            }
+            BOOL skin = hue <= 50.0f && saturation >= 35.0f && saturation <= 180.0f && maximum >= 70.0f;
+            mask[y * width + x] = skin ? 255 : 0;
         }
     }
     CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
@@ -85,92 +87,89 @@ static CIImage *PrivacyMask(CVPixelBufferRef pixelBuffer, CGRect extent) {
         pose = [s_posePrivacyPoints copy] ?: @[];
         hands = [s_handPrivacyPoints copy] ?: @[];
     }
-    const int links[][2] = {{0,11},{0,12},{11,12},{11,13},{13,15},{12,14},{14,16},{11,23},{12,24},{23,24},{23,25},{25,27},{24,26},{26,28}};
-    CGContextSetLineWidth(context, 18);
-    for (NSUInteger i = 0; i < sizeof(links) / sizeof(links[0]); ++i) {
-        if (links[i][0] >= pose.count || links[i][1] >= pose.count) continue;
-        CGPoint a = pose[links[i][0]].CGPointValue, b = pose[links[i][1]].CGPointValue;
-        CGContextMoveToPoint(context, a.x * width, (1.0 - a.y) * height);
-        CGContextAddLineToPoint(context, b.x * width, (1.0 - b.y) * height);
-        CGContextStrokePath(context);
-    }
     for (NSValue *value in pose) {
         CGPoint p = value.CGPointValue;
-        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 7, (1.0 - p.y) * height - 7, 14, 14));
+        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 6, (1.0 - p.y) * height - 6, 12, 12));
     }
     for (NSValue *value in hands) {
         CGPoint p = value.CGPointValue;
-        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 5, (1.0 - p.y) * height - 5, 10, 10));
+        CGContextFillEllipseInRect(context, CGRectMake(p.x * width - 6, (1.0 - p.y) * height - 6, 12, 12));
     }
     CGImageRef maskImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
     CIImage *result = [[CIImage imageWithCGImage:maskImage] imageByApplyingTransform:CGAffineTransformMakeScale(extent.size.width / width, extent.size.height / height)];
     CGImageRelease(maskImage);
-    CIFilter *expand = [CIFilter filterWithName:@"CIGaussianBlur"];
+    CIFilter *expand = [CIFilter filterWithName:@"CIMorphologyMaximum"];
     [expand setValue:result forKey:kCIInputImageKey];
-    [expand setValue:@18 forKey:kCIInputRadiusKey];
+    [expand setValue:@12 forKey:kCIInputRadiusKey];
     return [expand.outputImage imageByCroppingToRect:extent];
 }
 
-static NSDictionary *HeadRotationFromPose(NSArray<MPPNormalizedLandmark *> *points) {
-    if (points.count < 13) return nil;
-    MPPNormalizedLandmark *nose = points[0];
-    MPPNormalizedLandmark *leftEye = points[2];
-    MPPNormalizedLandmark *rightEye = points[5];
-    MPPNormalizedLandmark *leftEar = points[7];
-    MPPNormalizedLandmark *rightEar = points[8];
-    CGFloat faceWidth = hypot(rightEar.x - leftEar.x, rightEar.y - leftEar.y);
-    if (faceWidth < .02) return nil;
-    CGFloat centerX = (leftEar.x + rightEar.x) * .5;
-    CGFloat eyeY = (leftEye.y + rightEye.y) * .5;
-    CGFloat yaw = MAX(-.85, MIN(.85, (nose.x - centerX) / faceWidth * 1.8));
-    CGFloat pitch = MAX(-.60, MIN(.60, (nose.y - eyeY) / faceWidth * 1.2 - .32));
-    CGFloat roll = -atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
-    CGFloat cx = cos(pitch * .5), sx = sin(pitch * .5);
-    CGFloat cy = cos(yaw * .5), sy = sin(yaw * .5);
-    CGFloat cz = cos(roll * .5), sz = sin(roll * .5);
-    return @{@"x": @(sx * cy * cz - cx * sy * sz),
-             @"y": @(cx * sy * cz + sx * cy * sz),
-             @"z": @(cx * cy * sz - sx * sy * cz),
-             @"w": @(cx * cy * cz + sx * sy * sz)};
+static NSDictionary *HeadRotationFromFaceMatrix(MPPTransformMatrix *matrix) {
+    if (matrix == nil || matrix.rows < 3 || matrix.columns < 3) return nil;
+    float r[3][3];
+    for (NSUInteger row = 0; row < 3; ++row)
+        for (NSUInteger column = 0; column < 3; ++column)
+            r[row][column] = [matrix valueAtRow:row column:column];
+    // Newton polar decomposition produces the same nearest orthogonal matrix as
+    // Windows' U @ Vh SVD scale removal, without adding another native library.
+    for (NSUInteger iteration = 0; iteration < 6; ++iteration) {
+        float determinant =
+            r[0][0] * (r[1][1] * r[2][2] - r[1][2] * r[2][1]) -
+            r[0][1] * (r[1][0] * r[2][2] - r[1][2] * r[2][0]) +
+            r[0][2] * (r[1][0] * r[2][1] - r[1][1] * r[2][0]);
+        if (fabsf(determinant) < .000001f) return nil;
+        float inverseTranspose[3][3] = {
+            {(r[1][1]*r[2][2]-r[1][2]*r[2][1])/determinant, (r[1][2]*r[2][0]-r[1][0]*r[2][2])/determinant, (r[1][0]*r[2][1]-r[1][1]*r[2][0])/determinant},
+            {(r[0][2]*r[2][1]-r[0][1]*r[2][2])/determinant, (r[0][0]*r[2][2]-r[0][2]*r[2][0])/determinant, (r[0][1]*r[2][0]-r[0][0]*r[2][1])/determinant},
+            {(r[0][1]*r[1][2]-r[0][2]*r[1][1])/determinant, (r[0][2]*r[1][0]-r[0][0]*r[1][2])/determinant, (r[0][0]*r[1][1]-r[0][1]*r[1][0])/determinant}
+        };
+        for (NSUInteger row = 0; row < 3; ++row)
+            for (NSUInteger column = 0; column < 3; ++column)
+                r[row][column] = .5f * (r[row][column] + inverseTranspose[row][column]);
+    }
+    const float axis[3] = {1, -1, -1};
+    for (NSUInteger row = 0; row < 3; ++row)
+        for (NSUInteger column = 0; column < 3; ++column)
+            r[row][column] *= axis[row] * axis[column];
+    float x, y, z, w;
+    float trace = r[0][0] + r[1][1] + r[2][2];
+    if (trace > 0) {
+        float scale = sqrtf(trace + 1) * 2;
+        w = .25f * scale; x = (r[2][1] - r[1][2]) / scale;
+        y = (r[0][2] - r[2][0]) / scale; z = (r[1][0] - r[0][1]) / scale;
+    } else if (r[0][0] > r[1][1] && r[0][0] > r[2][2]) {
+        float scale = sqrtf(1 + r[0][0] - r[1][1] - r[2][2]) * 2;
+        x = .25f * scale; y = (r[0][1] + r[1][0]) / scale;
+        z = (r[0][2] + r[2][0]) / scale; w = (r[2][1] - r[1][2]) / scale;
+    } else if (r[1][1] > r[2][2]) {
+        float scale = sqrtf(1 + r[1][1] - r[0][0] - r[2][2]) * 2;
+        x = (r[0][1] + r[1][0]) / scale; y = .25f * scale;
+        z = (r[1][2] + r[2][1]) / scale; w = (r[0][2] - r[2][0]) / scale;
+    } else {
+        float scale = sqrtf(1 + r[2][2] - r[0][0] - r[1][1]) * 2;
+        x = (r[0][2] + r[2][0]) / scale; y = (r[1][2] + r[2][1]) / scale;
+        z = .25f * scale; w = (r[1][0] - r[0][1]) / scale;
+    }
+    float norm = sqrtf(x*x + y*y + z*z + w*w);
+    if (norm < .00001f) return nil;
+    return @{@"x": @(x/norm), @"y": @(y/norm), @"z": @(z/norm), @"w": @(w/norm)};
 }
 
 static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent) {
     NSArray<MPPNormalizedLandmark *> *points = result.landmarks.firstObject;
-    if (points.count < 29) return nil;
+    if (points.count == 0) return nil;
     const size_t width = 160, height = 120;
     NSMutableData *data = [NSMutableData dataWithLength:width * height];
     CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
     CGContextRef context = CGBitmapContextCreate(data.mutableBytes, width, height, 8, width, gray, kCGImageAlphaNone);
     CGColorSpaceRelease(gray);
     CGContextSetGrayFillColor(context, 1, 1);
-    CGContextSetGrayStrokeColor(context, 1, 1);
-    CGContextSetLineCap(context, kCGLineCapRound);
-    CGContextSetLineJoin(context, kCGLineJoinRound);
-
-    CGPoint (^point)(NSUInteger) = ^CGPoint(NSUInteger index) {
-        MPPNormalizedLandmark *p = points[index];
-        return CGPointMake(p.x * width, (1.0 - p.y) * height);
-    };
-    const int links[][2] = {{0,11},{0,12},{11,12},{11,13},{13,15},{12,14},{14,16},
-                             {11,23},{12,24},{23,24},{23,25},{25,27},{24,26},{26,28}};
-    CGContextSetLineWidth(context, 12);
-    for (NSUInteger i = 0; i < sizeof(links) / sizeof(links[0]); ++i) {
-        CGPoint a = point(links[i][0]), b = point(links[i][1]);
-        CGContextMoveToPoint(context, a.x, a.y);
-        CGContextAddLineToPoint(context, b.x, b.y);
-        CGContextStrokePath(context);
+    for (MPPNormalizedLandmark *point in points) {
+        CGFloat x = point.x * width;
+        CGFloat y = (1.0 - point.y) * height;
+        CGContextFillEllipseInRect(context, CGRectMake(x - 6, y - 6, 12, 12));
     }
-    CGPoint shoulderL = point(11), shoulderR = point(12), hipR = point(24), hipL = point(23);
-    CGContextBeginPath(context);
-    CGContextMoveToPoint(context, shoulderL.x, shoulderL.y);
-    CGContextAddLineToPoint(context, shoulderR.x, shoulderR.y);
-    CGContextAddLineToPoint(context, hipR.x, hipR.y);
-    CGContextAddLineToPoint(context, hipL.x, hipL.y);
-    CGContextClosePath(context);
-    CGContextFillPath(context);
-    CGPoint nose = point(0);
-    CGContextFillEllipseInRect(context, CGRectMake(nose.x - 18, nose.y - 22, 36, 44));
 
     CGImageRef image = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
@@ -180,39 +179,8 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
         extent.size.width / width, extent.size.height / height)];
     CIFilter *expand = [CIFilter filterWithName:@"CIMorphologyMaximum"];
     [expand setValue:mask forKey:kCIInputImageKey];
-    [expand setValue:@(5.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
+    [expand setValue:@12 forKey:kCIInputRadiusKey];
     return [expand.outputImage imageByCroppingToRect:extent];
-}
-
-static CIImage *WindowsStylePersonMask(MPPMask *mask, CGRect extent) {
-    if (mask == nil || mask.width <= 0 || mask.height <= 0) return nil;
-    const NSInteger width = mask.width, height = mask.height;
-    NSMutableData *thresholded = [NSMutableData dataWithLength:width * height];
-    uint8_t *bytes = (uint8_t *)thresholded.mutableBytes;
-    const float *confidence = mask.float32Data;
-    for (NSInteger i = 0; i < width * height; ++i)
-        bytes[i] = confidence[i] > .18f ? 255 : 0;
-    CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
-    CGContextRef bitmap = CGBitmapContextCreate(bytes, width, height, 8, width, gray, kCGImageAlphaNone);
-    CGColorSpaceRelease(gray);
-    CGImageRef image = CGBitmapContextCreateImage(bitmap);
-    CGContextRelease(bitmap);
-    CIImage *result = [CIImage imageWithCGImage:image];
-    CGImageRelease(image);
-    result = [result imageByApplyingTransform:CGAffineTransformMakeScale(
-        extent.size.width / width, extent.size.height / height)];
-    CIFilter *dilate = [CIFilter filterWithName:@"CIMorphologyMaximum"];
-    [dilate setValue:result forKey:kCIInputImageKey];
-    [dilate setValue:@(10.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
-    CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
-    [blur setValue:dilate.outputImage forKey:kCIInputImageKey];
-    [blur setValue:@(3.0 * extent.size.width / 640.0) forKey:kCIInputRadiusKey];
-    CIFilter *amplify = [CIFilter filterWithName:@"CIColorMatrix"];
-    [amplify setValue:blur.outputImage forKey:kCIInputImageKey];
-    [amplify setValue:[CIVector vectorWithX:2 Y:0 Z:0 W:0] forKey:@"inputRVector"];
-    [amplify setValue:[CIVector vectorWithX:0 Y:2 Z:0 W:0] forKey:@"inputGVector"];
-    [amplify setValue:[CIVector vectorWithX:0 Y:0 Z:2 W:0] forKey:@"inputBVector"];
-    return [amplify.outputImage imageByCroppingToRect:extent];
 }
 
 static CIImage *WindowsStyleMosaic(CIImage *source) {
@@ -242,26 +210,17 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     if (!hasReliablePose) {
         processed = WindowsStyleMosaic(source);
     }
-    CIImage *mask = WindowsStylePersonMask(result.segmentationMasks.firstObject, source.extent);
-    CIImage *skinAndTrackerMask = captured[@"privacy"];
+    CIImage *mask = captured[@"privacy"];
     CIImage *currentPoseMask = CurrentPosePrivacyMask(result, source.extent);
     if (currentPoseMask != nil) {
-        if (skinAndTrackerMask != nil) {
+        if (mask != nil) {
             CIFilter *poseUnion = [CIFilter filterWithName:@"CIMaximumCompositing"];
             [poseUnion setValue:currentPoseMask forKey:kCIInputImageKey];
-            [poseUnion setValue:skinAndTrackerMask forKey:kCIInputBackgroundImageKey];
-            skinAndTrackerMask = [poseUnion.outputImage imageByCroppingToRect:source.extent];
+            [poseUnion setValue:mask forKey:kCIInputBackgroundImageKey];
+            mask = [poseUnion.outputImage imageByCroppingToRect:source.extent];
         } else {
-            skinAndTrackerMask = currentPoseMask;
+            mask = currentPoseMask;
         }
-    }
-    if (mask != nil && skinAndTrackerMask != nil) {
-        CIFilter *unionFilter = [CIFilter filterWithName:@"CIMaximumCompositing"];
-        [unionFilter setValue:mask forKey:kCIInputImageKey];
-        [unionFilter setValue:skinAndTrackerMask forKey:kCIInputBackgroundImageKey];
-        mask = [unionFilter.outputImage imageByCroppingToRect:source.extent];
-    } else if (mask == nil) {
-        mask = skinAndTrackerMask;
     }
     if (hasReliablePose && mask != nil) {
         CIFilter *blend = [CIFilter filterWithName:@"CIBlendWithMask"];
@@ -305,6 +264,8 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
             combined[@"left_hand_points"] = parts[@"hand"][@"left_hand_points"] ?: @0;
             combined[@"right_hand_points"] = parts[@"hand"][@"right_hand_points"] ?: @0;
             combined[@"face_blendshapes"] = parts[@"face"][@"face_blendshapes"];
+            if (parts[@"face"][@"head_rotation"] != nil)
+                combined[@"head_rotation"] = parts[@"face"][@"head_rotation"];
             combined[@"frame"] = @(s_frame++);
             NSData *data = [NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];
             NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
@@ -398,9 +359,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
         if (s_hasLeftPoseWrist) { MPPNormalizedLandmark *p = points[15]; s_leftPoseWrist = CGPointMake(p.x, p.y); }
         if (s_hasRightPoseWrist) { MPPNormalizedLandmark *p = points[16]; s_rightPoseWrist = CGPointMake(p.x, p.y); }
     }
-    NSMutableDictionary *packet = [@{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints} mutableCopy];
-    NSDictionary *headRotation = HeadRotationFromPose(points);
-    if (headRotation != nil) packet[@"head_rotation"] = headRotation;
+    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints};
     SubmitResult(@"pose", packet, timestamp);
 }
 @end
@@ -483,7 +442,9 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
                                 @"confidence": @1.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
         }
     }
-    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": points};
+    NSMutableDictionary *packet = [@{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": points} mutableCopy];
+    NSDictionary *headRotation = HeadRotationFromFaceMatrix(result.facialTransformationMatrixes.firstObject);
+    if (headRotation != nil) packet[@"head_rotation"] = headRotation;
     SubmitResult(@"face", packet, timestamp);
 }
 @end
@@ -549,7 +510,7 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     options.baseOptions.modelAssetPath = modelPath;
     options.runningMode = MPPRunningModeLiveStream;
     options.numPoses = 1;
-    options.shouldOutputSegmentationMasks = YES;
+    options.shouldOutputSegmentationMasks = NO;
     s_resultDelegate = [NativePoseResultDelegate new];
     options.poseLandmarkerLiveStreamDelegate = s_resultDelegate;
     s_landmarker = [[MPPPoseLandmarker alloc] initWithOptions:options error:nil];
@@ -565,7 +526,7 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     s_handDelegate = [NativeHandResultDelegate new]; handOptions.handLandmarkerLiveStreamDelegate = s_handDelegate;
     s_handLandmarker = [[MPPHandLandmarker alloc] initWithOptions:handOptions error:nil];
     MPPFaceLandmarkerOptions *faceOptions = [MPPFaceLandmarkerOptions new];
-    faceOptions.baseOptions.modelAssetPath = facePath; faceOptions.runningMode = MPPRunningModeLiveStream; faceOptions.numFaces = 1; faceOptions.outputFaceBlendshapes = YES;
+    faceOptions.baseOptions.modelAssetPath = facePath; faceOptions.runningMode = MPPRunningModeLiveStream; faceOptions.numFaces = 1; faceOptions.outputFaceBlendshapes = YES; faceOptions.outputFacialTransformationMatrixes = YES;
     s_faceDelegate = [NativeFaceResultDelegate new]; faceOptions.faceLandmarkerLiveStreamDelegate = s_faceDelegate;
     s_faceLandmarker = [[MPPFaceLandmarker alloc] initWithOptions:faceOptions error:nil];
     if (!s_handLandmarker || !s_faceLandmarker) return -8;
