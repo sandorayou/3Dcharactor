@@ -152,11 +152,11 @@ namespace RealtimeBodyTracking
             return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
-        public static bool SourceIsLeftForAvatarSide(bool avatarLeft, bool displayedPreviewMirrored)
+        public static bool SourceIsLeftForAvatarSide(bool avatarLeft)
         {
-            // A mirrored preview swaps which anatomical limb is drawn under each
-            // screen-space avatar limb. Rear/unmirrored preview preserves it.
-            return avatarLeft != displayedPreviewMirrored;
+            // Camera mirroring changes displayed image coordinates only. MediaPipe's
+            // anatomical left/right labels always drive the matching avatar side.
+            return avatarLeft;
         }
 
         public static bool TryGet(PosePacket pose, string name, bool mirror, out Vector3 position)
@@ -189,20 +189,27 @@ namespace RealtimeBodyTracking
 
         public static bool TryReadUpperBody(PosePacket pose, bool mirror, float bodyMinConfidence, out UpperBodyPose upperBody)
         {
-            if (!TryGet(pose, "left_shoulder", mirror, bodyMinConfidence, out var leftShoulder) ||
-                !TryGet(pose, "right_shoulder", mirror, bodyMinConfidence, out var rightShoulder))
+            return TryReadUpperBody(pose, mirror, mirror, bodyMinConfidence, out upperBody);
+        }
+
+        public static bool TryReadUpperBody(
+            PosePacket pose, bool worldMirror, bool imageMirror, float bodyMinConfidence,
+            out UpperBodyPose upperBody)
+        {
+            if (!TryGet(pose, "left_shoulder", worldMirror, bodyMinConfidence, out var leftShoulder) ||
+                !TryGet(pose, "right_shoulder", worldMirror, bodyMinConfidence, out var rightShoulder))
             {
                 upperBody = default;
                 return false;
             }
 
-            var hasLeftHip = TryGet(pose, "left_hip", mirror, bodyMinConfidence, out var leftHip) && TryGetVisibleImage(pose, "left_hip", bodyMinConfidence, out _);
-            var hasRightHip = TryGet(pose, "right_hip", mirror, bodyMinConfidence, out var rightHip) && TryGetVisibleImage(pose, "right_hip", bodyMinConfidence, out _);
+            var hasLeftHip = TryGet(pose, "left_hip", worldMirror, bodyMinConfidence, out var leftHip) && TryGetVisibleImage(pose, "left_hip", bodyMinConfidence, out _);
+            var hasRightHip = TryGet(pose, "right_hip", worldMirror, bodyMinConfidence, out var rightHip) && TryGetVisibleImage(pose, "right_hip", bodyMinConfidence, out _);
             var hipsTracked = hasLeftHip && hasRightHip;
             var shoulderCenter = (leftShoulder + rightShoulder) * .5f;
             var shoulderWidth = Mathf.Max((rightShoulder - leftShoulder).magnitude, .001f);
             var hipCenter = hipsTracked ? (leftHip + rightHip) * .5f : shoulderCenter + Vector3.down * Mathf.Max(shoulderWidth * 1.45f, .35f);
-            var hasImageFacing = TryReadImageFacing(pose, mirror, bodyMinConfidence, out var imageFacing, out var imageLateral);
+            var hasImageFacing = TryReadImageFacing(pose, imageMirror, bodyMinConfidence, out var imageFacing, out var imageLateral);
             upperBody = new UpperBodyPose(leftShoulder, rightShoulder, hipCenter, hipsTracked, hasImageFacing ? imageFacing : Vector3.zero, imageLateral);
             return true;
         }

@@ -451,7 +451,9 @@ namespace RealtimeBodyTracking
             lastArmCameraClamp = string.Empty;
             if (manualController != null && manualController.ShouldBlockTracking)
                 return;
-            if (!PoseInputMapper.TryReadUpperBody(pose, InputCoordinatesNeedMirror, bodyTurnMinConfidence, out var upperBody))
+            if (!PoseInputMapper.TryReadUpperBody(
+                    pose, InputCoordinatesNeedMirror, PreviewMirrored,
+                    bodyTurnMinConfidence, out var upperBody))
             {
                 bodyPositionTracking = false;
                 handContactTracking = false;
@@ -487,7 +489,7 @@ namespace RealtimeBodyTracking
             hasLastUpperBody = true;
             bodyPositionTracking = false;
             var hasScreenBody = PoseInputMapper.TryReadScreenBody(
-                pose, false, positionMinConfidence, out var screenBody);
+                pose, PreviewMirrored, positionMinConfidence, out var screenBody);
 
             if (!cameraFramingReady &&
                 (hasScreenBody || TryReadExtendedCameraFrameBody(pose, out screenBody)))
@@ -522,7 +524,7 @@ namespace RealtimeBodyTracking
                 ReturnBoneToParentRest(HumanBodyBones.RightShoulder);
                 ApplyTrackedShoulderLift(pose, true);
                 ApplyTrackedShoulderLift(pose, false);
-                var faceObserved = PoseInputMapper.TryReadHeadFacing(pose, InputCoordinatesNeedMirror, headMinConfidence, out _);
+                var faceObserved = PoseInputMapper.TryReadHeadFacing(pose, PreviewMirrored, headMinConfidence, out _);
                 if (faceObserved) lastReliableFaceTime = Time.unscaledTime;
                 // A hand aimed at the camera commonly occludes an eye or ear. Face
                 // confidence must not disable otherwise valid arm and hand tracking.
@@ -749,9 +751,9 @@ namespace RealtimeBodyTracking
         {
             rotation = Quaternion.identity;
             if (!PoseInputMapper.TryReadHeadFacing(
-                    pose, InputCoordinatesNeedMirror, headMinConfidence, out var facing)) return false;
+                    pose, PreviewMirrored, headMinConfidence, out var facing)) return false;
             PoseInputMapper.TryReadHeadRoll(
-                pose, InputCoordinatesNeedMirror, headMinConfidence, out var roll);
+                pose, PreviewMirrored, headMinConfidence, out var roll);
             var yaw = Mathf.Clamp(facing.x * 420f, -50f, 50f);
             var pitch = Mathf.Clamp(-facing.y * 180f, -35f, 35f);
             rotation = Quaternion.Euler(pitch, yaw, -roll);
@@ -823,7 +825,7 @@ namespace RealtimeBodyTracking
         // becomes least reliable when a hand occludes the torso.
         private void ApplyRawTrackerArm(PosePacket pose, bool left, UpperBodyPose upperBody)
         {
-            var sourceLeft = PoseInputMapper.SourceIsLeftForAvatarSide(left, PreviewMirrored);
+            var sourceLeft = PoseInputMapper.SourceIsLeftForAvatarSide(left);
             var side = sourceLeft ? "left" : "right";
             var shoulder = sourceLeft ? upperBody.LeftShoulder : upperBody.RightShoulder;
             var elbowName = side + "_elbow";
@@ -977,7 +979,7 @@ namespace RealtimeBodyTracking
         {
             // Mirroring is a coordinate transform, not an anatomical side swap.
             // MediaPipe's left/right labels remain tied to the performer.
-            var sourceLeft = PoseInputMapper.SourceIsLeftForAvatarSide(left, PreviewMirrored);
+            var sourceLeft = PoseInputMapper.SourceIsLeftForAvatarSide(left);
             var shoulder = sourceLeft ? upperBody.LeftShoulder : upperBody.RightShoulder;
             var elbowName = sourceLeft ? "left_elbow" : "right_elbow";
             var wristName = sourceLeft ? "left_wrist" : "right_wrist";
@@ -2072,8 +2074,7 @@ namespace RealtimeBodyTracking
             var sourcePoint = ToPreviewViewport(imagePoint);
             var sourceShoulder = ToPreviewViewport(sourceShoulderImage);
             var viewportScale = avatarShoulderWidth / Mathf.Max(sourceShoulderWidth, .03f);
-            // ToPreviewViewport mirrors camera X. SourceSide independently swaps the
-            // anatomical limb assignment for a mirrored front-camera presentation.
+            // ToPreviewViewport mirrors camera X while SourceSide remains anatomical.
             var dx = sourcePoint.x - sourceShoulder.x;
             var dy = sourcePoint.y - sourceShoulder.y;
             var offset = new Vector2(dx * handHorizontalGain, dy * armVerticalGain) * viewportScale;
@@ -2314,7 +2315,7 @@ namespace RealtimeBodyTracking
         private void GetRelaxedArmPose(bool left, UpperBodyPose upperBody, out Vector3 upperDirection, out Vector3 lowerDirection)
         {
             var lateral = upperBody.Lateral.sqrMagnitude > .000001f ? upperBody.Lateral.normalized : Vector3.right;
-            var sourceLeft = PoseInputMapper.SourceIsLeftForAvatarSide(left, PreviewMirrored);
+            var sourceLeft = PoseInputMapper.SourceIsLeftForAvatarSide(left);
             var side = sourceLeft ? -1f : 1f;
             var shoulder = sourceLeft ? upperBody.LeftShoulder : upperBody.RightShoulder;
             var hipTarget = upperBody.HipCenter + lateral * side * upperBody.Lateral.magnitude * .22f;
@@ -2332,7 +2333,7 @@ namespace RealtimeBodyTracking
 
         private string SourceSide(bool avatarLeft)
         {
-            return PoseInputMapper.SourceIsLeftForAvatarSide(avatarLeft, PreviewMirrored)
+            return PoseInputMapper.SourceIsLeftForAvatarSide(avatarLeft)
                 ? "left" : "right";
         }
 
@@ -2367,6 +2368,11 @@ namespace RealtimeBodyTracking
             }
             left.y = -left.y;
             right.y = -right.y;
+            if (PreviewMirrored)
+            {
+                left.x = 1f - left.x;
+                right.x = 1f - right.x;
+            }
             var lateral = right - left;
             var width = Mathf.Abs(lateral.x);
             if (width < .05f || width > .95f)
@@ -2974,11 +2980,9 @@ namespace RealtimeBodyTracking
             var alignedRight = (Vector2)trackingCamera.WorldToViewportPoint(right.position);
             sourceShoulderViewport = solution.SourceCenter;
             avatarShoulderViewport = (alignedLeft + alignedRight) * .5f;
-            var sourceForAvatarLeft = PreviewMirrored ? sourceRight : sourceLeft;
-            var sourceForAvatarRight = PreviewMirrored ? sourceLeft : sourceRight;
             screenAlignmentError = Mathf.Max(
-                Vector2.Distance(sourceForAvatarLeft, alignedLeft),
-                Vector2.Distance(sourceForAvatarRight, alignedRight));
+                Vector2.Distance(sourceLeft, alignedLeft),
+                Vector2.Distance(sourceRight, alignedRight));
             RecordScreenAlignmentDiagnostic(
                 pose, true, sourceShoulderViewport, avatarShoulderViewport, screenAlignmentError);
         }

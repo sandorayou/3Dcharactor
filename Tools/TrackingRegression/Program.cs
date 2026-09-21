@@ -85,12 +85,23 @@ static class Program
         PoseInputMapper.TryReadPreviewShoulders(rearB,4f/3f,true,.6f,out var frontBL,out var frontBR);
         Check((rearBL.x+rearBR.x) > (rearAL.x+rearAR.x), "rear preview follows raw lateral direction");
         Check((frontBL.x+frontBR.x) < (frontAL.x+frontAR.x), "front preview follows displayed mirrored direction");
-        Check(PoseInputMapper.SourceIsLeftForAvatarSide(true, false) &&
-              !PoseInputMapper.SourceIsLeftForAvatarSide(false, false),
-              "rear preview preserves anatomical limb assignment");
-        Check(!PoseInputMapper.SourceIsLeftForAvatarSide(true, true) &&
-              PoseInputMapper.SourceIsLeftForAvatarSide(false, true),
-              "front preview swaps anatomical limb assignment");
+        Check(PoseInputMapper.SourceIsLeftForAvatarSide(true) &&
+              !PoseInputMapper.SourceIsLeftForAvatarSide(false),
+              "camera preview never swaps anatomical limb assignment");
+
+        var anatomical = new PosePacket { version=4, source_width=640, source_height=480,
+            points=new List<PosePoint> {
+                Point("left_shoulder",.35f,.4f), Point("right_shoulder",.65f,.4f),
+                Point("left_hip",.4f,.7f), Point("right_hip",.6f,.7f) } };
+        var hasRearBody = PoseInputMapper.TryReadUpperBody(anatomical,false,false,.6f,out var rearBody);
+        var hasFrontBody = PoseInputMapper.TryReadUpperBody(anatomical,false,true,.6f,out var frontBody);
+        Check(hasRearBody && hasFrontBody,
+              "front and rear upper body available");
+        Check(Vector3.Distance(rearBody.LeftShoulder,frontBody.LeftShoulder) < .0001f &&
+              Vector3.Distance(rearBody.RightShoulder,frontBody.RightShoulder) < .0001f,
+              "front camera leaves anatomical world landmarks unchanged");
+        Check(Near(rearBody.ImageLateral.x,-frontBody.ImageLateral.x),
+              "front camera mirrors image lateral only");
 
         rearA.points[0].confidence=.1f;
         Check(!PoseInputMapper.TryReadPreviewShoulders(rearA,4f/3f,false,.6f,out _,out _),
