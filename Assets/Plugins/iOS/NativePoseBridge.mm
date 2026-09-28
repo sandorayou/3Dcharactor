@@ -223,6 +223,17 @@ extern "C" const char *NativeGet(const char *key) {
 extern "C" void NativePoseCaptureSetFrontCamera(int front) {
     (void)front;
 }
+extern "C" int NativeStart(const char *url, const char *key, int width, int height,
+                              int fps, int videoKbps, int audioKbps) {
+    (void)url; (void)key; (void)width; (void)height;
+    (void)fps; (void)videoKbps; (void)audioKbps;
+    return -1;
+}
+extern "C" void NativeStop(void) { }
+extern "C" void NativeSetCamera(int front) { (void)front; }
+extern "C" void NativeSetMuted(int muted) { (void)muted; }
+extern "C" int NativeStartRecording(void) { return -1; }
+extern "C" void NativeStopRecording(void) { }
 
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
