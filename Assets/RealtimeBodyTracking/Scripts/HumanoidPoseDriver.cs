@@ -2083,7 +2083,8 @@ namespace RealtimeBodyTracking
             return shoulderViewport.z > 0f && targetViewport.z > 0f;
         }
 
-        private bool PreviewMirrored => localPoseSource is IOSNativePoseSource || avatarMirror;
+        // iOS pose landmarks come from AVCaptureVideoDataOutput, whose buffer is already mirrored.
+        private bool PreviewMirrored => avatarMirror;
 
         private Vector2 ToPreviewViewport(Vector3 image)
         {

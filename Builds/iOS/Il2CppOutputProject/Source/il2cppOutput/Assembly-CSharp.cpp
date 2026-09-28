@@ -112,7 +112,6 @@ IL2CPP_EXTERN_C RuntimeClass* HumanBodyBones_tA2A904890A05ABCFFAB7E119244E97C5EA
 IL2CPP_EXTERN_C RuntimeClass* HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* IDisposable_t030E0496B4E0E4E4F086825007979AF51F7248C5_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* IEnumerator_t7B609C2FFA6EB5167D9C62A0C32A21DE2F666DAA_il2cpp_TypeInfo_var;
-IL2CPP_EXTERN_C RuntimeClass* IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Int64_t092CFB123BE63C28ACDAF65C68F21A526050DBA3_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* KeyValuePair_2U5BU5D_t8B42A1FF41A21F9CCFFF96EC438F29EEA08678EE_il2cpp_TypeInfo_var;
@@ -1440,7 +1439,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_CompleteBottomExitIfN
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR String_t* String_Format_m918500C1EFB475181349A79989BB79BB36102894 (String_t* ___0_format, ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* ___1_args, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR int32_t BoneRotationSolver_RefreshMissingBones_mB0ADEF908F0391C4940BD02B61BC067541633E76 (BoneRotationSolver_t3267D0DF3BF4EE35D24545D5429D514DE9962141* __this, Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* ___0_animator, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool ManualAvatarController_get_ShouldBlockTracking_m074A0E990BB689689D85A4EF82F78807BFC9F0B8 (ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72* __this, const RuntimeMethod* method) ;
-IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) ;
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool PoseInputMapper_TryReadUpperBody_m16012C975DD03AF5B0BD2D73C4A9BD4F0B5EB390 (PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* ___0_pose, bool ___1_worldMirror, bool ___2_imageMirror, float ___3_bodyMinConfidence, UpperBodyPose_t8CA96A2D82DD97455C9B3550EF1CFBA9578CE091* ___4_upperBody, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR float Time_get_deltaTime_mC3195000401F0FD167DD2F948FD2BC58330D0865 (const RuntimeMethod* method) ;
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR float Mathf_MoveTowardsAngle_m585FDB98FB93C76E58E3D783AF728816B9EC2319_inline (float ___0_current, float ___1_target, float ___2_maxDelta, const RuntimeMethod* method) ;
@@ -2634,7 +2633,7 @@ IL_0071:
 	{
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_13 = ___0_pose;
 		bool L_14;
-		L_14 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_14 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_15 = __this->___bodyTurnMinConfidence;
 		bool L_16;
 		L_16 = PoseInputMapper_TryReadUpperBody_m16012C975DD03AF5B0BD2D73C4A9BD4F0B5EB390(L_13, (bool)0, L_14, L_15, (&V_0), NULL);
@@ -2788,7 +2787,7 @@ IL_01c2:
 		__this->___bodyPositionTracking = (bool)0;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_66 = ___0_pose;
 		bool L_67;
-		L_67 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_67 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_68 = __this->___positionMinConfidence;
 		bool L_69;
 		L_69 = PoseInputMapper_TryReadScreenBody_m734A01249279D5720686A01CAE5C59DBD126EEEE(L_66, L_67, L_68, (&V_3), NULL);
@@ -2941,7 +2940,7 @@ IL_029e:
 		HumanoidPoseDriver_ApplyTrackedShoulderLift_m5853A6FFEF139C29D5DCE1451E4B0BE36EA8387F(__this, L_107, (bool)0, NULL);
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_108 = ___0_pose;
 		bool L_109;
-		L_109 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_109 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_110 = __this->___headMinConfidence;
 		bool L_111;
 		L_111 = PoseInputMapper_TryReadHeadFacing_m78D34DDD634B5FD0CFCF79D97B40D059AFF9752C(L_108, L_109, L_110, (&V_8), NULL);
@@ -4064,7 +4063,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryEstimateHeadRotati
 		*(Quaternion_tDA59F214EF07D7700B26E40E562F267AF7306974*)L_0 = L_1;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_2 = ___0_pose;
 		bool L_3;
-		L_3 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_3 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_4 = __this->___headMinConfidence;
 		bool L_5;
 		L_5 = PoseInputMapper_TryReadHeadFacing_m78D34DDD634B5FD0CFCF79D97B40D059AFF9752C(L_2, L_3, L_4, (&V_0), NULL);
@@ -4081,7 +4080,7 @@ IL_0023:
 	{
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_6 = ___0_pose;
 		bool L_7;
-		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_8 = __this->___headMinConfidence;
 		bool L_9;
 		L_9 = PoseInputMapper_TryReadHeadRoll_m3331BACD4D9D85A25695B51C5484D9B5D28C277C(L_6, L_7, L_8, (&V_1), NULL);
@@ -13861,27 +13860,9 @@ IL_01ce:
 }
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) 
 {
-	static bool s_Il2CppMethodInitialized;
-	if (!s_Il2CppMethodInitialized)
 	{
-		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708_il2cpp_TypeInfo_var);
-		s_Il2CppMethodInitialized = true;
-	}
-	{
-		RuntimeObject* L_0 = __this->___localPoseSource;
-		if (((IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708*)IsInstSealed((RuntimeObject*)L_0, IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708_il2cpp_TypeInfo_var)))
-		{
-			goto IL_0014;
-		}
-	}
-	{
-		bool L_1 = __this->___avatarMirror;
-		return L_1;
-	}
-
-IL_0014:
-	{
-		return (bool)1;
+		bool L_0 = __this->___avatarMirror;
+		return L_0;
 	}
 }
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 HumanoidPoseDriver_ToPreviewViewport_m28AE9B20516FADA09B12C0821ABB33C42F325463 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 ___0_image, const RuntimeMethod* method) 
@@ -16882,7 +16863,7 @@ IL_009b:
 		float L_26 = L_25.___y;
 		(&V_1)->___y = ((-L_26));
 		bool L_27;
-		L_27 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_27 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		if (!L_27)
 		{
 			goto IL_00e5;
@@ -17051,7 +17032,7 @@ IL_001f:
 		float L_6;
 		L_6 = Camera_get_aspect_m48BF8820EA2D55BE0D154BC5546819FB65BE257D(L_5, NULL);
 		bool L_7;
-		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_8 = __this->___positionMinConfidence;
 		bool L_9;
 		L_9 = PoseInputMapper_TryReadPreviewShoulders_m7ACD80FEF574AC62399F39079EE927B77E49C83D(L_4, L_6, L_7, L_8, (&V_0), (&V_1), NULL);
@@ -18714,7 +18695,7 @@ IL_0018:
 IL_0023:
 	{
 		bool L_7;
-		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_8;
 		L_8 = PoseInputMapper_ImageToViewport_mEB41953402252741825E85C0EADBBB6E9E54B326(G_B3_3, G_B3_2, G_B3_1, G_B3_0, L_7, NULL);
 		return L_8;
@@ -19946,7 +19927,7 @@ IL_0063:
 IL_006e:
 	{
 		bool L_18;
-		L_18 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_18 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_19;
 		L_19 = PoseInputMapper_ImageToViewport_mEB41953402252741825E85C0EADBBB6E9E54B326(G_B6_3, G_B6_2, G_B6_1, G_B6_0, L_18, NULL);
 		V_2 = L_19;
@@ -20001,7 +19982,7 @@ IL_00ac:
 IL_00b7:
 	{
 		bool L_33;
-		L_33 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_33 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_34;
 		L_34 = PoseInputMapper_ImageToViewport_mEB41953402252741825E85C0EADBBB6E9E54B326(G_B9_3, G_B9_2, G_B9_1, G_B9_0, L_33, NULL);
 		V_3 = L_34;
@@ -20405,7 +20386,7 @@ IL_0033:
 		float L_9;
 		L_9 = Camera_get_aspect_m48BF8820EA2D55BE0D154BC5546819FB65BE257D(L_8, NULL);
 		bool L_10;
-		L_10 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_10 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_11 = __this->___positionMinConfidence;
 		bool L_12;
 		L_12 = PoseInputMapper_TryReadPreviewShoulders_m7ACD80FEF574AC62399F39079EE927B77E49C83D(L_7, L_9, L_10, L_11, (&V_16), (&V_17), NULL);
@@ -20775,7 +20756,7 @@ IL_002d:
 		float L_8;
 		L_8 = Camera_get_aspect_m48BF8820EA2D55BE0D154BC5546819FB65BE257D(L_7, NULL);
 		bool L_9;
-		L_9 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
+		L_9 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
 		float L_10 = __this->___positionMinConfidence;
 		bool L_11;
 		L_11 = PoseInputMapper_TryReadPreviewShoulders_m7ACD80FEF574AC62399F39079EE927B77E49C83D(L_6, L_8, L_9, L_10, (&V_0), (&V_1), NULL);
@@ -22385,6 +22366,13 @@ IL_000c:
 	{
 		float L_4 = V_0;
 		return L_4;
+	}
+}
+IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) 
+{
+	{
+		bool L_0 = __this->___avatarMirror;
+		return L_0;
 	}
 }
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR float Mathf_MoveTowardsAngle_m585FDB98FB93C76E58E3D783AF728816B9EC2319_inline (float ___0_current, float ___1_target, float ___2_maxDelta, const RuntimeMethod* method) 
