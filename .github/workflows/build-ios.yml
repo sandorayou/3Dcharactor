@@ -42,11 +42,6 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks | grep -E 'iphoneos|iPhoneOS'
 
-      - name: Add HaishinKit Swift Package
-        run: |
-          python3 Tools/add_haishinkit_spm.py "${{ steps.find-project.outputs.project_path }}"
-          xcodebuild -resolvePackageDependencies -project "${{ steps.find-project.outputs.project_path }}" -scheme "Unity-iPhone"
-
       - name: Build unsigned app
         env:
           XCODE_PROJECT: ${{ steps.find-project.outputs.project_path }}

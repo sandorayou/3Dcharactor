@@ -18,6 +18,18 @@ project = Xcodeproj::Project.open(project_path)
 target = project.targets.find { |item| item.name == 'UnityFramework' }
 abort 'UnityFramework target not found' unless target
 
+# The app only composites a front-camera image and one body avatar. Remove
+# files left in the checked-in Xcode export by the old streaming build.
+streaming_refs = project.files.select do |item|
+  %w[LiveStreamingBridge.mm LiveStreamingBridge.swift].include?(File.basename(item.path.to_s))
+end
+project.targets.each do |item|
+  item.build_phases.each do |phase|
+    phase.files.select { |build_file| streaming_refs.include?(build_file.file_ref) }.each(&:remove_from_project)
+  end
+end
+streaming_refs.each(&:remove_from_project)
+
 # The Homuler Unity package embeds a full MediaPipe runtime. Loading it beside
 # MediaPipeTasksVision registers the same GPU buffer types twice and crashes in
 # dyld initializers before Unity starts.
@@ -50,8 +62,14 @@ project.save
 abort 'Legacy MediaPipeUnity.framework is still linked' if project.files.any? { |item| item.path.to_s.end_with?('MediaPipeUnity.framework') }
 raw = File.join(File.dirname(project_path), 'Data', 'Raw')
 FileUtils.mkdir_p(raw)
-%w[pose_landmarker_full.bytes hand_landmarker.task face_landmarker.task].each do |name|
-  source = File.join('Assets', 'StreamingAssets', name)
-  abort "Missing model: #{source}" unless File.file?(source) && File.size(source) > 1024
+name = 'pose_landmarker_lite.task'
+source = File.join('Assets', 'StreamingAssets', name)
+abort "Missing model: #{source}" unless File.file?(source) && File.size(source) > 1024
+%w[pose_landmarker_full.bytes hand_landmarker.task face_landmarker.task].each do |obsolete|
+  FileUtils.rm_f(File.join(raw, obsolete))
+end
+begin
   FileUtils.cp(source, File.join(raw, name))
+rescue SystemCallError => error
+  abort "Unable to copy model #{source}: #{error.message}"
 end
