@@ -180,6 +180,8 @@ static void DisplayCameraBackground(CVPixelBufferRef pixelBuffer) {
     });
 }
 @end
+static NativePoseCaptureDelegate *s_delegate;
+static NativePoseResultDelegate *s_resultDelegate;
 static BOOL s_stopping;
 
 static void UpdateVideoOrientation() {
@@ -216,12 +218,10 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (granted) UnitySendMessage(s_unityObject.UTF8String, "OnNativeCameraPermissionGranted", "");
-                else NotifyCameraState(@"camera_permission_denied");
             });
         }];
         return -6;
     } else if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] != AVAuthorizationStatusAuthorized) {
-        NotifyCameraState(@"camera_permission_denied");
         return -5;
     }
     NSString *modelPath = [[NSBundle mainBundle] pathForResource:@"pose_landmarker_lite" ofType:@"task" inDirectory:@"Data/Raw"];
@@ -278,7 +278,6 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
         UpdateVideoOrientation();
     });
     [s_session startRunning];
-    NotifyCameraState(@"camera_started");
     return 0;
 }
 
