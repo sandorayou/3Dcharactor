@@ -464,7 +464,6 @@ namespace RealtimeBodyTracking
                 rootRotationDelta = root.rotation * Quaternion.Inverse(avatarRootOriginRotation);
                 if (returnToRestPose && !waistCoordinatesLocked) ReturnToRest();
                 if (enableHead) ApplyHead(pose);
-                ApplyFaceExpressions(pose);
                 ApplyFaceZoom(pose, Time.unscaledDeltaTime);
                 ApplyExactShoulderScreenAlignment(pose);
                 return;
@@ -551,7 +550,6 @@ namespace RealtimeBodyTracking
                     else
                         ReturnBoneToRest(chain.bone);
             if (enableHead) ApplyHead(pose);
-            ApplyFaceExpressions(pose);
             ApplyFaceZoom(pose, Time.unscaledDeltaTime);
             ApplyExactShoulderScreenAlignment(pose);
         }
@@ -2085,8 +2083,7 @@ namespace RealtimeBodyTracking
             return shoulderViewport.z > 0f && targetViewport.z > 0f;
         }
 
-        private bool PreviewMirrored => localPoseSource is IOSNativePoseSource native
-            ? native.UseFrontCamera : avatarMirror;
+        private bool PreviewMirrored => localPoseSource is IOSNativePoseSource || avatarMirror;
 
         private Vector2 ToPreviewViewport(Vector3 image)
         {
@@ -2942,7 +2939,6 @@ namespace RealtimeBodyTracking
                     pose, trackingCamera.aspect, PreviewMirrored, positionMinConfidence,
                     out var sourceLeft, out var sourceRight))
             {
-                RecordScreenAlignmentDiagnostic(pose, false, default, default, float.NaN);
                 return;
             }
 
@@ -2983,16 +2979,6 @@ namespace RealtimeBodyTracking
             screenAlignmentError = Mathf.Max(
                 Vector2.Distance(sourceLeft, alignedLeft),
                 Vector2.Distance(sourceRight, alignedRight));
-            RecordScreenAlignmentDiagnostic(
-                pose, true, sourceShoulderViewport, avatarShoulderViewport, screenAlignmentError);
-        }
-
-        private void RecordScreenAlignmentDiagnostic(
-            PosePacket pose, bool valid, Vector2 sourceCenter, Vector2 avatarCenter, float maximumError)
-        {
-            if (!receivedNewPoseFrame || !(localPoseSource is IOSNativePoseSource native)) return;
-            native.RecordAlignmentDiagnostic(
-                pose?.frame ?? -1, valid, sourceCenter, avatarCenter, maximumError);
         }
 
         private void ResetTrackingFiltersOnly()

@@ -15,12 +15,34 @@ namespace RealtimeBodyTracking.Editor
         {
             if (report.summary.platform == BuildTarget.iOS)
             {
+                RemoveUnneededStreamingFrameworks(report.summary.outputPath);
                 ConfigureIosBuild(report.summary.outputPath);
                 RemoveLegacyMediaPipeFramework(report.summary.outputPath);
                 GenerateMediaPipePodfile(report.summary.outputPath);
                 return;
             }
 
+        }
+
+        private static void RemoveUnneededStreamingFrameworks(string pathToBuiltProject)
+        {
+            var projectPath = PBXProject.GetPBXProjectPath(pathToBuiltProject);
+            var project = new PBXProject();
+            project.ReadFromFile(projectPath);
+            var obsoletePaths = new[]
+            {
+                "LiveStreamingBridge.mm",
+                "LiveStreamingBridge.swift",
+            };
+            foreach (var file in obsoletePaths)
+            {
+                var guid = project.FindFileGuidByProjectPath(file);
+                if (string.IsNullOrEmpty(guid)) continue;
+                project.RemoveFileFromBuild(project.GetUnityMainTargetGuid(), guid);
+                project.RemoveFileFromBuild(project.GetUnityFrameworkTargetGuid(), guid);
+                project.RemoveFile(guid);
+            }
+            project.WriteToFile(projectPath);
         }
 
         private static void ConfigureIosBuild(string pathToBuiltProject)
@@ -44,47 +66,6 @@ namespace RealtimeBodyTracking.Editor
                         modified = true;
                     }
                 }
-
-                if (!content.Contains("<key>NSMicrophoneUsageDescription</key>"))
-                {
-                    string microphoneEntry = "    <key>NSMicrophoneUsageDescription</key>\n    <string>ライブ配信の音声を送信するためにマイクを使用します。</string>\n";
-                    int insertIndex = content.IndexOf("<dict>");
-                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + microphoneEntry); modified = true; }
-                }
-
-                if (!content.Contains("<key>NSPhotoLibraryAddUsageDescription</key>"))
-                {
-                    string photosEntry = "    <key>NSPhotoLibraryAddUsageDescription</key>\n    <string>デバッグ録画を写真アプリに保存するために使用します。</string>\n";
-                    int insertIndex = content.IndexOf("<dict>");
-                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + photosEntry); modified = true; }
-                }
-
-                if (!content.Contains("<key>NSLocalNetworkUsageDescription</key>"))
-                {
-                    string networkEntry = "    <key>NSLocalNetworkUsageDescription</key>\n    <string>PCからの姿勢トラッキングデータを受信するためにローカルネットワークを使用します。</string>\n";
-                    int insertIndex = content.IndexOf("<dict>");
-                    if (insertIndex >= 0)
-                    {
-                        insertIndex += "<dict>".Length;
-                        content = content.Insert(insertIndex, "\n" + networkEntry);
-                        modified = true;
-                    }
-                }
-
-                if (!content.Contains("<key>UIBackgroundModes</key>"))
-                {
-                    string backgroundEntry = "    <key>UIBackgroundModes</key>\n    <array>\n        <string>audio</string>\n    </array>\n";
-                    int insertIndex = content.IndexOf("<dict>");
-                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + backgroundEntry); modified = true; }
-                }
-
-                if (!content.Contains("myproject5"))
-                {
-                    string urlEntry = "    <key>CFBundleURLTypes</key>\n    <array>\n        <dict>\n            <key>CFBundleURLSchemes</key>\n            <array><string>myproject5</string><string>com.googleusercontent.apps.619136214643-6hsflt2isot3prrices9tu5nn5nvq355</string></array>\n        </dict>\n    </array>\n";
-                    int insertIndex = content.IndexOf("<dict>");
-                    if (insertIndex >= 0) { content = content.Insert(insertIndex + "<dict>".Length, "\n" + urlEntry); modified = true; }
-                }
-
 
                 if (modified)
                 {
@@ -123,10 +104,7 @@ namespace RealtimeBodyTracking.Editor
             var podfile = Path.Combine(pathToBuiltProject, "Podfile");
             var content = "platform :ios, '15.0'\nuse_frameworks! :linkage => :static\n\ntarget 'UnityFramework' do\n  pod 'MediaPipeTasksVision'\nend\n";
             if (!File.Exists(podfile) || File.ReadAllText(podfile) != content)
-            {
                 File.WriteAllText(podfile, content);
-                Debug.Log($"[TrackerBuildPostprocessor] Generated MediaPipe Podfile: {podfile}");
-            }
 
             var script = Path.Combine(pathToBuiltProject, "InstallMediaPipePods.command");
             File.WriteAllText(script, "#!/bin/sh\nset -eu\ncd \"$(dirname \"$0\")\"\npod install\nopen Unity-iPhone.xcworkspace\n");

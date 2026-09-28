@@ -9,15 +9,7 @@ namespace RealtimeBodyTracking.LiveStreaming
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (Object.FindObjectOfType<LiveStreamingController>() != null) return;
-            var root = new GameObject("LiveStreamingRuntime");
-            Object.DontDestroyOnLoad(root);
-            root.AddComponent<LiveStreamingController>();
-            root.AddComponent<RealtimeBodyTracking.RuntimeLogCapture>();
-            root.AddComponent<RealtimeBodyTracking.DeviceScreenRecorder>();
-            root.AddComponent<LiveStreamAccountLinkController>();
-            root.AddComponent<YouTubeAccountLinkController>();
-            root.AddComponent<LiveStreamSettingsController>();
+            // Streaming is not part of the camera-avatar app.
         }
     }
 }

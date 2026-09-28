@@ -2,108 +2,12 @@ using UnityEngine;
 
 namespace RealtimeBodyTracking
 {
-    /// Device-only diagnostic panel. It is deliberately independent from the
-    /// streaming UI so tracking can be debugged with streaming disabled.
-    public sealed class IOSDebugOverlay : MonoBehaviour
-    {
-        private bool visible = true;
-        private Vector2 scroll;
-        private GUIStyle textStyle;
-        private float copyPressStarted = -1f;
-        private string copyStatus = "ログ全文を長押しコピー";
-
-        private void Awake()
-        {
-            DontDestroyOnLoad(gameObject);
-        }
-
-        private void OnGUI()
-        {
-            if (!visible) {
-                if (GUI.Button(new Rect(12, 12, 150, 52), "ログ表示")) visible = true;
-                return;
-            }
-
-            if (textStyle == null)
-                textStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, wordWrap = true };
-            var width = Mathf.Min(Screen.width - 24, 900);
-            var height = Mathf.Min(Screen.height * .42f, 620);
-            GUILayout.BeginArea(new Rect(12, 12, width, height), GUI.skin.box);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("iPhone Tracking Log", textStyle);
-            if (GUILayout.Button("前/後", GUILayout.Width(110), GUILayout.Height(44)))
-                Object.FindObjectOfType<IOSNativePoseSource>()?.ToggleCamera();
-            if (GUILayout.Button("コピー", GUILayout.Width(110), GUILayout.Height(44)))
-                GUIUtility.systemCopyBuffer = RuntimeLogCapture.GetText();
-            if (GUILayout.Button("閉じる", GUILayout.Width(110), GUILayout.Height(44))) visible = false;
-            GUILayout.EndHorizontal();
-            var source = Object.FindObjectOfType<IOSNativePoseSource>();
-            if (source != null)
-            {
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button(source.Recording.IsRecording ? "記録停止" : "新規記録（前回を上書き）", GUILayout.Height(44)))
-                {
-                    if (source.Recording.IsRecording) source.StopRecording();
-                    else source.StartRecording();
-                }
-                if (GUILayout.Button("記録JSONをコピー", GUILayout.Height(44)))
-                {
-                    source.StopRecording();
-                    try
-                    {
-                        if (System.IO.File.Exists(source.Recording.FilePath))
-                            GUIUtility.systemCopyBuffer = System.IO.File.ReadAllText(source.Recording.FilePath);
-                    }
-                    catch (System.Exception error) { Debug.LogError("[Tracking] Copy failed: " + error.Message); }
-                }
-                if (GUILayout.Button("位置誤差をコピー", GUILayout.Height(44)))
-                {
-                    source.StopRecording();
-                    try
-                    {
-                        if (System.IO.File.Exists(source.AlignmentRecording.FilePath))
-                            GUIUtility.systemCopyBuffer = System.IO.File.ReadAllText(source.AlignmentRecording.FilePath);
-                    }
-                    catch (System.Exception error) { Debug.LogError("[Tracking] Alignment copy failed: " + error.Message); }
-                }
-                GUILayout.EndHorizontal();
-                GUILayout.Label(source.Recording.Status + " / " + source.Recording.Frames + " frames", textStyle);
-                GUILayout.Label(source.Recording.FilePath ?? "画像なし・最大6000フレーム / 8 MiB", textStyle);
-                GUILayout.Label(source.AlignmentRecording.FilePath ?? "位置誤差ログは記録開始時に作成", textStyle);
-            }
-            var holdingCopy = GUILayout.RepeatButton(copyStatus, GUILayout.Height(48));
-            if (holdingCopy)
-            {
-                if (copyPressStarted < 0f) copyPressStarted = Time.unscaledTime;
-                if (Time.unscaledTime - copyPressStarted >= .8f && copyStatus != "コピーしました")
-                {
-                    GUIUtility.systemCopyBuffer = RuntimeLogCapture.GetText();
-                    copyStatus = "コピーしました";
-                }
-            }
-            else if (copyPressStarted >= 0f)
-            {
-                copyPressStarted = -1f;
-                if (copyStatus == "コピーしました") copyStatus = "ログ全文を長押しコピー";
-            }
-            scroll = GUILayout.BeginScrollView(scroll, GUI.skin.box);
-            GUILayout.Label(RuntimeLogCapture.GetText(), textStyle);
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-    }
+    /// <summary>Compatibility type for existing scenes. No diagnostic UI is installed.</summary>
+    public sealed class IOSDebugOverlay : MonoBehaviour { }
 
     internal static class IOSDebugOverlayBootstrap
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Install()
-        {
-#if UNITY_IOS && !UNITY_EDITOR
-            if (Object.FindObjectOfType<RuntimeLogCapture>() == null)
-                new GameObject("RuntimeLogCapture").AddComponent<RuntimeLogCapture>();
-            if (Object.FindObjectOfType<IOSDebugOverlay>() == null)
-                new GameObject("IOSDebugOverlay").AddComponent<IOSDebugOverlay>();
-#endif
-        }
+        private static void Install() { }
     }
 }
