@@ -42,6 +42,9 @@ namespace RealtimeBodyTracking
             return packet != null;
         }
 
+        // Compatibility for unused legacy streaming scripts; this app keeps the front camera fixed.
+        public void SetFrontCamera(bool front) { }
+
         private void OnEnable()
         {
 #if UNITY_IOS && !UNITY_EDITOR
