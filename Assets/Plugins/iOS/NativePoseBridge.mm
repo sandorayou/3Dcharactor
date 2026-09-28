@@ -210,6 +210,19 @@ static AVCaptureDevice *CameraDevice(void) {
 
 extern "C" void NativePoseCaptureStop();
 extern "C" void NativePoseCaptureSetPaused(int paused);
+// Link-only compatibility shims for the unused streaming/recording scripts.
+// This app does not persist stream keys or switch away from the front camera.
+extern "C" void NativeSet(const char *key, const char *value) {
+    (void)key;
+    (void)value;
+}
+extern "C" const char *NativeGet(const char *key) {
+    (void)key;
+    return nullptr;
+}
+extern "C" void NativePoseCaptureSetFrontCamera(int front) {
+    (void)front;
+}
 
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;

@@ -2,25 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLSchemes</key>
-            <array><string>myproject5</string><string>com.googleusercontent.apps.619136214643-6hsflt2isot3prrices9tu5nn5nvq355</string></array>
-        </dict>
-    </array>
-
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>audio</string>
-    </array>
-
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>PCからの姿勢トラッキングデータを受信するためにローカルネットワークを使用します。</string>
-
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>デバッグ録画を写真アプリに保存するために使用します。</string>
-
     <key>CADisableMinimumFrameDuration</key>
     <false />
     <key>CADisableMinimumFrameDurationOnPhone</key>
@@ -30,7 +11,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>MyProject5 Live Streaming</string>
+    <string>Camera Avatar</string>
     <key>CFBundleExecutable</key>
     <string>${EXECUTABLE_NAME}</string>
     <key>CFBundleIdentifier</key>
@@ -48,9 +29,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true />
     <key>NSCameraUsageDescription</key>
-    <string>MyProject5 Live Streamingがカメラを配信映像に使用します。</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>MyProject5 Live Streamingがマイク音声を配信に使用します。</string>
+    <string>人物の動きを追跡し、アバターを実写映像に重ねるためにカメラを使用します。</string>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen-iPhone</string>
     <key>UILaunchStoryboardName~ipad</key>
