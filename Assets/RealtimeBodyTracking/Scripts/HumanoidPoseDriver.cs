@@ -7,7 +7,9 @@ namespace RealtimeBodyTracking
 {
     public sealed class HumanoidPoseDriver : MonoBehaviour
     {
-        private const bool InputCoordinatesNeedMirror = false;
+        // The front-camera image is mirrored before both display and MediaPipe
+        // inference. Convert its horizontal pose axis back to the avatar's view.
+        private const bool InputCoordinatesNeedMirror = true;
         [Header("References")]
         [SerializeField] private Animator targetAnimator;
         private LocalPosePacketSource localPoseSource;
@@ -2084,7 +2086,8 @@ namespace RealtimeBodyTracking
         }
 
         // iOS pose landmarks come from AVCaptureVideoDataOutput, whose buffer is already mirrored.
-        private bool PreviewMirrored => avatarMirror;
+        // The iOS capture buffer and avatar preview use the same mirrored frame.
+        private bool PreviewMirrored => localPoseSource is IOSNativePoseSource || avatarMirror;
 
         private Vector2 ToPreviewViewport(Vector3 image)
         {

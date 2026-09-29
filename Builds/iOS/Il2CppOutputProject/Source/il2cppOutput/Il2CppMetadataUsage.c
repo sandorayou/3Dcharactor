@@ -2634,6 +2634,7 @@ RuntimeClass* IMoveHandler_t6C9BB42118BAEEDF258B967391CCCD6A5C7976AB_il2cpp_Type
 RuntimeClass* INavigationEvent_t4864FB506AF154EE9A56715FF6521E6582EDD129_il2cpp_TypeInfo_var = (RuntimeClass*)(uintptr_t)536887797;
 RuntimeClass* IOAsyncCallback_tDBBA8BBDA6B203613680E77BD4AD6320A1268388_il2cpp_TypeInfo_var = (RuntimeClass*)(uintptr_t)536887807;
 RuntimeClass* IOException_t5D599190B003D41D45D4839A9B6B9AB53A755910_il2cpp_TypeInfo_var = (RuntimeClass*)(uintptr_t)536887819;
+RuntimeClass* IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708_il2cpp_TypeInfo_var = (RuntimeClass*)(uintptr_t)536887831;
 RuntimeClass* IOSelectorJob_t988E3C2831A98169EFDB178A08E8548A4E90DD31_il2cpp_TypeInfo_var = (RuntimeClass*)(uintptr_t)536887835;
 RuntimeClass* IObjectReference_tB2D247519F1BBA740487C64E0C0DDAA58A132F16_il2cpp_TypeInfo_var = (RuntimeClass*)(uintptr_t)536887843;
 RuntimeClass* IPAddress_t2F4486449B0D73FF2D3B36A9FE5E9C3F63116484_il2cpp_TypeInfo_var = (RuntimeClass*)(uintptr_t)536887847;

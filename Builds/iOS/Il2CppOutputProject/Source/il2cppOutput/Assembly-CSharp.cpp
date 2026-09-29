@@ -112,6 +112,7 @@ IL2CPP_EXTERN_C RuntimeClass* HumanBodyBones_tA2A904890A05ABCFFAB7E119244E97C5EA
 IL2CPP_EXTERN_C RuntimeClass* HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* IDisposable_t030E0496B4E0E4E4F086825007979AF51F7248C5_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* IEnumerator_t7B609C2FFA6EB5167D9C62A0C32A21DE2F666DAA_il2cpp_TypeInfo_var;
+IL2CPP_EXTERN_C RuntimeClass* IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Int32_t680FF22E76F6EFAD4375103CBBFFA0421349384C_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* Int64_t092CFB123BE63C28ACDAF65C68F21A526050DBA3_il2cpp_TypeInfo_var;
 IL2CPP_EXTERN_C RuntimeClass* KeyValuePair_2U5BU5D_t8B42A1FF41A21F9CCFFF96EC438F29EEA08678EE_il2cpp_TypeInfo_var;
@@ -1439,7 +1440,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void HumanoidPoseDriver_CompleteBottomExitIfN
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR String_t* String_Format_m918500C1EFB475181349A79989BB79BB36102894 (String_t* ___0_format, ObjectU5BU5D_t8061030B0A12A55D5AD8652A20C922FE99450918* ___1_args, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR int32_t BoneRotationSolver_RefreshMissingBones_mB0ADEF908F0391C4940BD02B61BC067541633E76 (BoneRotationSolver_t3267D0DF3BF4EE35D24545D5429D514DE9962141* __this, Animator_t8A52E42AE54F76681838FE9E632683EF3952E883* ___0_animator, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool ManualAvatarController_get_ShouldBlockTracking_m074A0E990BB689689D85A4EF82F78807BFC9F0B8 (ManualAvatarController_tAEB01348E576C4635E1779A92E3BDDAB0A24CE72* __this, const RuntimeMethod* method) ;
-IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) ;
+IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool PoseInputMapper_TryReadUpperBody_m16012C975DD03AF5B0BD2D73C4A9BD4F0B5EB390 (PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* ___0_pose, bool ___1_worldMirror, bool ___2_imageMirror, float ___3_bodyMinConfidence, UpperBodyPose_t8CA96A2D82DD97455C9B3550EF1CFBA9578CE091* ___4_upperBody, const RuntimeMethod* method) ;
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR float Time_get_deltaTime_mC3195000401F0FD167DD2F948FD2BC58330D0865 (const RuntimeMethod* method) ;
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR float Mathf_MoveTowardsAngle_m585FDB98FB93C76E58E3D783AF728816B9EC2319_inline (float ___0_current, float ___1_target, float ___2_maxDelta, const RuntimeMethod* method) ;
@@ -2633,10 +2634,10 @@ IL_0071:
 	{
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_13 = ___0_pose;
 		bool L_14;
-		L_14 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_14 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_15 = __this->___bodyTurnMinConfidence;
 		bool L_16;
-		L_16 = PoseInputMapper_TryReadUpperBody_m16012C975DD03AF5B0BD2D73C4A9BD4F0B5EB390(L_13, (bool)0, L_14, L_15, (&V_0), NULL);
+		L_16 = PoseInputMapper_TryReadUpperBody_m16012C975DD03AF5B0BD2D73C4A9BD4F0B5EB390(L_13, (bool)1, L_14, L_15, (&V_0), NULL);
 		if (L_16)
 		{
 			goto IL_0163;
@@ -2787,7 +2788,7 @@ IL_01c2:
 		__this->___bodyPositionTracking = (bool)0;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_66 = ___0_pose;
 		bool L_67;
-		L_67 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_67 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_68 = __this->___positionMinConfidence;
 		bool L_69;
 		L_69 = PoseInputMapper_TryReadScreenBody_m734A01249279D5720686A01CAE5C59DBD126EEEE(L_66, L_67, L_68, (&V_3), NULL);
@@ -2940,7 +2941,7 @@ IL_029e:
 		HumanoidPoseDriver_ApplyTrackedShoulderLift_m5853A6FFEF139C29D5DCE1451E4B0BE36EA8387F(__this, L_107, (bool)0, NULL);
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_108 = ___0_pose;
 		bool L_109;
-		L_109 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_109 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_110 = __this->___headMinConfidence;
 		bool L_111;
 		L_111 = PoseInputMapper_TryReadHeadFacing_m78D34DDD634B5FD0CFCF79D97B40D059AFF9752C(L_108, L_109, L_110, (&V_8), NULL);
@@ -3033,7 +3034,7 @@ IL_0390:
 		String_t* L_132 = L_131.___Item2;
 		float L_133 = __this->___legMinConfidence;
 		bool L_134;
-		L_134 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_130, L_132, (bool)0, L_133, (&V_12), NULL);
+		L_134 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_130, L_132, (bool)1, L_133, (&V_12), NULL);
 		if (!L_134)
 		{
 			goto IL_03ee;
@@ -3045,7 +3046,7 @@ IL_0390:
 		String_t* L_137 = L_136.___Item3;
 		float L_138 = __this->___legMinConfidence;
 		bool L_139;
-		L_139 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_135, L_137, (bool)0, L_138, (&V_13), NULL);
+		L_139 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_135, L_137, (bool)1, L_138, (&V_13), NULL);
 		if (!L_139)
 		{
 			goto IL_03ee;
@@ -4063,7 +4064,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryEstimateHeadRotati
 		*(Quaternion_tDA59F214EF07D7700B26E40E562F267AF7306974*)L_0 = L_1;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_2 = ___0_pose;
 		bool L_3;
-		L_3 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_3 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_4 = __this->___headMinConfidence;
 		bool L_5;
 		L_5 = PoseInputMapper_TryReadHeadFacing_m78D34DDD634B5FD0CFCF79D97B40D059AFF9752C(L_2, L_3, L_4, (&V_0), NULL);
@@ -4080,7 +4081,7 @@ IL_0023:
 	{
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_6 = ___0_pose;
 		bool L_7;
-		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_8 = __this->___headMinConfidence;
 		bool L_9;
 		L_9 = PoseInputMapper_TryReadHeadRoll_m3331BACD4D9D85A25695B51C5484D9B5D28C277C(L_6, L_7, L_8, (&V_1), NULL);
@@ -4680,13 +4681,13 @@ IL_0026:
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_11 = ___0_pose;
 		String_t* L_12 = V_2;
 		bool L_13;
-		L_13 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_11, L_12, (bool)0, (0.349999994f), (&V_5), NULL);
+		L_13 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_11, L_12, (bool)1, (0.349999994f), (&V_5), NULL);
 		V_4 = L_13;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_14 = ___0_pose;
 		String_t* L_15 = V_3;
 		float L_16 = __this->___wristMinConfidence;
 		bool L_17;
-		L_17 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_14, L_15, (bool)0, L_16, (&V_7), NULL);
+		L_17 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_14, L_15, (bool)1, L_16, (&V_7), NULL);
 		V_6 = L_17;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_18 = ___0_pose;
 		String_t* L_19 = V_2;
@@ -6060,13 +6061,13 @@ IL_0036:
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_8 = ___0_pose;
 		String_t* L_9 = V_1;
 		bool L_10;
-		L_10 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_8, L_9, (bool)0, (0.349999994f), (&V_4), NULL);
+		L_10 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_8, L_9, (bool)1, (0.349999994f), (&V_4), NULL);
 		V_3 = L_10;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_11 = ___0_pose;
 		String_t* L_12 = V_2;
 		float L_13 = __this->___wristMinConfidence;
 		bool L_14;
-		L_14 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_11, L_12, (bool)0, L_13, (&V_6), NULL);
+		L_14 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_11, L_12, (bool)1, L_13, (&V_6), NULL);
 		V_5 = L_14;
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_15 = ___0_pose;
 		String_t* L_16 = V_1;
@@ -9376,7 +9377,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandOrientation
 		String_t* L_4;
 		L_4 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_3, _stringLiteralDBB74A66F1E9A62549929E2AD03C445A56AD08C2, NULL);
 		bool L_5;
-		L_5 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_2, L_4, (bool)0, (0.349999994f), (&V_1), NULL);
+		L_5 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_2, L_4, (bool)1, (0.349999994f), (&V_1), NULL);
 		if (!L_5)
 		{
 			goto IL_0074;
@@ -9388,7 +9389,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandOrientation
 		String_t* L_8;
 		L_8 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_7, _stringLiteral4C93A1AA29BA58E79B3DF298B119732F393CAEFC, NULL);
 		bool L_9;
-		L_9 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_6, L_8, (bool)0, (0.349999994f), (&V_2), NULL);
+		L_9 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_6, L_8, (bool)1, (0.349999994f), (&V_2), NULL);
 		if (!L_9)
 		{
 			goto IL_0074;
@@ -9400,7 +9401,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandOrientation
 		String_t* L_12;
 		L_12 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_11, _stringLiteral47736B534A0C5F770D0EC8C602869CE4E4834C6E, NULL);
 		bool L_13;
-		L_13 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_10, L_12, (bool)0, (0.349999994f), (&V_3), NULL);
+		L_13 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_10, L_12, (bool)1, (0.349999994f), (&V_3), NULL);
 		if (!L_13)
 		{
 			goto IL_0074;
@@ -9412,7 +9413,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandOrientation
 		String_t* L_16;
 		L_16 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_15, _stringLiteralBA969A6E1BA72FA0D1D17FC7E126AAB09F0D1990, NULL);
 		bool L_17;
-		L_17 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_14, L_16, (bool)0, (0.349999994f), (&V_4), NULL);
+		L_17 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_14, L_16, (bool)1, (0.349999994f), (&V_4), NULL);
 		if (L_17)
 		{
 			goto IL_0086;
@@ -9745,7 +9746,7 @@ IL_00a3:
 		String_t* L_27;
 		L_27 = String_Concat_m8855A6DE10F84DA7F4EC113CADDB59873A25573B(L_24, _stringLiteralFCABB9BDA6739697D7B54FAAF4158A05273E397E, L_26, NULL);
 		bool L_28;
-		L_28 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_23, L_27, (bool)0, (0.349999994f), (&V_16), NULL);
+		L_28 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_23, L_27, (bool)1, (0.349999994f), (&V_16), NULL);
 		if (!L_28)
 		{
 			goto IL_024b;
@@ -9759,7 +9760,7 @@ IL_00a3:
 		String_t* L_33;
 		L_33 = String_Concat_m8855A6DE10F84DA7F4EC113CADDB59873A25573B(L_30, _stringLiteralFCABB9BDA6739697D7B54FAAF4158A05273E397E, L_32, NULL);
 		bool L_34;
-		L_34 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_29, L_33, (bool)0, (0.349999994f), (&V_17), NULL);
+		L_34 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_29, L_33, (bool)1, (0.349999994f), (&V_17), NULL);
 		if (!L_34)
 		{
 			goto IL_024b;
@@ -9773,7 +9774,7 @@ IL_00a3:
 		String_t* L_39;
 		L_39 = String_Concat_m8855A6DE10F84DA7F4EC113CADDB59873A25573B(L_36, _stringLiteralFCABB9BDA6739697D7B54FAAF4158A05273E397E, L_38, NULL);
 		bool L_40;
-		L_40 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_35, L_39, (bool)0, (0.349999994f), (&V_18), NULL);
+		L_40 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_35, L_39, (bool)1, (0.349999994f), (&V_18), NULL);
 		if (!L_40)
 		{
 			goto IL_024b;
@@ -9787,7 +9788,7 @@ IL_00a3:
 		String_t* L_45;
 		L_45 = String_Concat_m8855A6DE10F84DA7F4EC113CADDB59873A25573B(L_42, _stringLiteralFCABB9BDA6739697D7B54FAAF4158A05273E397E, L_44, NULL);
 		bool L_46;
-		L_46 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_41, L_45, (bool)0, (0.349999994f), (&V_19), NULL);
+		L_46 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_41, L_45, (bool)1, (0.349999994f), (&V_19), NULL);
 		if (!L_46)
 		{
 			goto IL_024b;
@@ -10354,7 +10355,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandBasis_mFF03
 		String_t* L_2;
 		L_2 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_1, _stringLiteralDBB74A66F1E9A62549929E2AD03C445A56AD08C2, NULL);
 		bool L_3;
-		L_3 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_0, L_2, (bool)0, (0.349999994f), (&V_0), NULL);
+		L_3 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_0, L_2, (bool)1, (0.349999994f), (&V_0), NULL);
 		if (!L_3)
 		{
 			goto IL_006c;
@@ -10366,7 +10367,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandBasis_mFF03
 		String_t* L_6;
 		L_6 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_5, _stringLiteral4C93A1AA29BA58E79B3DF298B119732F393CAEFC, NULL);
 		bool L_7;
-		L_7 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_4, L_6, (bool)0, (0.349999994f), (&V_1), NULL);
+		L_7 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_4, L_6, (bool)1, (0.349999994f), (&V_1), NULL);
 		if (!L_7)
 		{
 			goto IL_006c;
@@ -10378,7 +10379,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandBasis_mFF03
 		String_t* L_10;
 		L_10 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_9, _stringLiteral47736B534A0C5F770D0EC8C602869CE4E4834C6E, NULL);
 		bool L_11;
-		L_11 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_8, L_10, (bool)0, (0.349999994f), (&V_2), NULL);
+		L_11 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_8, L_10, (bool)1, (0.349999994f), (&V_2), NULL);
 		if (!L_11)
 		{
 			goto IL_006c;
@@ -10390,7 +10391,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGetHandBasis_mFF03
 		String_t* L_14;
 		L_14 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_13, _stringLiteralBA969A6E1BA72FA0D1D17FC7E126AAB09F0D1990, NULL);
 		bool L_15;
-		L_15 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_12, L_14, (bool)0, (0.349999994f), (&V_3), NULL);
+		L_15 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_12, L_14, (bool)1, (0.349999994f), (&V_3), NULL);
 		if (L_15)
 		{
 			goto IL_0096;
@@ -12521,7 +12522,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_IsWristOverTorso_mF9F
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_2 = ___0_pose;
 		float L_3 = __this->___wristMinConfidence;
 		bool L_4;
-		L_4 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_2, _stringLiteralC919EC859C3F9AEE10DF6598328FC30E5A0EBE40, (bool)0, L_3, (&V_1), NULL);
+		L_4 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_2, _stringLiteralC919EC859C3F9AEE10DF6598328FC30E5A0EBE40, (bool)1, L_3, (&V_1), NULL);
 		if (!L_4)
 		{
 			goto IL_0050;
@@ -12531,7 +12532,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_IsWristOverTorso_mF9F
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_5 = ___0_pose;
 		float L_6 = __this->___wristMinConfidence;
 		bool L_7;
-		L_7 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_5, _stringLiteral9A93727BA50500EC41C224B3DBA274EB739BAF67, (bool)0, L_6, (&V_2), NULL);
+		L_7 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_5, _stringLiteral9A93727BA50500EC41C224B3DBA274EB739BAF67, (bool)1, L_6, (&V_2), NULL);
 		if (!L_7)
 		{
 			goto IL_0050;
@@ -12544,7 +12545,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_IsWristOverTorso_mF9F
 		L_10 = String_Concat_m9E3155FB84015C823606188F53B47CB44C444991(L_9, _stringLiteralA8D9AEA970191D4695D5F0E436BA568017BFE02B, NULL);
 		float L_11 = __this->___wristMinConfidence;
 		bool L_12;
-		L_12 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_8, L_10, (bool)0, L_11, (&V_3), NULL);
+		L_12 = PoseInputMapper_TryGet_m3DA70C32076002CEB6E4D3678722491F8D7E0EAF(L_8, L_10, (bool)1, L_11, (&V_3), NULL);
 		if (L_12)
 		{
 			goto IL_0052;
@@ -13860,9 +13861,27 @@ IL_01ce:
 }
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) 
 {
+	static bool s_Il2CppMethodInitialized;
+	if (!s_Il2CppMethodInitialized)
 	{
-		bool L_0 = __this->___avatarMirror;
-		return L_0;
+		il2cpp_codegen_initialize_runtime_metadata((uintptr_t*)&IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708_il2cpp_TypeInfo_var);
+		s_Il2CppMethodInitialized = true;
+	}
+	{
+		RuntimeObject* L_0 = __this->___localPoseSource;
+		if (((IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708*)IsInstSealed((RuntimeObject*)L_0, IOSNativePoseSource_tDC0B938828B06A5F1EF9F92AE934A713378CC708_il2cpp_TypeInfo_var)))
+		{
+			goto IL_0014;
+		}
+	}
+	{
+		bool L_1 = __this->___avatarMirror;
+		return L_1;
+	}
+
+IL_0014:
+	{
+		return (bool)1;
 	}
 }
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 HumanoidPoseDriver_ToPreviewViewport_m28AE9B20516FADA09B12C0821ABB33C42F325463 (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2 ___0_image, const RuntimeMethod* method) 
@@ -15841,7 +15860,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryApplyHandContact_m
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_0 = ___0_pose;
 		float L_1 = __this->___wristMinConfidence;
 		bool L_2;
-		L_2 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_0, _stringLiteral6BFC31CCB12271ED6017E324C2AD37A637639B1C, (bool)0, L_1, (&V_0), NULL);
+		L_2 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_0, _stringLiteral6BFC31CCB12271ED6017E324C2AD37A637639B1C, (bool)1, L_1, (&V_0), NULL);
 		if (!L_2)
 		{
 			goto IL_006a;
@@ -15851,7 +15870,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryApplyHandContact_m
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_3 = ___0_pose;
 		float L_4 = __this->___wristMinConfidence;
 		bool L_5;
-		L_5 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_3, _stringLiteral9956C563EEAF330D023129ADCED4B7537B548D9C, (bool)0, L_4, (&V_1), NULL);
+		L_5 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_3, _stringLiteral9956C563EEAF330D023129ADCED4B7537B548D9C, (bool)1, L_4, (&V_1), NULL);
 		if (!L_5)
 		{
 			goto IL_006a;
@@ -15861,7 +15880,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryApplyHandContact_m
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_6 = ___0_pose;
 		float L_7 = __this->___wristMinConfidence;
 		bool L_8;
-		L_8 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_6, _stringLiteralFA9346E221344A88A9EE20A6A8672C2BB6FFA790, (bool)0, L_7, (&V_2), NULL);
+		L_8 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_6, _stringLiteralFA9346E221344A88A9EE20A6A8672C2BB6FFA790, (bool)1, L_7, (&V_2), NULL);
 		if (!L_8)
 		{
 			goto IL_006a;
@@ -15871,7 +15890,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryApplyHandContact_m
 		PosePacket_t566F4BE9B7708B88209B0F64AA6C99FCE8A80473* L_9 = ___0_pose;
 		float L_10 = __this->___wristMinConfidence;
 		bool L_11;
-		L_11 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_9, _stringLiteral8BD1F704597A4C5D4AF7ADCE8F7E4F0E5A8A1E8E, (bool)0, L_10, (&V_3), NULL);
+		L_11 = PoseInputMapper_TryGetVisible_m0EB7F72F10AFA873E79D2F538FCE17338673DF35(L_9, _stringLiteral8BD1F704597A4C5D4AF7ADCE8F7E4F0E5A8A1E8E, (bool)1, L_10, (&V_3), NULL);
 		if (L_11)
 		{
 			goto IL_006c;
@@ -16513,7 +16532,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_TryGet_m2F007E4ED207B
 		String_t* L_1 = ___1_name;
 		Vector3_t24C512C7B96BBABAD472002D0BA2BDA40A5A80B2* L_2 = ___2_position;
 		bool L_3;
-		L_3 = PoseInputMapper_TryGet_m0A4B88CEE90DDD87FF1A3A113EEA23BCEDF40F3F(L_0, L_1, (bool)0, L_2, NULL);
+		L_3 = PoseInputMapper_TryGet_m0A4B88CEE90DDD87FF1A3A113EEA23BCEDF40F3F(L_0, L_1, (bool)1, L_2, NULL);
 		return L_3;
 	}
 }
@@ -16863,7 +16882,7 @@ IL_009b:
 		float L_26 = L_25.___y;
 		(&V_1)->___y = ((-L_26));
 		bool L_27;
-		L_27 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_27 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		if (!L_27)
 		{
 			goto IL_00e5;
@@ -17032,7 +17051,7 @@ IL_001f:
 		float L_6;
 		L_6 = Camera_get_aspect_m48BF8820EA2D55BE0D154BC5546819FB65BE257D(L_5, NULL);
 		bool L_7;
-		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_8 = __this->___positionMinConfidence;
 		bool L_9;
 		L_9 = PoseInputMapper_TryReadPreviewShoulders_m7ACD80FEF574AC62399F39079EE927B77E49C83D(L_4, L_6, L_7, L_8, (&V_0), (&V_1), NULL);
@@ -18695,7 +18714,7 @@ IL_0018:
 IL_0023:
 	{
 		bool L_7;
-		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_7 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_8;
 		L_8 = PoseInputMapper_ImageToViewport_mEB41953402252741825E85C0EADBBB6E9E54B326(G_B3_3, G_B3_2, G_B3_1, G_B3_0, L_7, NULL);
 		return L_8;
@@ -19927,7 +19946,7 @@ IL_0063:
 IL_006e:
 	{
 		bool L_18;
-		L_18 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_18 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_19;
 		L_19 = PoseInputMapper_ImageToViewport_mEB41953402252741825E85C0EADBBB6E9E54B326(G_B6_3, G_B6_2, G_B6_1, G_B6_0, L_18, NULL);
 		V_2 = L_19;
@@ -19982,7 +20001,7 @@ IL_00ac:
 IL_00b7:
 	{
 		bool L_33;
-		L_33 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_33 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		Vector2_t1FD6F485C871E832B347AB2DC8CBA08B739D8DF7 L_34;
 		L_34 = PoseInputMapper_ImageToViewport_mEB41953402252741825E85C0EADBBB6E9E54B326(G_B9_3, G_B9_2, G_B9_1, G_B9_0, L_33, NULL);
 		V_3 = L_34;
@@ -20386,7 +20405,7 @@ IL_0033:
 		float L_9;
 		L_9 = Camera_get_aspect_m48BF8820EA2D55BE0D154BC5546819FB65BE257D(L_8, NULL);
 		bool L_10;
-		L_10 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_10 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_11 = __this->___positionMinConfidence;
 		bool L_12;
 		L_12 = PoseInputMapper_TryReadPreviewShoulders_m7ACD80FEF574AC62399F39079EE927B77E49C83D(L_7, L_9, L_10, L_11, (&V_16), (&V_17), NULL);
@@ -20756,7 +20775,7 @@ IL_002d:
 		float L_8;
 		L_8 = Camera_get_aspect_m48BF8820EA2D55BE0D154BC5546819FB65BE257D(L_7, NULL);
 		bool L_9;
-		L_9 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline(__this, NULL);
+		L_9 = HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5(__this, NULL);
 		float L_10 = __this->___positionMinConfidence;
 		bool L_11;
 		L_11 = PoseInputMapper_TryReadPreviewShoulders_m7ACD80FEF574AC62399F39079EE927B77E49C83D(L_6, L_8, L_9, L_10, (&V_0), (&V_1), NULL);
@@ -22366,13 +22385,6 @@ IL_000c:
 	{
 		float L_4 = V_0;
 		return L_4;
-	}
-}
-IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR bool HumanoidPoseDriver_get_PreviewMirrored_mDDBB3F25F0B8FC6E8C386D2A733DE6441EF5FBA5_inline (HumanoidPoseDriver_t570AAD31236B53E06115BBBAC4B86E6F1D2C4427* __this, const RuntimeMethod* method) 
-{
-	{
-		bool L_0 = __this->___avatarMirror;
-		return L_0;
 	}
 }
 IL2CPP_MANAGED_FORCE_INLINE IL2CPP_METHOD_ATTR float Mathf_MoveTowardsAngle_m585FDB98FB93C76E58E3D783AF728816B9EC2319_inline (float ___0_current, float ___1_target, float ___2_maxDelta, const RuntimeMethod* method) 
