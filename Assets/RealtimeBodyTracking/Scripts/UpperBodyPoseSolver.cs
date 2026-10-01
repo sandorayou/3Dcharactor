@@ -38,17 +38,8 @@ namespace RealtimeBodyTracking
             var direction = toWrist.sqrMagnitude > .000001f ? toWrist.normalized : Vector3.down;
             var maximumReach = upperLength + lowerLength - .0001f;
             var requestedDistance = toWrist.magnitude;
-            if (elbowObserved)
-            {
-                var observedUpper = Vector3.Distance(shoulder, elbowHint);
-                var observedLower = Vector3.Distance(elbowHint, targetWrist);
-                var observedPath = observedUpper + observedLower;
-                if (observedPath > .001f)
-                {
-                    var straightness = Vector3.Distance(shoulder, targetWrist) / observedPath;
-                    if (straightness > .9f) requestedDistance = maximumReach;
-                }
-            }
+            // Elbow observations choose the bend direction, never the wrist distance.
+            // Only an unreachable wrist target needs a reach correction.
             var distance = Mathf.Clamp(requestedDistance, minReach, maximumReach);
             wrist = shoulder + direction * distance;
             var along = (upperLength * upperLength - lowerLength * lowerLength + distance * distance) / (2f * distance);
