@@ -380,11 +380,26 @@ namespace RealtimeBodyTracking
                 HumanBodyBones.RightLittleProximal, HumanBodyBones.RightLittleIntermediate, HumanBodyBones.RightLittleDistal),
         };
 
+        private LocalPosePacketSource localPoseSource;
+
+        private bool TryTakeLatestPose(out PosePacket packet)
+        {
+            if (localPoseSource != null) return localPoseSource.TryTakeLatest(out packet);
+            if (udpReceiver != null) return udpReceiver.TryTakeLatest(out packet);
+            packet = null;
+            return false;
+        }
+
         private void Awake()
         {
             if (udpReceiver == null) udpReceiver = GetComponent<UdpPoseReceiver>();
             if (targetAnimator == null) targetAnimator = GetComponentInChildren<Animator>();
             if (trackingCamera == null) trackingCamera = Camera.main;
+#if UNITY_IOS && !UNITY_EDITOR
+            var sourceObject = new GameObject("IOSWindowsPoseSource_" + GetInstanceID());
+            sourceObject.transform.SetParent(transform, false);
+            localPoseSource = sourceObject.AddComponent<IOSNativePoseSource>();
+#endif
         }
 
         private void Start()
@@ -435,7 +450,7 @@ namespace RealtimeBodyTracking
         {
             receivedNewPoseFrame = false;
             receivedTrackedPoseFrame = false;
-            if (udpReceiver != null && udpReceiver.TryTakeLatest(out var packet))
+            if (TryTakeLatestPose(out var packet))
             {
                 receivedNewPoseFrame = true;
                 var reacquired = !tracking || (latestFrame >= 0 && packet.frame < latestFrame);

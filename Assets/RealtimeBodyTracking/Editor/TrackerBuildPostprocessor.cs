@@ -12,6 +12,8 @@ namespace RealtimeBodyTracking.Editor
 
         public void OnPostprocessBuild(BuildReport report)
         {
+            if (report.summary.platform != BuildTarget.StandaloneWindows &&
+                report.summary.platform != BuildTarget.StandaloneWindows64) return;
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var source = Path.Combine(projectRoot, "python-tracker");
             var buildDirectory = Path.GetDirectoryName(report.summary.outputPath);

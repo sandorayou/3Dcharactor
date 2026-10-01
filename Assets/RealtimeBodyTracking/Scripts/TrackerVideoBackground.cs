@@ -20,6 +20,11 @@ namespace RealtimeBodyTracking
 
         private void Awake()
         {
+#if UNITY_IOS && !UNITY_EDITOR
+            // Native synchronized mosaic sits behind the transparent Unity view.
+            enabled = false;
+            return;
+#else
             targetCamera = GetComponent<Camera>() ?? Camera.main;
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Tracker Video Background";
@@ -34,6 +39,7 @@ namespace RealtimeBodyTracking
             backgroundRenderer.material = new Material(shader);
             backgroundRenderer.enabled = false;
             StartCoroutine(PollFrames());
+#endif
         }
 
         private IEnumerator PollFrames()

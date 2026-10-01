@@ -23,16 +23,23 @@ namespace RealtimeBodyTracking
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
+#if UNITY_IOS && !UNITY_EDITOR
+            return;
+#else
             var receiver = FindObjectOfType<UdpPoseReceiver>();
             if (receiver != null && receiver.GetComponent<TrackerAutoLauncher>() == null)
             {
                 receiver.gameObject.AddComponent<TrackerAutoLauncher>();
                 Debug.Log("[TrackerAutoLauncher] Automatically installed onto UdpPoseReceiver GameObject.");
             }
+#endif
         }
 
         private IEnumerator Start()
         {
+#if UNITY_IOS && !UNITY_EDITOR
+            yield break;
+#else
             receiver = GetComponent<UdpPoseReceiver>();
             if (!autoLaunchLiveTracker)
             {
@@ -43,6 +50,7 @@ namespace RealtimeBodyTracking
             yield return null;
             yield return new WaitForSecondsRealtime(0.75f);
             RestartOwnedTracker("Unity play mode started");
+#endif
         }
 
         private void RestartOwnedTracker(string reason)

@@ -24,11 +24,12 @@ jobs:
       - name: Locate Xcode Project
         id: find-project
         run: |
-          XCODEPROJ=$(find . -name "*.xcodeproj" -not -path "*/Pods/*" | head -n 1)
-          if [ -z "$XCODEPROJ" ]; then
-            echo "::error::No .xcodeproj found in repository. Please export Unity to iOS and commit the Xcode project, or see GITHUB_SIDELOAD.md."
+          XCODEPROJ="Builds/iOS-WindowsPort/Unity-iPhone.xcodeproj"
+          if [ ! -d "$XCODEPROJ" ]; then
+            echo "::error::Export the current Unity iOS player to Builds/iOS-WindowsPort first."
             exit 1
           fi
+          test "$(cat Builds/iOS-WindowsPort/windows-port-export.txt)" = "WindowsPort-PoseHandFace-Mosaic-v1"
           echo "Found project: $XCODEPROJ"
           PROJECT_NAME=$(basename "$XCODEPROJ" .xcodeproj)
           echo "project_path=$XCODEPROJ" >> $GITHUB_OUTPUT
@@ -48,14 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           PROJECT_DIR=$(dirname "$XCODE_PROJECT")
-          cat > "$PROJECT_DIR/Podfile" <<'PODFILE'
-          platform :ios, '15.0'
-          use_frameworks! :linkage => :static
-
-          target 'UnityFramework' do
-            pod 'MediaPipeTasksVision'
-          end
-          PODFILE
+          test -f "$PROJECT_DIR/Podfile"
           if ! command -v pod >/dev/null 2>&1; then
             brew install cocoapods
           fi

@@ -11,6 +11,19 @@ namespace RealtimeBodyTracking
     [RequireComponent(typeof(Camera))]
     public sealed class OfflineVideoCapture : MonoBehaviour
     {
+#if UNITY_IOS && !UNITY_EDITOR
+        [System.Runtime.InteropServices.DllImport("__Internal")] private static extern void WindowsPortStartRecording(string receiver);
+        [System.Runtime.InteropServices.DllImport("__Internal")] private static extern void WindowsPortStopRecording();
+        private bool iosRecordingPending;
+        [UnityEngine.Scripting.Preserve]
+        public void OnIOSRecordingState(string state)
+        {
+            iosRecordingPending = false;
+            recording = state == "started";
+            if (recording && !isActiveAndEnabled) StopRecording();
+            if (state != "started" && state != "stopped") Debug.LogError(state, this);
+        }
+#endif
         [SerializeField] private int width = 1280;
         [SerializeField] private int height = 720;
         [SerializeField] private int frameRate = 30;
@@ -43,11 +56,21 @@ namespace RealtimeBodyTracking
                 if (recording) StopRecording(); else StartRecording();
             }
             GUI.backgroundColor = old;
+#if UNITY_IOS && !UNITY_EDITOR
+            if (recording) GUI.Label(new Rect(210, 28, 300, 30), "REC  実写モザイク + アバター");
+#else
             if (recording) GUI.Label(new Rect(210, 28, 300, 30), "REC  実写マスク + 透過アバター");
+#endif
         }
 
         private void StartRecording()
         {
+#if UNITY_IOS && !UNITY_EDITOR
+            if (iosRecordingPending) return;
+            iosRecordingPending = true;
+            WindowsPortStartRecording(gameObject.name);
+            return;
+#else
             ffmpegPath = ResolveFfmpeg();
             if (string.IsNullOrEmpty(ffmpegPath))
             {
@@ -65,6 +88,7 @@ namespace RealtimeBodyTracking
             recording = maskedEncoder != null && avatarEncoder != null;
             nextFrameTime = Time.unscaledTime;
             if (recording) StartCoroutine(CaptureLoop()); else StopRecording();
+#endif
         }
 
         private IEnumerator CaptureLoop()
@@ -137,6 +161,11 @@ namespace RealtimeBodyTracking
 
         private void StopRecording()
         {
+#if UNITY_IOS && !UNITY_EDITOR
+            if (iosRecordingPending) return;
+            iosRecordingPending = true;
+            WindowsPortStopRecording();
+#else
             recording = false;
             CloseEncoder(maskedEncoder);
             CloseEncoder(avatarEncoder);
@@ -150,6 +179,7 @@ namespace RealtimeBodyTracking
             if (readback != null) Destroy(readback);
             if (!string.IsNullOrEmpty(outputDirectory))
                 Debug.Log($"録画を保存しました: {outputDirectory}", this);
+#endif
         }
 
         private void CreateComposite()

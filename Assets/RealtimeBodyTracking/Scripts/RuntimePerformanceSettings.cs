@@ -12,15 +12,16 @@ namespace RealtimeBodyTracking
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Apply()
         {
-#if UNITY_STANDALONE && !UNITY_EDITOR
+#if (UNITY_STANDALONE || UNITY_IOS) && !UNITY_EDITOR
             QualitySettings.SetQualityLevel(StandaloneQualityLevel, true);
-#if UNITY_STANDALONE_WIN
+#if UNITY_STANDALONE_WIN || UNITY_IOS
             QualitySettings.shadowDistance = Mathf.Min(QualitySettings.shadowDistance, 28f);
 #endif
 #endif
             QualitySettings.vSyncCount = 0;
             Application.targetFrameRate = TargetFrameRate;
 
+#if !UNITY_IOS || UNITY_EDITOR
             if (Screen.width > MaximumWidth || Screen.height > MaximumHeight)
             {
                 Screen.SetResolution(
@@ -29,6 +30,7 @@ namespace RealtimeBodyTracking
                     Screen.fullScreenMode,
                     TargetFrameRate);
             }
+#endif
         }
     }
 }

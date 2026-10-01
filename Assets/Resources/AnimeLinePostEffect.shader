@@ -48,7 +48,8 @@ Shader "Hidden/RealtimeBodyTracking/AnimeLinePostEffect"
                 float localDifference = max(length(center - left), length(center - up));
                 edge *= smoothstep(_Threshold * .55, _Threshold * .55 + hardWidth, localDifference);
                 edge = saturate(edge * _Strength * _LineColor.a);
-                return fixed4(lerp(center, _LineColor.rgb, edge), 1);
+                // Preserve transparency for native iOS camera composition.
+                return fixed4(lerp(center, _LineColor.rgb, edge), tex2D(_MainTex, input.uv).a);
             }
             ENDCG
         }

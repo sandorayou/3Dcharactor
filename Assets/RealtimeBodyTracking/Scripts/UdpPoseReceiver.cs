@@ -51,6 +51,9 @@ namespace RealtimeBodyTracking
 
         private void OnEnable()
         {
+#if UNITY_IOS && !UNITY_EDITOR
+            return;
+#else
 #if UNITY_EDITOR
             AssemblyReloadEvents.beforeAssemblyReload -= StopReceiver;
             AssemblyReloadEvents.beforeAssemblyReload += StopReceiver;
@@ -79,6 +82,7 @@ namespace RealtimeBodyTracking
             {
                 Debug.LogError($"Unable to receive pose UDP on {port}: {exception.Message}");
             }
+#endif
         }
 
         private void OnDisable()
