@@ -63,102 +63,8 @@ namespace RealtimeBodyTracking
         }
     }
 
-    public readonly struct ScreenAlignmentSolution
-    {
-        public readonly Vector2 SourceCenter;
-        public readonly Vector2 AvatarCenter;
-        public readonly float SourceWidth;
-        public readonly float AvatarWidth;
-        public readonly float TargetDepth;
-
-        public ScreenAlignmentSolution(
-            Vector2 sourceCenter, Vector2 avatarCenter,
-            float sourceWidth, float avatarWidth, float targetDepth)
-        {
-            SourceCenter = sourceCenter;
-            AvatarCenter = avatarCenter;
-            SourceWidth = sourceWidth;
-            AvatarWidth = avatarWidth;
-            TargetDepth = targetDepth;
-        }
-    }
-
     public static class PoseInputMapper
     {
-        public static Vector2 ImageToViewport(Vector2 image, int width, int height, float viewportAspect, bool mirror)
-        {
-            var point = new Vector2(mirror ? 1f - image.x : image.x, 1f - image.y);
-            if (width <= 0 || height <= 0 || viewportAspect <= 0f) return point;
-            var sourceAspect = (float)width / height;
-            // The native preview fills its layer and crops the excess image.
-            if (viewportAspect < sourceAspect)
-                point.x = .5f + (point.x - .5f) * sourceAspect / viewportAspect;
-            else
-                point.y = .5f + (point.y - .5f) * viewportAspect / sourceAspect;
-            return point;
-        }
-
-        public static bool TryReadPreviewShoulders(
-            PosePacket pose, float viewportAspect, bool previewMirrored, float minConfidence,
-            out Vector2 leftShoulder, out Vector2 rightShoulder)
-        {
-            leftShoulder = default;
-            rightShoulder = default;
-            if (pose == null ||
-                !pose.TryGetImage("left_shoulder", minConfidence, out var left) ||
-                !pose.TryGetImage("right_shoulder", minConfidence, out var right) ||
-                !IsFiniteImagePoint(left) || !IsFiniteImagePoint(right))
-                return false;
-
-            leftShoulder = ImageToViewport(
-                new Vector2(left.x, left.y), pose.source_width, pose.source_height,
-                viewportAspect, previewMirrored);
-            rightShoulder = ImageToViewport(
-                new Vector2(right.x, right.y), pose.source_width, pose.source_height,
-                viewportAspect, previewMirrored);
-            return Vector2.Distance(leftShoulder, rightShoulder) >= .01f;
-        }
-
-        public static bool TrySolveScreenAlignment(
-            Vector2 sourceLeft, Vector2 sourceRight,
-            Vector2 avatarLeft, Vector2 avatarRight,
-            float currentDepth, float minimumDepth, float maximumDepth,
-            out ScreenAlignmentSolution solution)
-        {
-            solution = default;
-            var sourceWidth = Vector2.Distance(sourceLeft, sourceRight);
-            var avatarWidth = Vector2.Distance(avatarLeft, avatarRight);
-            if (!IsFinite(sourceWidth) || !IsFinite(avatarWidth) || !IsFinite(currentDepth) ||
-                sourceWidth < .01f || avatarWidth < .0001f || currentDepth <= .05f)
-                return false;
-
-            var targetDepth = Mathf.Clamp(
-                currentDepth * avatarWidth / sourceWidth,
-                Mathf.Max(minimumDepth, .05f), Mathf.Max(maximumDepth, minimumDepth));
-            solution = new ScreenAlignmentSolution(
-                (sourceLeft + sourceRight) * .5f,
-                (avatarLeft + avatarRight) * .5f,
-                sourceWidth, avatarWidth, targetDepth);
-            return true;
-        }
-
-        private static bool IsFiniteImagePoint(Vector3 point)
-        {
-            return IsFinite(point.x) && IsFinite(point.y);
-        }
-
-        private static bool IsFinite(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
-        }
-
-        public static bool SourceIsLeftForAvatarSide(bool avatarLeft)
-        {
-            // Camera mirroring changes displayed image coordinates only. MediaPipe's
-            // anatomical left/right labels always drive the matching avatar side.
-            return avatarLeft;
-        }
-
         public static bool TryGet(PosePacket pose, string name, bool mirror, out Vector3 position)
         {
             return TryGet(pose, name, mirror, 0.001f, out position);
@@ -189,27 +95,20 @@ namespace RealtimeBodyTracking
 
         public static bool TryReadUpperBody(PosePacket pose, bool mirror, float bodyMinConfidence, out UpperBodyPose upperBody)
         {
-            return TryReadUpperBody(pose, mirror, mirror, bodyMinConfidence, out upperBody);
-        }
-
-        public static bool TryReadUpperBody(
-            PosePacket pose, bool worldMirror, bool imageMirror, float bodyMinConfidence,
-            out UpperBodyPose upperBody)
-        {
-            if (!TryGet(pose, "left_shoulder", worldMirror, bodyMinConfidence, out var leftShoulder) ||
-                !TryGet(pose, "right_shoulder", worldMirror, bodyMinConfidence, out var rightShoulder))
+            if (!TryGet(pose, "left_shoulder", mirror, out var leftShoulder) ||
+                !TryGet(pose, "right_shoulder", mirror, out var rightShoulder))
             {
                 upperBody = default;
                 return false;
             }
 
-            var hasLeftHip = TryGet(pose, "left_hip", worldMirror, bodyMinConfidence, out var leftHip) && TryGetVisibleImage(pose, "left_hip", bodyMinConfidence, out _);
-            var hasRightHip = TryGet(pose, "right_hip", worldMirror, bodyMinConfidence, out var rightHip) && TryGetVisibleImage(pose, "right_hip", bodyMinConfidence, out _);
+            var hasLeftHip = TryGet(pose, "left_hip", mirror, bodyMinConfidence, out var leftHip) && TryGetVisibleImage(pose, "left_hip", bodyMinConfidence, out _);
+            var hasRightHip = TryGet(pose, "right_hip", mirror, bodyMinConfidence, out var rightHip) && TryGetVisibleImage(pose, "right_hip", bodyMinConfidence, out _);
             var hipsTracked = hasLeftHip && hasRightHip;
             var shoulderCenter = (leftShoulder + rightShoulder) * .5f;
             var shoulderWidth = Mathf.Max((rightShoulder - leftShoulder).magnitude, .001f);
             var hipCenter = hipsTracked ? (leftHip + rightHip) * .5f : shoulderCenter + Vector3.down * Mathf.Max(shoulderWidth * 1.45f, .35f);
-            var hasImageFacing = TryReadImageFacing(pose, imageMirror, bodyMinConfidence, out var imageFacing, out var imageLateral);
+            var hasImageFacing = TryReadImageFacing(pose, mirror, bodyMinConfidence, out var imageFacing, out var imageLateral);
             upperBody = new UpperBodyPose(leftShoulder, rightShoulder, hipCenter, hipsTracked, hasImageFacing ? imageFacing : Vector3.zero, imageLateral);
             return true;
         }
@@ -360,10 +259,6 @@ namespace RealtimeBodyTracking
             left = MapImagePoint(left, mirror);
             right = MapImagePoint(right, mirror);
             var lateral = right - left;
-            // A shoulder/eye line is an undirected roll axis. Anatomical right is
-            // screen-left in an unmirrored front view; atan2 alone returns +/-180
-            // there and flips sign whenever near-level landmark noise crosses zero.
-            if (lateral.x < 0f) lateral = -lateral;
             roll = Mathf.Atan2(lateral.y, lateral.x) * Mathf.Rad2Deg;
             return Mathf.Abs(lateral.x) > (hasEyes ? .025f : .04f);
         }

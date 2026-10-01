@@ -25,11 +25,12 @@ namespace RealtimeBodyTracking.LiveStreaming
 
         private void Awake()
         {
-            // The tracking view must remain clean on every platform. Streaming
-            // services may still run, but their setup panel is never overlaid.
+#if UNITY_IOS || UNITY_ANDROID
+            // Mobile validation currently targets camera compositing and local
+            // pose tracking only. Keep streaming code out of this execution path.
             enabled = false;
             return;
-#if false
+#endif
             controller ??= GetComponent<LiveStreamingController>();
             accountLink ??= GetComponent<LiveStreamAccountLinkController>();
             youtubeLink ??= GetComponent<YouTubeAccountLinkController>();
@@ -68,7 +69,6 @@ namespace RealtimeBodyTracking.LiveStreaming
             commentsRoot = new GameObject("LocalComments"); commentsRoot.transform.SetParent(panel.transform, false); commentsRoot.AddComponent<Image>().color = new Color(0.1f, 0.1f, 0.14f, 0.96f); commentsRoot.AddComponent<LayoutElement>().preferredHeight = 150;
             AddLabel(commentsRoot.transform, "コメント", 18); AddLabel(commentsRoot.transform, "Twitch／YouTubeのコメントをここに表示します。\n配信映像には表示されません。", 16);
             settingsRoot.SetActive(false); commentsRoot.SetActive(false);
-#endif
         }
 
         private void Select(LiveStreamProvider provider) { selected = provider; controller?.LoadSavedAccount(provider); if (status) status.text = "配信先: " + provider + " / 待機中"; }

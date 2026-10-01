@@ -89,7 +89,6 @@ namespace RealtimeBodyTracking.LiveStreaming
         {
 #if UNITY_IOS && !UNITY_EDITOR
             NativeSetCamera(front ? 1 : 0);
-            Object.FindObjectOfType<IOSNativePoseSource>()?.SetFrontCamera(front);
 #endif
         }
 
