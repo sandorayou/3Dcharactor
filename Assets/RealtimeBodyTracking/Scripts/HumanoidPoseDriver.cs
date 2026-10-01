@@ -9,6 +9,63 @@ namespace RealtimeBodyTracking
     public sealed class HumanoidPoseDriver : MonoBehaviour
     {
         private const bool InputCoordinatesNeedMirror = false;
+        private static readonly HumanBodyBones[] AllBones = (HumanBodyBones[])Enum.GetValues(typeof(HumanBodyBones));
+        private readonly Transform[] cachedBones = new Transform[(int)HumanBodyBones.LastBone];
+        private Animator cachedBoneAnimator;
+        private readonly KeyValuePair<BlendShapeKey, float>[] faceValues = new KeyValuePair<BlendShapeKey, float>[4];
+        private static readonly BlendShapeKey[] FaceKeys = {
+            BlendShapeKey.CreateFromPreset(BlendShapePreset.Blink_L),
+            BlendShapeKey.CreateFromPreset(BlendShapePreset.Blink_R),
+            BlendShapeKey.CreateFromPreset(BlendShapePreset.A),
+            BlendShapeKey.CreateFromPreset(BlendShapePreset.Joy),
+        };
+        private static readonly string[] HandTips = { "pinky", "index", "thumb" };
+        private static readonly string[][] OpennessChains = {
+            new[] { "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb" },
+            new[] { "wrist", "index_mcp", "index_pip", "index_dip", "index" },
+            new[] { "wrist", "middle_mcp", "middle_pip", "middle_dip", "middle" },
+            new[] { "wrist", "ring_mcp", "ring_pip", "ring_dip", "ring" },
+            new[] { "wrist", "pinky_mcp", "pinky_pip", "pinky_dip", "pinky" },
+        };
+        private static readonly Dictionary<string, string> LeftLandmarks = BuildLandmarks("left");
+        private static readonly Dictionary<string, string> RightLandmarks = BuildLandmarks("right");
+        private static Dictionary<string, string> BuildLandmarks(string side)
+        {
+            var names = new Dictionary<string, string>();
+            foreach (var suffix in new[] { "shoulder", "elbow", "wrist", "hand_palm" })
+                names[suffix] = side + "_" + suffix;
+            foreach (var chain in OpennessChains)
+                foreach (var joint in chain)
+                    names["hand_" + joint] = side + "_hand_" + joint;
+            return names;
+        }
+        private static string HandLandmarkName(string side, string suffix) =>
+            (side == "left" ? LeftHandLandmarks : RightHandLandmarks)[suffix];
+        private static readonly Dictionary<string, string> LeftHandLandmarks = BuildHandLandmarks("left");
+        private static readonly Dictionary<string, string> RightHandLandmarks = BuildHandLandmarks("right");
+        private static Dictionary<string, string> BuildHandLandmarks(string side)
+        {
+            var names = new Dictionary<string, string> { ["palm"] = side + "_hand_palm" };
+            foreach (var chain in OpennessChains)
+                foreach (var joint in chain) names[joint] = side + "_hand_" + joint;
+            return names;
+        }
+        private static string LandmarkName(string side, string suffix) =>
+            (side == "left" ? LeftLandmarks : RightLandmarks)[suffix];
+        private Transform GetCachedBone(HumanBodyBones bone)
+        {
+            if (cachedBoneAnimator != targetAnimator) CacheBones();
+            return bone < HumanBodyBones.LastBone ? cachedBones[(int)bone] : null;
+        }
+        private void CacheBones()
+        {
+            cachedBoneAnimator = targetAnimator;
+            foreach (var bone in AllBones)
+                if (bone < HumanBodyBones.LastBone)
+                    cachedBones[(int)bone] = targetAnimator != null && targetAnimator.isHuman
+                        ? targetAnimator.GetBoneTransform(bone) : null;
+        }
+
         [Header("References")]
         [SerializeField] private Animator targetAnimator;
         [SerializeField] private UdpPoseReceiver udpReceiver;
@@ -346,6 +403,7 @@ namespace RealtimeBodyTracking
             avatarRootOriginPosition = targetAnimator.transform.position;
             avatarRootOriginRotation = targetAnimator.transform.rotation;
             ConfigureAnimeInternalLines();
+            CacheBones();
             solver.Initialize(targetAnimator);
             faceBlendShapeProxy = targetAnimator.GetComponentInChildren<VRMBlendShapeProxy>(true);
             manualController = targetAnimator.GetComponent<ManualAvatarController>();
@@ -427,7 +485,6 @@ namespace RealtimeBodyTracking
 
         private void ApplyPose(PosePacket pose)
         {
-            solver.RefreshMissingBones(targetAnimator);
             validPoints = pose.points?.Count ?? 0;
             appliedBones = 0;
             anatomyClampCount = 0;
@@ -602,11 +659,11 @@ namespace RealtimeBodyTracking
                 if (Quaternion.Angle(rootRotationDelta * rest, target) > maxSwing + .1f)
                 {
                     anatomyClampCount++;
-                    lastAnatomyClamp = bone.ToString();
+                    if (debugLogging) lastAnatomyClamp = bone.ToString();
                 }
                 target = AnatomyLimits.ClampSwing(bone, rootRotationDelta * rest, target);
             }
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             if (transform != null)
             {
                 if ((bone == HumanBodyBones.LeftHand || bone == HumanBodyBones.RightHand) &&
@@ -731,7 +788,7 @@ namespace RealtimeBodyTracking
             if (!solver.TryGetRestRotation(bone, out var rest)) return;
             var target = rootRotationDelta * Quaternion.SlerpUnclamped(Quaternion.identity, relativeRotation, weight) * rest;
             if (enableAnatomyLimits) target = AnatomyLimits.ClampSwing(bone, rootRotationDelta * rest, target);
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             if (transform == null) return;
             transform.rotation = target;
             appliedBones++;
@@ -750,17 +807,11 @@ namespace RealtimeBodyTracking
             filteredSmile = Mathf.Lerp(filteredSmile,
                 (pose.GetFaceBlendshape("mouthSmileLeft") + pose.GetFaceBlendshape("mouthSmileRight")) * .5f, t);
 
-            faceBlendShapeProxy.SetValues(new[]
-            {
-                new KeyValuePair<BlendShapeKey, float>(
-                    BlendShapeKey.CreateFromPreset(BlendShapePreset.Blink_L), filteredBlinkLeft),
-                new KeyValuePair<BlendShapeKey, float>(
-                    BlendShapeKey.CreateFromPreset(BlendShapePreset.Blink_R), filteredBlinkRight),
-                new KeyValuePair<BlendShapeKey, float>(
-                    BlendShapeKey.CreateFromPreset(BlendShapePreset.A), filteredJawOpen * (1f - filteredSmile)),
-                new KeyValuePair<BlendShapeKey, float>(
-                    BlendShapeKey.CreateFromPreset(BlendShapePreset.Joy), filteredSmile),
-            });
+            faceValues[0] = new KeyValuePair<BlendShapeKey, float>(FaceKeys[0], filteredBlinkLeft);
+            faceValues[1] = new KeyValuePair<BlendShapeKey, float>(FaceKeys[1], filteredBlinkRight);
+            faceValues[2] = new KeyValuePair<BlendShapeKey, float>(FaceKeys[2], filteredJawOpen * (1f - filteredSmile));
+            faceValues[3] = new KeyValuePair<BlendShapeKey, float>(FaceKeys[3], filteredSmile);
+            faceBlendShapeProxy.SetValues(faceValues);
         }
 
         private static float NormalizeBlink(float score)
@@ -780,7 +831,7 @@ namespace RealtimeBodyTracking
             var baseRotation = rootRotationDelta * rest;
             var target = Quaternion.AngleAxis(screenRoll, Vector3.forward) * baseRotation;
             if (enableAnatomyLimits) target = AnatomyLimits.ClampSwing(bone, baseRotation, target);
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             if (transform == null) return;
             transform.rotation = smoother.Smooth(bone, transform.rotation, target, smoothingSpeed, rotationDeadZoneDegrees, Time.deltaTime);
             appliedBones++;
@@ -813,13 +864,13 @@ namespace RealtimeBodyTracking
             var upperBone = left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm;
             var lowerBone = left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
             var handBone = left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
-            var upperTransform = targetAnimator.GetBoneTransform(upperBone);
-            var lowerTransform = targetAnimator.GetBoneTransform(lowerBone);
-            var handTransform = targetAnimator.GetBoneTransform(handBone);
+            var upperTransform = GetCachedBone(upperBone);
+            var lowerTransform = GetCachedBone(lowerBone);
+            var handTransform = GetCachedBone(handBone);
             if (upperTransform == null || lowerTransform == null || handTransform == null) return;
 
-            var avatarLeftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var avatarRightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var avatarLeftShoulder = GetCachedBone(HumanBodyBones.LeftUpperArm);
+            var avatarRightShoulder = GetCachedBone(HumanBodyBones.RightUpperArm);
             var avatarShoulderWidth = avatarLeftShoulder != null && avatarRightShoulder != null
                 ? Vector3.Distance(avatarLeftShoulder.position, avatarRightShoulder.position)
                 : shoulderWidth;
@@ -877,13 +928,13 @@ namespace RealtimeBodyTracking
             {
                 leftConstrainedArm = solvedArm;
                 hasLeftConstrainedArm = true;
-                leftArmFilterState = $"tracker6dof wrist={wristFilter.Stage}, elbow={elbowFilter.Stage}";
+                leftArmFilterState = debugLogging ? ($"tracker6dof wrist={wristFilter.Stage}, elbow={elbowFilter.Stage}") : string.Empty;
             }
             else
             {
                 rightConstrainedArm = solvedArm;
                 hasRightConstrainedArm = true;
-                rightArmFilterState = $"tracker6dof wrist={wristFilter.Stage}, elbow={elbowFilter.Stage}";
+                rightArmFilterState = debugLogging ? ($"tracker6dof wrist={wristFilter.Stage}, elbow={elbowFilter.Stage}") : string.Empty;
             }
 
             var facingOffset = Quaternion.AngleAxis(avatarFacingOffsetDegrees, Vector3.up);
@@ -960,7 +1011,7 @@ namespace RealtimeBodyTracking
                 pose, left, hasWristImage, wristImage, hasRawWrist ? rawWrist.z : shoulder.z,
                 hasRawWrist, shoulder.z, shoulderWidth,
                 out wristImage, out handDepthZ);
-            var palmVisible = pose.TryGetImage($"{SourceSide(left)}_hand_palm", .35f, out _);
+            var palmVisible = pose.TryGetImage(HandLandmarkName(SourceSide(left), "palm"), .35f, out _);
             var palmMissingFrames = left ? leftPalmMissingFrames : rightPalmMissingFrames;
             var palmLastProcessedFrame = left ? leftPalmLastProcessedFrame : rightPalmLastProcessedFrame;
             if (pose.frame != palmLastProcessedFrame)
@@ -1017,7 +1068,7 @@ namespace RealtimeBodyTracking
                 wrist = heldWrist;
                 hasWrist = true;
             }
-            pose.TryGetConfidence($"{SourceSide(left)}_hand_palm", out var handConfidence);
+            pose.TryGetConfidence(HandLandmarkName(SourceSide(left), "palm"), out var handConfidence);
             if (hasWrist && handConfidence < .65f && wristFilter.TryGetLastStable(out var previousPalm))
                 wrist = Vector3.Lerp(previousPalm, wrist, Mathf.InverseLerp(.35f, .65f, handConfidence));
             var hasStableWrist = wristFilter.TryGetStable(wrist, hasWrist, shoulderWidth, maxWristSpeed,
@@ -1036,8 +1087,8 @@ namespace RealtimeBodyTracking
                 wristHoldTime, armAcquireFrames, armPointDeadZoneScale, armPositionSmoothingCutoff,
                 armMotionResponsiveness, pose.frame, Time.unscaledTime, out elbow);
             var useObservedElbow = hasElbow && hasStableElbow;
-            var filterState = $"elbow={elbowFilter.Stage}/{elbowFilter.RejectReason}/{elbowSource}, wrist={wristFilter.Stage}/{wristFilter.RejectReason}" +
-                              (holdWristFromVisibleElbow ? "/held_from_visible_elbow" : "");
+            var filterState = debugLogging ? ($"elbow={elbowFilter.Stage}/{elbowFilter.RejectReason}/{elbowSource}, wrist={wristFilter.Stage}/{wristFilter.RejectReason}" +
+                              (holdWristFromVisibleElbow ? "/held_from_visible_elbow" : "")) : string.Empty;
             if (left) leftArmFilterState = filterState; else rightArmFilterState = filterState;
             GetRelaxedArmPose(left, upperBody, out var relaxedUpper, out var relaxedLower);
             var relaxWeight = left ? leftArmRelaxWeight : rightArmRelaxWeight;
@@ -1064,9 +1115,9 @@ namespace RealtimeBodyTracking
             ArmPose solvedArm;
             var appliedUpperDepthAxis = upperBody.Forward;
             {
-                var upperTransform = targetAnimator.GetBoneTransform(upperBone);
-                var lowerTransform = targetAnimator.GetBoneTransform(lowerBone);
-                var handTransform = targetAnimator.GetBoneTransform(handBone);
+                var upperTransform = GetCachedBone(upperBone);
+                var lowerTransform = GetCachedBone(lowerBone);
+                var handTransform = GetCachedBone(handBone);
                 var sourceShoulderWidth = Mathf.Max(upperBody.Lateral.magnitude, .05f);
                 var upperLength = upperTransform != null && lowerTransform != null
                     ? Vector3.Distance(upperTransform.position, lowerTransform.position)
@@ -1096,12 +1147,12 @@ namespace RealtimeBodyTracking
                 // must not discard its bend direction and replace it with a downward pole.
                 var reliableElbow = useObservedElbow && elbowConfidence >= .35f;
                 var elbowHint = reliableElbow ? elbow : Vector3.zero;
-                filterState += $", observedWeight={observedElbowWeight:F2}, fallback={!reliableElbow}";
+                if (debugLogging) filterState += $", observedWeight={observedElbowWeight:F2}, fallback={!reliableElbow}";
                 if (left) leftArmFilterState = filterState; else rightArmFilterState = filterState;
                 var arm = UpperBodyPoseSolver.SolveArm(
                     shoulder, targetWrist, elbowHint, upperBody, left, reliableElbow,
                     upperLength, lowerLength, out var solveDiagnostics);
-                filterState += $", solve={solveDiagnostics}";
+                if (debugLogging) filterState += $", solve={solveDiagnostics}";
                 if (left) leftArmFilterState = filterState; else rightArmFilterState = filterState;
                 solvedArm = arm;
                 if (left)
@@ -1140,9 +1191,9 @@ namespace RealtimeBodyTracking
         private void ApplyTwoBoneArm(HumanBodyBones upperBone, HumanBodyBones lowerBone, HumanBodyBones handBone,
             ArmPose arm, Vector3 depthAxis, Quaternion facingOffset, Vector3 palmNormal)
         {
-            var upper = targetAnimator.GetBoneTransform(upperBone);
-            var lower = targetAnimator.GetBoneTransform(lowerBone);
-            var hand = targetAnimator.GetBoneTransform(handBone);
+            var upper = GetCachedBone(upperBone);
+            var lower = GetCachedBone(lowerBone);
+            var hand = GetCachedBone(handBone);
             if (upper == null || lower == null || hand == null) return;
             var upperVector = arm.Elbow - arm.Shoulder;
             var lowerVector = arm.Wrist - arm.Elbow;
@@ -1195,9 +1246,9 @@ namespace RealtimeBodyTracking
                 : lowerCorrection <= .01f ? $"forearm_solve_not_applied/{lowerFailure}"
                 : "forearm_rotation_overwritten_or_axis_mismatch";
 
-            var rollState = $"rest_anchored correction=({upperCorrection:F1},{lowerCorrection:F1}), forearmTwist={forearmTwist:F1}, " +
+            var rollState = debugLogging ? ($"rest_anchored correction=({upperCorrection:F1},{lowerCorrection:F1}), forearmTwist={forearmTwist:F1}, " +
                             $"depth[wristRequest={requestedWristDepth:F3}, elbowRequest={requestedElbowDepth:F3}, forearmRequest={requestedForearmDepth:F3}, " +
-                            $"before=({beforeDepth:F3},{beforeForearmDepth:F3}), after=({appliedDepth:F3},{appliedForearmDepth:F3}), error=({depthError:F3},{forearmDepthError:F3}), stage=({reason},{forearmReason})]";
+                            $"before=({beforeDepth:F3},{beforeForearmDepth:F3}), after=({appliedDepth:F3},{appliedForearmDepth:F3}), error=({depthError:F3},{forearmDepthError:F3}), stage=({reason},{forearmReason})]") : string.Empty;
             if (upperBone == HumanBodyBones.LeftUpperArm) leftArmRollState = rollState;
             else rightArmRollState = rollState;
             LogUpperArmDepthFailure(
@@ -1271,8 +1322,8 @@ namespace RealtimeBodyTracking
             float handDepthZ, HumanBodyBones handBone, Vector2 torsoRadii, out Vector3 wristTarget)
         {
             var side = SourceSide(left);
-            if (!pose.TryGetImage($"{side}_hand_palm", .35f, out var palmImage) ||
-                !pose.TryGetImage($"{side}_hand_wrist", .35f, out var handWristImage) ||
+            if (!pose.TryGetImage(HandLandmarkName(side, "palm"), .35f, out var palmImage) ||
+                !pose.TryGetImage(HandLandmarkName(side, "wrist"), .35f, out var handWristImage) ||
                 !TryMapArmImagePoint(pose, left, shoulder, body, palmImage, handDepthZ, out var palmTarget) ||
                 !TryMapArmImagePoint(pose, left, shoulder, body, handWristImage, handDepthZ, out var detectedWristTarget) ||
                 !TryGetAvatarPalmCenter(left, out var palmCenter))
@@ -1280,7 +1331,7 @@ namespace RealtimeBodyTracking
                 wristTarget = default;
                 return false;
             }
-            var hand = targetAnimator.GetBoneTransform(handBone);
+            var hand = GetCachedBone(handBone);
             if (hand == null)
             {
                 wristTarget = default;
@@ -1297,8 +1348,8 @@ namespace RealtimeBodyTracking
             if (avatarPalmOffset.sqrMagnitude < .000001f)
                 avatarPalmOffset = palmDirection.normalized * Vector3.Distance(hand.position, palmCenter);
 
-            var chest = targetAnimator.GetBoneTransform(HumanBodyBones.Chest);
-            var avatarShoulder = targetAnimator.GetBoneTransform(
+            var chest = GetCachedBone(HumanBodyBones.Chest);
+            var avatarShoulder = GetCachedBone(
                 left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
             if (chest != null && avatarShoulder != null)
             {
@@ -1310,7 +1361,7 @@ namespace RealtimeBodyTracking
                 var rel = palmTarget - chestCenter;
                 var chestHeight = Mathf.Max(Vector3.Distance(
                     chest.position,
-                    targetAnimator.GetBoneTransform(HumanBodyBones.Hips)?.position ?? chest.position), .001f);
+                    GetCachedBone(HumanBodyBones.Hips)?.position ?? chest.position), .001f);
                 if (Mathf.Abs(rel.x) <= torsoRadii.x && Mathf.Abs(rel.y) <= chestHeight * .55f)
                 {
                     var frontSurface = Mathf.Max(torsoRadii.y, .001f);
@@ -1325,9 +1376,9 @@ namespace RealtimeBodyTracking
 
         private bool TryGetAvatarPalmCenter(bool left, out Vector3 center)
         {
-            var index = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal);
-            var middle = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftMiddleProximal : HumanBodyBones.RightMiddleProximal);
-            var little = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal);
+            var index = GetCachedBone(left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal);
+            var middle = GetCachedBone(left ? HumanBodyBones.LeftMiddleProximal : HumanBodyBones.RightMiddleProximal);
+            var little = GetCachedBone(left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal);
             if (index == null || middle == null || little == null)
             {
                 center = default;
@@ -1341,10 +1392,10 @@ namespace RealtimeBodyTracking
             out Vector3 handDirection, out Vector3 palmNormal)
         {
             var side = SourceSide(left);
-            if (!PoseInputMapper.TryGet(pose, $"{side}_hand_wrist", InputCoordinatesNeedMirror, .35f, out var worldWrist) ||
-                !PoseInputMapper.TryGet(pose, $"{side}_hand_index_mcp", InputCoordinatesNeedMirror, .35f, out var worldIndex) ||
-                !PoseInputMapper.TryGet(pose, $"{side}_hand_middle_mcp", InputCoordinatesNeedMirror, .35f, out var worldMiddle) ||
-                !PoseInputMapper.TryGet(pose, $"{side}_hand_pinky_mcp", InputCoordinatesNeedMirror, .35f, out var worldPinky))
+            if (!PoseInputMapper.TryGet(pose, HandLandmarkName(side, "wrist"), InputCoordinatesNeedMirror, .35f, out var worldWrist) ||
+                !PoseInputMapper.TryGet(pose, HandLandmarkName(side, "index_mcp"), InputCoordinatesNeedMirror, .35f, out var worldIndex) ||
+                !PoseInputMapper.TryGet(pose, HandLandmarkName(side, "middle_mcp"), InputCoordinatesNeedMirror, .35f, out var worldMiddle) ||
+                !PoseInputMapper.TryGet(pose, HandLandmarkName(side, "pinky_mcp"), InputCoordinatesNeedMirror, .35f, out var worldPinky))
             {
                 handDirection = default;
                 palmNormal = default;
@@ -1369,7 +1420,7 @@ namespace RealtimeBodyTracking
             var cameraDot = trackingCamera != null
                 ? Vector3.Dot(palmNormal, -trackingCamera.transform.forward)
                 : 0f;
-            var state = $"source=hand_world_basis, palmCameraDot={cameraDot:F2}, direction={handDirection:F3}, normal={palmNormal:F3}";
+            var state = debugLogging ? ($"source=hand_world_basis, palmCameraDot={cameraDot:F2}, direction={handDirection:F3}, normal={palmNormal:F3}") : string.Empty;
             if (left) leftHandOrientationState = state; else rightHandOrientationState = state;
             return true;
         }
@@ -1393,10 +1444,10 @@ namespace RealtimeBodyTracking
             var curlCount = 0;
             foreach (var chain in FingerChains)
             {
-                if (!PoseInputMapper.TryGet(pose, $"{side}_hand_{chain.start}", InputCoordinatesNeedMirror, .35f, out var start) ||
-                    !PoseInputMapper.TryGet(pose, $"{side}_hand_{chain.middle}", InputCoordinatesNeedMirror, .35f, out var middle) ||
-                    !PoseInputMapper.TryGet(pose, $"{side}_hand_{chain.end}", InputCoordinatesNeedMirror, .35f, out var end) ||
-                    !PoseInputMapper.TryGet(pose, $"{side}_hand_{chain.tip}", InputCoordinatesNeedMirror, .35f, out var tip))
+                if (!PoseInputMapper.TryGet(pose, HandLandmarkName(side, chain.start), InputCoordinatesNeedMirror, .35f, out var start) ||
+                    !PoseInputMapper.TryGet(pose, HandLandmarkName(side, chain.middle), InputCoordinatesNeedMirror, .35f, out var middle) ||
+                    !PoseInputMapper.TryGet(pose, HandLandmarkName(side, chain.end), InputCoordinatesNeedMirror, .35f, out var end) ||
+                    !PoseInputMapper.TryGet(pose, HandLandmarkName(side, chain.tip), InputCoordinatesNeedMirror, .35f, out var tip))
                 {
                     // Keep the last reliable bend. Returning one chain to rest for a
                     // single dropped landmark creates visible popping while waving.
@@ -1417,7 +1468,7 @@ namespace RealtimeBodyTracking
                 if (ApplyFingerDirection(distalBone, MapHandDirection(
                         distal, sourceForward, sourceAcross, sourceNormal,
                         avatarForward, avatarAcross, avatarNormal))) applied++;
-                if (chain.start != "thumb_cmc")
+                if (debugLogging && chain.start != "thumb_cmc")
                 {
                     curl += Vector3.Angle(sourceForward, proximal) +
                             Vector3.Angle(proximal, intermediate) +
@@ -1426,8 +1477,8 @@ namespace RealtimeBodyTracking
                 }
             }
             var failure = applied < 15 ? $", failure={solver.LastFailure}" : string.Empty;
-            var state = $"source=hand21, applied={applied}/15, inputCurl={curl / Mathf.Max(curlCount, 1):F1}, " +
-                        $"avatarCurl={MeasureAvatarFingerCurl(left):F1}{failure}";
+            var state = debugLogging ? ($"source=hand21, applied={applied}/15, inputCurl={curl / Mathf.Max(curlCount, 1):F1}, " +
+                        $"avatarCurl={MeasureAvatarFingerCurl(left):F1}{failure}") : string.Empty;
             if (left) leftFingerState = state; else rightFingerState = state;
         }
 
@@ -1448,7 +1499,7 @@ namespace RealtimeBodyTracking
 
         private float MeasureFingerBoneCurl(HumanBodyBones bone)
         {
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             return transform != null && solver.TryGetRestLocalRotation(bone, out var rest)
                 ? Quaternion.Angle(rest, transform.localRotation)
                 : 0f;
@@ -1457,10 +1508,10 @@ namespace RealtimeBodyTracking
         private bool TryGetHandBasis(PosePacket pose, string side,
             out Vector3 forward, out Vector3 across, out Vector3 normal)
         {
-            if (!PoseInputMapper.TryGet(pose, $"{side}_hand_wrist", InputCoordinatesNeedMirror, .35f, out var wrist) ||
-                !PoseInputMapper.TryGet(pose, $"{side}_hand_index_mcp", InputCoordinatesNeedMirror, .35f, out var index) ||
-                !PoseInputMapper.TryGet(pose, $"{side}_hand_middle_mcp", InputCoordinatesNeedMirror, .35f, out var middle) ||
-                !PoseInputMapper.TryGet(pose, $"{side}_hand_pinky_mcp", InputCoordinatesNeedMirror, .35f, out var pinky))
+            if (!PoseInputMapper.TryGet(pose, HandLandmarkName(side, "wrist"), InputCoordinatesNeedMirror, .35f, out var wrist) ||
+                !PoseInputMapper.TryGet(pose, HandLandmarkName(side, "index_mcp"), InputCoordinatesNeedMirror, .35f, out var index) ||
+                !PoseInputMapper.TryGet(pose, HandLandmarkName(side, "middle_mcp"), InputCoordinatesNeedMirror, .35f, out var middle) ||
+                !PoseInputMapper.TryGet(pose, HandLandmarkName(side, "pinky_mcp"), InputCoordinatesNeedMirror, .35f, out var pinky))
             {
                 forward = across = normal = default;
                 return false;
@@ -1471,7 +1522,7 @@ namespace RealtimeBodyTracking
         private bool TryGetAvatarHandBasis(bool left,
             out Vector3 forward, out Vector3 across, out Vector3 normal)
         {
-            var hand = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+            var hand = GetCachedBone(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
             if (hand == null || !(left ? leftRestHandBasisInitialized : rightRestHandBasisInitialized))
             {
                 forward = across = normal = default;
@@ -1485,10 +1536,10 @@ namespace RealtimeBodyTracking
 
         private bool CacheRestHandBasis(bool left)
         {
-            var hand = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
-            var index = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal);
-            var middle = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftMiddleProximal : HumanBodyBones.RightMiddleProximal);
-            var little = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal);
+            var hand = GetCachedBone(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+            var index = GetCachedBone(left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal);
+            var middle = GetCachedBone(left ? HumanBodyBones.LeftMiddleProximal : HumanBodyBones.RightMiddleProximal);
+            var little = GetCachedBone(left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal);
             if (hand == null || index == null || middle == null || little == null)
                 return false;
             var forwardLocal = hand.InverseTransformDirection(middle.position - hand.position).normalized;
@@ -1532,7 +1583,7 @@ namespace RealtimeBodyTracking
 
         private bool ApplyFingerDirection(HumanBodyBones bone, Vector3 direction)
         {
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             if (transform == null ||
                 !solver.TrySolveFinger(bone, direction, AnatomyLimits.GetMaxSwingDegrees(bone), out var target))
                 return false;
@@ -1632,7 +1683,7 @@ namespace RealtimeBodyTracking
 
         private void ReturnFingerToRest(HumanBodyBones bone)
         {
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             if (transform == null || !solver.TryGetRestLocalRotation(bone, out var rest)) return;
             transform.localRotation = smoother.Smooth(
                 bone, transform.localRotation, rest, smoothingSpeed, rotationDeadZoneDegrees, Time.deltaTime);
@@ -1644,8 +1695,8 @@ namespace RealtimeBodyTracking
         {
             var side = SourceSide(left);
             const float minHandConfidence = .35f;
-            var hasDetectedWrist = pose.TryGetImage($"{side}_hand_wrist", minHandConfidence, out var detectedWrist);
-            var hasPalm = pose.TryGetImage($"{side}_hand_palm", minHandConfidence, out var detectedPalm);
+            var hasDetectedWrist = pose.TryGetImage(HandLandmarkName(side, "wrist"), minHandConfidence, out var detectedWrist);
+            var hasPalm = pose.TryGetImage(HandLandmarkName(side, "palm"), minHandConfidence, out var detectedPalm);
             // Keep the arm endpoint anchored to the detected wrist.  The palm is used
             // separately by TryGetPalmAlignedWristTarget to compensate for the avatar's
             // hand-bone-to-palm offset.  Using the palm here made that compensation happen
@@ -1664,9 +1715,9 @@ namespace RealtimeBodyTracking
             var associated = hasDetectedWrist;
             var accepted = associated ? 1 : 0;
             var maxClusterDistance = 0f;
-            foreach (var suffix in new[] { "pinky", "index", "thumb" })
+            foreach (var suffix in HandTips)
             {
-                var name = $"{side}_hand_{suffix}";
+                var name = HandLandmarkName(side, suffix);
                 if (!pose.TryGetImage(name, minHandConfidence, out var image) ||
                     !IsInsideExtendedArmImage(image, .08f)) continue;
                 var distance = Vector2.Distance(image, detectedWrist);
@@ -1685,7 +1736,7 @@ namespace RealtimeBodyTracking
             var hasProjectionScale = valid &&
                                      palmProjectionTracker.TryMeasure(
                                          pose, side, minHandConfidence, out projectionScale, out handOpenness,
-                                         out projectionState);
+                                         out projectionState, debugLogging);
             var relativeScale = hasProjectionScale
                 ? projectionScale / Mathf.Max(shoulderWidth, .001f)
                 : 0f;
@@ -1695,10 +1746,10 @@ namespace RealtimeBodyTracking
                     relativeScale, worldShoulderWidth, hasPoseDepth, wristDepthZ - shoulderDepthZ,
                     handDepthGain, handNeutralProjectionRatio, maxPoseDepthCorrectionShoulderWidths,
                     maxHandDepthShoulderWidths, handDepthSmoothing,
-                    armPointDeadZoneScale, Time.deltaTime, out var depthState);
+                    armPointDeadZoneScale, Time.deltaTime, out var depthState, debugLogging);
                 handDepthZ += worldShoulderWidth * handForwardOffsetShoulderWidths;
                 handDepthZ += handForwardOffsetMeters;
-                depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}]";
+                if (debugLogging) depthState += $", openness={handOpenness:F2}, gestureScale=[{projectionState}]";
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
             else
@@ -1707,10 +1758,10 @@ namespace RealtimeBodyTracking
                     depthTracker.Reset();
                 handDepthZ = (hasPoseDepth ? wristDepthZ : shoulderDepthZ) +
                              worldShoulderWidth * handForwardOffsetShoulderWidths + handForwardOffsetMeters;
-                var depthState = $"source={(hasPoseDepth ? "pose" : "plane")}, projectionScale=missing";
+                var depthState = debugLogging ? ($"source={(hasPoseDepth ? "pose" : "plane")}, projectionScale=missing") : string.Empty;
                 if (left) leftHandDepthInputState = depthState; else rightHandDepthInputState = depthState;
             }
-            var state = $"detectorPoints={accepted}/4, association={associationDistance:F3}, maxCluster={maxClusterDistance:F3}, limit={clusterLimit:F3}, valid={valid}";
+            var state = debugLogging ? ($"detectorPoints={accepted}/4, association={associationDistance:F3}, maxCluster={maxClusterDistance:F3}, limit={clusterLimit:F3}, valid={valid}") : string.Empty;
             if (left) leftHandEvidenceState = state; else rightHandEvidenceState = state;
             return valid;
         }
@@ -1764,7 +1815,7 @@ namespace RealtimeBodyTracking
             var side = SourceSide(left);
             if (!PoseInputMapper.TryGet(pose, "left_shoulder", InputCoordinatesNeedMirror, wristMinConfidence, out var leftShoulder) ||
                 !PoseInputMapper.TryGet(pose, "right_shoulder", InputCoordinatesNeedMirror, wristMinConfidence, out var rightShoulder) ||
-                !PoseInputMapper.TryGet(pose, $"{side}_wrist", InputCoordinatesNeedMirror, wristMinConfidence, out var wrist))
+                !PoseInputMapper.TryGet(pose, LandmarkName(side, "wrist"), InputCoordinatesNeedMirror, wristMinConfidence, out var wrist))
                 return false;
 
             var minShoulderX = Mathf.Min(leftShoulder.x, rightShoulder.x);
@@ -1775,27 +1826,26 @@ namespace RealtimeBodyTracking
 
         private sealed class PalmProjectionTracker
         {
+            private static readonly (string, string)[] segments = {
+                ("wrist", "middle_mcp"), ("index_mcp", "pinky_mcp"),
+                ("wrist", "index_mcp"), ("wrist", "pinky_mcp"),
+            };
+            private readonly List<float> samples = new List<float>(4);
+            private readonly List<float> opennessSamples = new List<float>(5);
             private readonly float[] referenceWorldLengths = new float[4];
             private int calibrationFrames;
             private bool hasLastGoodScale;
             private float lastGoodScale;
 
             public bool TryMeasure(PosePacket pose, string side, float minConfidence,
-                out float scale, out float openness, out string state)
+                out float scale, out float openness, out string state, bool emitDiagnostics)
             {
-                var segments = new[]
-                {
-                    ("wrist", "middle_mcp"),
-                    ("index_mcp", "pinky_mcp"),
-                    ("wrist", "index_mcp"),
-                    ("wrist", "pinky_mcp"),
-                };
-                var samples = new System.Collections.Generic.List<float>(4);
+                samples.Clear();
                 var angleRejected = 0;
                 for (var index = 0; index < segments.Length; index++)
                 {
-                    var aName = $"{side}_hand_{segments[index].Item1}";
-                    var bName = $"{side}_hand_{segments[index].Item2}";
+                    var aName = HandLandmarkName(side, segments[index].Item1);
+                    var bName = HandLandmarkName(side, segments[index].Item2);
                     if (!pose.TryGetImage(aName, minConfidence, out var imageA) ||
                         !pose.TryGetImage(bName, minConfidence, out var imageB) ||
                         !pose.TryGet(aName, minConfidence, out var worldA) ||
@@ -1836,26 +1886,26 @@ namespace RealtimeBodyTracking
                 }
 
                 if (calibrationFrames < 15 && samples.Count > 0) calibrationFrames++;
-                openness = MeasureHandOpenness(pose, side, minConfidence);
+                openness = MeasureHandOpenness(pose, side, minConfidence, opennessSamples);
                 if (samples.Count >= 2)
                 {
                     scale = Median(samples);
                     lastGoodScale = scale;
                     hasLastGoodScale = true;
-                    state = $"angleCorrected={scale:F2}, samples={samples.Count}, " +
-                            $"angleRejected={angleRejected}, calibration={calibrationFrames}/15";
+                    state = emitDiagnostics ? ($"angleCorrected={scale:F2}, samples={samples.Count}, " +
+                            $"angleRejected={angleRejected}, calibration={calibrationFrames}/15") : string.Empty;
                     return true;
                 }
 
                 if (hasLastGoodScale)
                 {
                     scale = lastGoodScale;
-                    state = $"angleHold={scale:F2}, samples={samples.Count}, angleRejected={angleRejected}";
+                    state = emitDiagnostics ? ($"angleHold={scale:F2}, samples={samples.Count}, angleRejected={angleRejected}") : string.Empty;
                     return true;
                 }
 
                 scale = 0f;
-                state = $"angleMissing, samples={samples.Count}, angleRejected={angleRejected}";
+                state = emitDiagnostics ? ($"angleMissing, samples={samples.Count}, angleRejected={angleRejected}") : string.Empty;
                 return false;
             }
 
@@ -1869,28 +1919,26 @@ namespace RealtimeBodyTracking
             }
         }
 
-        private static float MeasureHandOpenness(PosePacket pose, string side, float minConfidence)
+        private static float MeasureHandOpenness(PosePacket pose, string side, float minConfidence, List<float> opennessSamples)
         {
-            var opennessSamples = new System.Collections.Generic.List<float>(5);
-            foreach (var finger in new[] { "thumb", "index", "middle", "ring", "pinky" })
+            opennessSamples.Clear();
+            foreach (var joints in OpennessChains)
             {
-                var joints = finger == "thumb"
-                    ? new[] { "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb" }
-                    : new[] { "wrist", $"{finger}_mcp", $"{finger}_pip", $"{finger}_dip", finger };
+                var finger = joints[joints.Length - 1];
                 var chainLength = 0f;
                 var completeChain = true;
                 for (var index = 0; index < joints.Length - 1; index++)
                 {
-                    var from = $"{side}_hand_{joints[index]}";
-                    var to = $"{side}_hand_{joints[index + 1]}";
+                    var from = HandLandmarkName(side, joints[index]);
+                    var to = HandLandmarkName(side, joints[index + 1]);
                     if (pose.TryGet(from, minConfidence, out var fromWorld) &&
                         pose.TryGet(to, minConfidence, out var toWorld))
                         chainLength += Vector3.Distance(fromWorld, toWorld);
                     else
                         completeChain = false;
                 }
-                var wristName = $"{side}_hand_wrist";
-                var tipName = $"{side}_hand_{finger}";
+                var wristName = HandLandmarkName(side, "wrist");
+                var tipName = HandLandmarkName(side, finger);
                 if (completeChain && chainLength > .005f &&
                     pose.TryGet(wristName, minConfidence, out var wristWorld) &&
                     pose.TryGet(tipName, minConfidence, out var tipWorld))
@@ -1929,11 +1977,11 @@ namespace RealtimeBodyTracking
                 point = default;
                 return false;
             }
-            var upperTransform = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
-            var lowerTransform = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
-            var handTransform = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
-            var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var upperTransform = GetCachedBone(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
+            var lowerTransform = GetCachedBone(left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
+            var handTransform = GetCachedBone(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+            var leftShoulder = GetCachedBone(HumanBodyBones.LeftUpperArm);
+            var rightShoulder = GetCachedBone(HumanBodyBones.RightUpperArm);
             var avatarShoulderWidth = leftShoulder != null && rightShoulder != null
                 ? Vector3.Distance(leftShoulder.position, rightShoulder.position)
                 : Mathf.Max(body.Lateral.magnitude, .05f);
@@ -1995,7 +2043,7 @@ namespace RealtimeBodyTracking
         private bool TryGetArmViewportTarget(PosePacket pose, bool left, Vector3 imagePoint,
             out Transform shoulderTransform, out Vector3 shoulderViewport, out Vector3 targetViewport)
         {
-            shoulderTransform = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
+            shoulderTransform = GetCachedBone(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
             if (shoulderTransform == null || trackingCamera == null)
             {
                 shoulderViewport = default;
@@ -2032,8 +2080,9 @@ namespace RealtimeBodyTracking
 
         private void UpdateArmScreenDiagnostics(bool left, PosePacket pose, HumanBodyBones handBone, bool tracked)
         {
+            if (!debugLogging) return;
             var state = tracked ? "tracked_no_projection" : "not_tracked";
-            var palmName = $"{SourceSide(left)}_hand_palm";
+            var palmName = HandLandmarkName(SourceSide(left), "palm");
             var hasSource = pose.TryGetImage(palmName, .5f, out var source);
             if (tracked && trackingCamera != null && TryGetAvatarPalmCenter(left, out var palmCenter) && hasSource &&
                 TryGetArmViewportTarget(pose, left, source, out _, out _, out var targetViewport))
@@ -2041,19 +2090,19 @@ namespace RealtimeBodyTracking
                 var actual = trackingCamera.WorldToViewportPoint(palmCenter);
                 var target = new Vector2(targetViewport.x, targetViewport.y);
                 var error = Vector2.Distance(new Vector2(actual.x, actual.y), target);
-                var hand = targetAnimator.GetBoneTransform(handBone);
-                var forearm = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
-                var shoulderBone = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
-                var spine = targetAnimator.GetBoneTransform(HumanBodyBones.Spine);
-                var hasSourceWrist = pose.TryGetImage($"{SourceSide(left)}_hand_wrist", .35f, out var sourceWrist);
+                var hand = GetCachedBone(handBone);
+                var forearm = GetCachedBone(left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
+                var shoulderBone = GetCachedBone(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
+                var spine = GetCachedBone(HumanBodyBones.Spine);
+                var hasSourceWrist = pose.TryGetImage(HandLandmarkName(SourceSide(left), "wrist"), .35f, out var sourceWrist);
                 var midpoint = hand != null && forearm != null ? (hand.position + forearm.position) * .5f : Vector3.zero;
                 var shoulderViewport = shoulderBone != null ? trackingCamera.WorldToViewportPoint(shoulderBone.position) : Vector3.zero;
                 var elbowViewport = forearm != null ? trackingCamera.WorldToViewportPoint(forearm.position) : Vector3.zero;
                 var spineViewport = spine != null ? trackingCamera.WorldToViewportPoint(spine.position) : Vector3.zero;
                 var wristViewport = hand != null ? trackingCamera.WorldToViewportPoint(hand.position) : Vector3.zero;
                 var side = SourceSide(left);
-                var hasSourceShoulder = pose.TryGetImage($"{side}_shoulder", wristMinConfidence, out var sourceShoulder);
-                var hasSourceElbow = pose.TryGetImage($"{side}_elbow", .35f, out var sourceElbow);
+                var hasSourceShoulder = pose.TryGetImage(LandmarkName(side, "shoulder"), wristMinConfidence, out var sourceShoulder);
+                var hasSourceElbow = pose.TryGetImage(LandmarkName(side, "elbow"), .35f, out var sourceElbow);
                 var sourceUpperDirection = hasSourceShoulder && hasSourceElbow
                     ? ToPreviewViewport(sourceElbow) - ToPreviewViewport(sourceShoulder)
                     : Vector2.zero;
@@ -2071,7 +2120,7 @@ namespace RealtimeBodyTracking
                     ? Vector2.Dot(sourcePalmDirection.normalized, actualPalmDirection.normalized)
                     : 0f;
                 var elbowDelta = elbowViewport.y - shoulderViewport.y;
-                state = $"stage=palm_locked, source={palmName}, target={target:F3}, actual=({actual.x:F3}, {actual.y:F3}), " +
+                state = debugLogging ? ($"stage=palm_locked, source={palmName}, target={target:F3}, actual=({actual.x:F3}, {actual.y:F3}), " +
                         $"error={error:F4}, shoulderViewport=({shoulderViewport.x:F3}, {shoulderViewport.y:F3}), " +
                         $"elbowViewport=({elbowViewport.x:F3}, {elbowViewport.y:F3}), elbowViewportDeltaY={elbowDelta:F4}, " +
                         $"elbowBelowShoulder={elbowDelta < -.01f}, spineViewportY={spineViewport.y:F3}, " +
@@ -2079,7 +2128,7 @@ namespace RealtimeBodyTracking
                         $"targetPalmAboveElbow={target.y > elbowViewport.y}, avatarPalmAboveElbow={actual.y > elbowViewport.y}, " +
                         $"upperElevation=({sourceUpperElevation:F1}->{actualUpperElevation:F1}), " +
                         $"sourcePalmDirection={sourcePalmDirection:F3}, actualPalmDirection={actualPalmDirection:F3}, " +
-                        $"palmDirectionDot={palmDirectionDot:F3}, forearmMid={midpoint:F3}";
+                        $"palmDirectionDot={palmDirectionDot:F3}, forearmMid={midpoint:F3}") : string.Empty;
             }
             else if (tracked) state = $"stage=palm_unavailable, source={palmName}, reason=source_or_avatar_palm_missing";
             if (left) leftArmScreenState = state; else rightArmScreenState = state;
@@ -2090,9 +2139,9 @@ namespace RealtimeBodyTracking
             var side = SourceSide(left);
             var hasLeftShoulderImage = pose.TryGetImage("left_shoulder", wristMinConfidence, out var leftShoulderImage);
             var hasRightShoulderImage = pose.TryGetImage("right_shoulder", wristMinConfidence, out var rightShoulderImage);
-            var hasShoulderImage = pose.TryGetImage($"{side}_shoulder", wristMinConfidence, out var shoulderImage);
-            var hasElbowImage = pose.TryGetImage($"{side}_elbow", wristMinConfidence, out var elbowImage);
-            var hasWristImage = pose.TryGetImage($"{side}_wrist", wristMinConfidence, out var wristImage);
+            var hasShoulderImage = pose.TryGetImage(LandmarkName(side, "shoulder"), wristMinConfidence, out var shoulderImage);
+            var hasElbowImage = pose.TryGetImage(LandmarkName(side, "elbow"), wristMinConfidence, out var elbowImage);
+            var hasWristImage = pose.TryGetImage(LandmarkName(side, "wrist"), wristMinConfidence, out var wristImage);
             var hasShoulders = hasLeftShoulderImage && hasRightShoulderImage;
             var hasArmImages = hasShoulderImage && hasElbowImage && hasWristImage;
             var pathRatio = -1f;
@@ -2106,8 +2155,8 @@ namespace RealtimeBodyTracking
             }
 
             var rawDepth = wrist.z - shoulder.z;
-            var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var leftShoulder = GetCachedBone(HumanBodyBones.LeftUpperArm);
+            var rightShoulder = GetCachedBone(HumanBodyBones.RightUpperArm);
             var depthReferenceWidth = leftShoulder != null && rightShoulder != null
                 ? Vector3.Distance(leftShoulder.position, rightShoulder.position)
                 : worldShoulderWidth;
@@ -2126,16 +2175,16 @@ namespace RealtimeBodyTracking
             }
 
             var inputState = left ? leftHandDepthInputState : rightHandDepthInputState;
-            var state = $"pathRatio={pathRatio:F2}, evidence={depthEvidence:F2}, wristZ={rawDepth:F3}->{resolvedWristDepth:F3}, " +
-                        $"elbowZ={resolvedElbowDepth:F3}, depthLocked=False, input=[{inputState}]";
+            var state = debugLogging ? ($"pathRatio={pathRatio:F2}, evidence={depthEvidence:F2}, wristZ={rawDepth:F3}->{resolvedWristDepth:F3}, " +
+                        $"elbowZ={resolvedElbowDepth:F3}, depthLocked=False, input=[{inputState}]") : string.Empty;
             if (left) leftArmDepthState = state; else rightArmDepthState = state;
         }
 
         private Vector3 ConstrainArmEndpointToCamera(HumanBodyBones bone, HumanBodyBones endpointBone, Vector3 worldDirection)
         {
             if (trackingCamera == null || worldDirection.sqrMagnitude < .000001f) return worldDirection;
-            var start = targetAnimator.GetBoneTransform(bone);
-            var endpoint = targetAnimator.GetBoneTransform(endpointBone);
+            var start = GetCachedBone(bone);
+            var endpoint = GetCachedBone(endpointBone);
             if (start == null || endpoint == null) return worldDirection;
             var boneLength = Vector3.Distance(start.position, endpoint.position);
             if (boneLength < .001f) return worldDirection;
@@ -2153,7 +2202,7 @@ namespace RealtimeBodyTracking
             var constrained = clampedEnd - start.position;
             if (constrained.sqrMagnitude < .000001f) return worldDirection;
             armCameraClampCount++;
-            lastArmCameraClamp = $"{bone}: viewport={viewport:F2} -> {clampedViewport:F2}";
+            lastArmCameraClamp = debugLogging ? ($"{bone}: viewport={viewport:F2} -> {clampedViewport:F2}") : string.Empty;
             return constrained.normalized * worldDirection.magnitude;
         }
 
@@ -2198,8 +2247,8 @@ namespace RealtimeBodyTracking
             wristSeparationRatio = Vector3.Distance(leftWrist, rightWrist) / sourceShoulderWidth;
             if (wristSeparationRatio > handContactDistanceRatio) return false;
 
-            var leftUpperArm = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var rightUpperArm = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var leftUpperArm = GetCachedBone(HumanBodyBones.LeftUpperArm);
+            var rightUpperArm = GetCachedBone(HumanBodyBones.RightUpperArm);
             if (leftUpperArm == null || rightUpperArm == null) return false;
             var avatarShoulderCenter = (leftUpperArm.position + rightUpperArm.position) * .5f;
             var scale = Vector3.Distance(leftUpperArm.position, rightUpperArm.position) / sourceShoulderWidth;
@@ -2217,9 +2266,9 @@ namespace RealtimeBodyTracking
         {
             var upperBone = left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm;
             var lowerBone = left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
-            var upper = targetAnimator.GetBoneTransform(upperBone);
-            var lower = targetAnimator.GetBoneTransform(lowerBone);
-            var hand = targetAnimator.GetBoneTransform(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+            var upper = GetCachedBone(upperBone);
+            var lower = GetCachedBone(lowerBone);
+            var hand = GetCachedBone(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
             if (upper == null || lower == null || hand == null) return;
 
             var upperLength = Vector3.Distance(upper.position, lower.position);
@@ -2327,8 +2376,8 @@ namespace RealtimeBodyTracking
             cameraCalibrationHeadTopY = Mathf.Lerp(cameraCalibrationHeadTopY, headTopViewportY, sampleT);
             if (Time.unscaledTime - cameraCalibrationStarted < cameraCalibrationSeconds) return;
 
-            var left = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var right = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var left = GetCachedBone(HumanBodyBones.LeftUpperArm);
+            var right = GetCachedBone(HumanBodyBones.RightUpperArm);
             if (left == null || right == null) return;
             var avatarShoulderCenter = (left.position + right.position) * .5f;
             var avatarShoulderWidth = Vector3.Distance(left.position, right.position);
@@ -2544,9 +2593,9 @@ namespace RealtimeBodyTracking
             UpdateHorizontalExitEvidence(sourceViewport);
             sourceViewport.y += avatarViewportVerticalOffset;
             var lockedPlacement = manualController != null && manualController.PlacementLocked;
-            var leftAnchor = targetAnimator.GetBoneTransform(
+            var leftAnchor = GetCachedBone(
                 shoulderMode == 2 ? HumanBodyBones.LeftEye : HumanBodyBones.LeftUpperArm);
-            var rightAnchor = targetAnimator.GetBoneTransform(
+            var rightAnchor = GetCachedBone(
                 shoulderMode == 2 ? HumanBodyBones.RightEye : HumanBodyBones.RightUpperArm);
             if (leftAnchor == null || rightAnchor == null) return;
 
@@ -2628,8 +2677,8 @@ namespace RealtimeBodyTracking
             {
                 if (pendingHorizontalExitDirection == 0 ||
                     Time.unscaledTime - lastTrackingTime <= horizontalExitLostDelay) return;
-                var leftShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-                var rightShoulder = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                var leftShoulder = GetCachedBone(HumanBodyBones.LeftUpperArm);
+                var rightShoulder = GetCachedBone(HumanBodyBones.RightUpperArm);
                 if (leftShoulder == null || rightShoulder == null) return;
                 var shoulderViewport = trackingCamera.WorldToViewportPoint((leftShoulder.position + rightShoulder.position) * .5f);
                 var crossesExpectedEdge = pendingHorizontalExitDirection > 0
@@ -2799,8 +2848,8 @@ namespace RealtimeBodyTracking
         {
             width = 0f;
             worldCenter = default;
-            var left = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var right = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var left = GetCachedBone(HumanBodyBones.LeftUpperArm);
+            var right = GetCachedBone(HumanBodyBones.RightUpperArm);
             if (left == null || right == null) return false;
 
             var leftViewport = trackingCamera.WorldToViewportPoint(left.position);
@@ -2821,8 +2870,8 @@ namespace RealtimeBodyTracking
                 !pose.TryGet("right_shoulder", .55f, out var sourceRight) ||
                 trackingCamera == null || targetAnimator == null)
                 return false;
-            var avatarLeft = targetAnimator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var avatarRight = targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var avatarLeft = GetCachedBone(HumanBodyBones.LeftUpperArm);
+            var avatarRight = GetCachedBone(HumanBodyBones.RightUpperArm);
             if (avatarLeft == null || avatarRight == null) return false;
 
             var sourceAxis = sourceRight - sourceLeft;
@@ -2855,8 +2904,8 @@ namespace RealtimeBodyTracking
                 return false;
             }
 
-            var leftEye = targetAnimator.GetBoneTransform(HumanBodyBones.LeftEye);
-            var rightEye = targetAnimator.GetBoneTransform(HumanBodyBones.RightEye);
+            var leftEye = GetCachedBone(HumanBodyBones.LeftEye);
+            var rightEye = GetCachedBone(HumanBodyBones.RightEye);
 
             if (leftEye == null || rightEye == null)
                 return false;
@@ -3023,7 +3072,7 @@ namespace RealtimeBodyTracking
                 if (bone == HumanBodyBones.LeftUpperArm || bone == HumanBodyBones.LeftLowerArm ||
                     bone == HumanBodyBones.LeftHand || bone == HumanBodyBones.RightUpperArm ||
                     bone == HumanBodyBones.RightLowerArm || bone == HumanBodyBones.RightHand) continue;
-                var transform = targetAnimator.GetBoneTransform(bone);
+                var transform = GetCachedBone(bone);
                 if (transform != null) transform.rotation = smoother.Smooth(bone, transform.rotation, rootRotationDelta * rest, smoothingSpeed, rotationDeadZoneDegrees, Time.deltaTime);
             }
             if (hasLastUpperBody)
@@ -3042,11 +3091,11 @@ namespace RealtimeBodyTracking
             var upperBone = left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm;
             var lowerBone = left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
             var handBone = left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
-            var upper = targetAnimator.GetBoneTransform(upperBone);
-            var lower = targetAnimator.GetBoneTransform(lowerBone);
-            var hand = targetAnimator.GetBoneTransform(handBone);
+            var upper = GetCachedBone(upperBone);
+            var lower = GetCachedBone(lowerBone);
+            var hand = GetCachedBone(handBone);
             if (upper == null || lower == null || hand == null) return;
-            var hips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            var hips = GetCachedBone(HumanBodyBones.Hips);
             var center = hips != null ? hips.position : targetAnimator.transform.position;
             var outward = Vector3.ProjectOnPlane(upper.position - center, Vector3.up).normalized;
             if (outward.sqrMagnitude < .000001f) outward = left ? -targetAnimator.transform.right : targetAnimator.transform.right;
@@ -3132,14 +3181,14 @@ namespace RealtimeBodyTracking
         private void ReturnBoneToRest(HumanBodyBones bone)
         {
             if (!solver.TryGetRestRotation(bone, out var rest)) return;
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             if (transform != null) transform.rotation = smoother.Smooth(bone, transform.rotation, rootRotationDelta * rest, smoothingSpeed, rotationDeadZoneDegrees, Time.deltaTime);
         }
 
         private void ReturnBoneToParentRest(HumanBodyBones bone)
         {
             if (!solver.TryGetRestLocalRotation(bone, out var rest)) return;
-            var transform = targetAnimator.GetBoneTransform(bone);
+            var transform = GetCachedBone(bone);
             if (transform != null)
                 transform.localRotation = Quaternion.Slerp(
                     transform.localRotation, rest,
@@ -3168,7 +3217,7 @@ namespace RealtimeBodyTracking
             public float Update(float projectionScale, float shoulderWidth, bool hasPoseDepth, float poseDepth,
                 float gain, float neutralProjectionRatio, float maxPoseCorrectionShoulderWidths,
                 float maxShoulderWidths, float smoothing, float deadZoneScale, float deltaTime,
-                out string state)
+                out string state, bool emitDiagnostics)
             {
                 shoulderWidth = Mathf.Max(shoulderWidth, .001f);
                 var maxDepth = shoulderWidth * maxShoulderWidths;
@@ -3206,10 +3255,10 @@ namespace RealtimeBodyTracking
                     1f - Mathf.Exp(-smoothing * Mathf.Max(deltaTime, .001f)));
                 stableDepth = FollowDepthOutsideDeadZone(
                     stableDepth, filteredDepth, shoulderWidth * deadZoneScale);
-                state = $"source={(hasPoseDepth ? "scale3d+bounded_pose" : "scale3d")}, absoluteRatio={absoluteProjectionRatio:F2}, " +
+                state = emitDiagnostics ? ($"source={(hasPoseDepth ? "scale3d+bounded_pose" : "scale3d")}, absoluteRatio={absoluteProjectionRatio:F2}, " +
                         $"neutralRatio={neutralProjectionRatio:F2}, scaleRatio={scaleRatio:F2}, pose={poseDepth:F3}->{constrainedPoseDepth:F3}, " +
                         $"projection={rawProjectionScale:F2}->{projectionScale:F2}, limited={projectionLimited}, " +
-                        $"measured={measuredDepth:F3}, stable={stableDepth:F3}";
+                        $"measured={measuredDepth:F3}, stable={stableDepth:F3}") : string.Empty;
                 return stableDepth;
             }
 

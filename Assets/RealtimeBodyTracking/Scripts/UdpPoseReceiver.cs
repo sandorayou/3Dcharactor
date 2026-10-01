@@ -15,7 +15,7 @@ namespace RealtimeBodyTracking
     {
         [SerializeField] private int port = 39542;
         [SerializeField] private bool logMalformedPackets;
-        [SerializeField] private bool recordIncomingPackets = true;
+        [SerializeField] private bool recordIncomingPackets;
         [SerializeField, Min(1)] private int maximumRecordingMegabytes = 16;
         [SerializeField, Tooltip("Live diagnostics; updated by the receiver thread.")] private long latestReceivedFrame = -1;
         [SerializeField, Tooltip("Live diagnostics; updated by the receiver thread.")] private bool latestTracking;

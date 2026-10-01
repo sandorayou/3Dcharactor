@@ -5,6 +5,7 @@ namespace RealtimeBodyTracking
 {
     public sealed class BoneRotationSolver
     {
+        private static readonly HumanBodyBones[] AllBones = (HumanBodyBones[])System.Enum.GetValues(typeof(HumanBodyBones));
         private readonly Dictionary<HumanBodyBones, Quaternion> restRotations = new();
         private readonly Dictionary<HumanBodyBones, Quaternion> restLocalRotations = new();
         private readonly Dictionary<HumanBodyBones, Vector3> restDirections = new();
@@ -30,7 +31,7 @@ namespace RealtimeBodyTracking
         public int RefreshMissingBones(Animator animator)
         {
             var added = 0;
-            foreach (HumanBodyBones bone in System.Enum.GetValues(typeof(HumanBodyBones)))
+            foreach (var bone in AllBones)
             {
                 if (bone == HumanBodyBones.LastBone || restRotations.ContainsKey(bone)) continue;
                 var transform = animator.GetBoneTransform(bone);

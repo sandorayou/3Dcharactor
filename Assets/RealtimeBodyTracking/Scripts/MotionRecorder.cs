@@ -7,6 +7,8 @@ namespace RealtimeBodyTracking
 {
     public sealed class MotionRecorder : MonoBehaviour
     {
+        private static readonly HumanBodyBones[] AllBones = (HumanBodyBones[])Enum.GetValues(typeof(HumanBodyBones));
+        private static readonly string[] BoneNames = Array.ConvertAll(AllBones, bone => bone.ToString());
         [SerializeField] private Animator targetAnimator;
         [SerializeField] private string outputFileName = "recording.motion.json";
         [SerializeField] private bool recordOnStart;
@@ -29,11 +31,12 @@ namespace RealtimeBodyTracking
             var frame = new Frame { timestamp = Time.time, tracking = true };
             var hips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
             if (hips != null) frame.hips = hips.position;
-            foreach (HumanBodyBones bone in Enum.GetValues(typeof(HumanBodyBones)))
+            for (var index = 0; index < AllBones.Length; index++)
             {
+                var bone = AllBones[index];
                 if (bone == HumanBodyBones.LastBone) continue;
                 var transform = targetAnimator.GetBoneTransform(bone);
-                if (transform != null) frame.rotations.Add(new Rotation { bone = bone.ToString(), value = transform.rotation });
+                if (transform != null) frame.rotations.Add(new Rotation { bone = BoneNames[index], value = transform.rotation });
             }
             recording.frames.Add(frame);
         }

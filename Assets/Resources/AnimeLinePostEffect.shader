@@ -35,13 +35,10 @@ Shader "Hidden/RealtimeBodyTracking/AnimeLinePostEffect"
                 float3 right = tex2D(_MainTex, input.uv + float2(stepSize.x, 0)).rgb;
                 float3 down = tex2D(_MainTex, input.uv - float2(0, stepSize.y)).rgb;
                 float3 up = tex2D(_MainTex, input.uv + float2(0, stepSize.y)).rgb;
-                float3 diagonalA = tex2D(_MainTex, input.uv + stepSize).rgb;
-                float3 diagonalB = tex2D(_MainTex, input.uv - stepSize).rgb;
 
                 float horizontal = length(right - left);
                 float vertical = length(up - down);
-                float diagonal = length(diagonalA - diagonalB) * .65;
-                float contrast = max(max(horizontal, vertical), diagonal);
+                float contrast = max(horizontal, vertical);
                 // Keep the ink edge hard.  The former wide smoothstep made the
                 // line look like a blurred shadow instead of drawn line art.
                 float hardWidth = max(_Softness, 0.001);

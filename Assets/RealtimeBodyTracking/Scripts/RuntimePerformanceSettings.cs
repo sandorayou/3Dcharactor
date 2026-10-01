@@ -14,6 +14,9 @@ namespace RealtimeBodyTracking
         {
 #if UNITY_STANDALONE && !UNITY_EDITOR
             QualitySettings.SetQualityLevel(StandaloneQualityLevel, true);
+#if UNITY_STANDALONE_WIN
+            QualitySettings.shadowDistance = Mathf.Min(QualitySettings.shadowDistance, 28f);
+#endif
 #endif
             QualitySettings.vSyncCount = 0;
             Application.targetFrameRate = TargetFrameRate;
