@@ -1,3 +1,4 @@
+#if !UNITY_IOS || UNITY_EDITOR
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -157,3 +158,14 @@ namespace RealtimeBodyTracking
         }
     }
 }
+
+#else
+namespace RealtimeBodyTracking
+{
+    public sealed class UdpPoseReceiver : UnityEngine.MonoBehaviour
+    {
+        public int DroppedPackets => 0;
+        public bool TryTakeLatest(out PosePacket packet) { packet = null; return false; }
+    }
+}
+#endif

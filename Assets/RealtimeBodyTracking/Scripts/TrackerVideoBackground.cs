@@ -1,3 +1,4 @@
+#if !UNITY_IOS || UNITY_EDITOR
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -103,3 +104,12 @@ namespace RealtimeBodyTracking
         }
     }
 }
+
+#else
+namespace RealtimeBodyTracking
+{
+    public sealed class TrackerVideoBackground : UnityEngine.MonoBehaviour
+    {
+    }
+}
+#endif

@@ -1,3 +1,4 @@
+#if !UNITY_IOS || UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -239,3 +240,40 @@ namespace RealtimeBodyTracking
         }
     }
 }
+
+#else
+using System.Runtime.InteropServices;
+using UnityEngine;
+namespace RealtimeBodyTracking
+{
+    [RequireComponent(typeof(Camera))]
+    public sealed class OfflineVideoCapture : MonoBehaviour
+    {
+        [DllImport("__Internal")] private static extern void WindowsPortStartRecording(string receiver);
+        [DllImport("__Internal")] private static extern void WindowsPortStopRecording();
+        private bool recording, pending;
+        [UnityEngine.Scripting.Preserve]
+        public void OnIOSRecordingState(string state)
+        {
+            pending = false;
+            recording = state == "started";
+            if (state != "started" && state != "stopped") Debug.LogError(state, this);
+            if (recording && !isActiveAndEnabled) StopRecording();
+        }
+        private void OnGUI()
+        {
+            var oldEnabled = GUI.enabled;
+            GUI.enabled = !pending;
+            if (GUI.Button(new Rect(16,16,180,48), recording ? "録画終了" : "録画開始"))
+            {
+                if (recording) StopRecording();
+                else { pending = true; WindowsPortStartRecording(gameObject.name); }
+            }
+            GUI.enabled = oldEnabled;
+            if (recording) GUI.Label(new Rect(210,28,300,30), "REC  実写モザイク + アバター");
+        }
+        private void StopRecording() { pending = true; WindowsPortStopRecording(); }
+        private void OnDisable() { if (recording && !pending) StopRecording(); }
+    }
+}
+#endif

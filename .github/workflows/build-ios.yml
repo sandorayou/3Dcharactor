@@ -16,10 +16,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
+          sparse-checkout: |
+            .github/workflows
+            .gitattributes
+            Builds/iOS-WindowsPort.zip
+          sparse-checkout-cone-mode: false
 
       - name: Ensure Git LFS objects are hydrated
-        run: git lfs checkout
+        run: git lfs pull --include="Builds/iOS-WindowsPort.zip" --exclude=""
+
+      - name: Extract iOS-only Xcode export
+        run: |
+          set -euo pipefail
+          test -f Builds/iOS-WindowsPort.zip
+          mkdir -p Builds/iOS-WindowsPort
+          ditto -x -k Builds/iOS-WindowsPort.zip Builds/iOS-WindowsPort
 
       - name: Locate Xcode Project
         id: find-project
@@ -53,7 +65,8 @@ jobs:
           if ! command -v pod >/dev/null 2>&1; then
             brew install cocoapods
           fi
-          ruby Tools/add_ios_native_pose.rb "$XCODE_PROJECT" Assets/Plugins/iOS/NativePoseBridge.mm
+          test -f "$PROJECT_DIR/Libraries/Plugins/iOS/NativePoseBridge.mm"
+          test -f "$PROJECT_DIR/Libraries/Plugins/iOS/IOSScreenRecording.mm"
           (cd "$PROJECT_DIR" && pod install --repo-update --silent)
           WORKSPACE="${XCODE_PROJECT%.xcodeproj}.xcworkspace"
           test -d "$WORKSPACE"
@@ -67,6 +80,12 @@ jobs:
             CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/App" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS=arm64 \
+            GCC_OPTIMIZATION_LEVEL=s \
+            STRIP_INSTALLED_PRODUCT=YES \
+            DEAD_CODE_STRIPPING=YES \
+            COPY_PHASE_STRIP=YES \
             clean build
           if find "$RUNNER_TEMP/App" -name 'MediaPipeUnity.framework' -print -quit | grep -q .; then
             echo "::error::Legacy MediaPipeUnity.framework was embedded alongside MediaPipeTasksVision"
@@ -79,6 +98,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/Payload"
           APP_PATH=$(find "$RUNNER_TEMP/App" -name "*.app" | head -n 1)
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/"
+          du -sh "$APP_PATH"
+          find "$RUNNER_TEMP/Payload" -name '*.dSYM' -type d -prune -exec rm -rf {} +
           cd "$RUNNER_TEMP"
           ditto -c -k --sequesterRsrc --keepParent Payload MyProject5-unsigned.ipa
 
@@ -88,3 +109,4 @@ jobs:
           name: MyProject5-unsigned-ipa
           path: ${{ runner.temp }}/MyProject5-unsigned.ipa
           if-no-files-found: error
+          retention-days: 7

@@ -30,5 +30,19 @@ Windowsのffmpegによる実写・透過アバター別ファイル出力はiOS�
 Xcodeでのネイティブビルドと実機でのカメラ・表情・指・モザイク・録画確認が必要です。
 Windows上のC#コンパイル成功だけでは、iPhoneでの表示・性能を確認したことにはなりません。
 
-GitHubのiOSワークフローを使う場合は、新しい出力を別途リポジトリへ含める必要があります
-（Buildsフォルダーは通常Gitの対象外）。ワークフローは古い出力を自動選択しません。
+## 小容量ビルドとGitHub Actions
+
+iOS書き出しではHigh managed stripping、IL2CPP OptimizeSize、未使用エンジンコードの除去、
+LZ4HCデータ圧縮を使います。シーンが参照するテクスチャだけをiOS用ASTC形式で圧縮し、
+最大1024pxに制限します。顔・目はASTC 4x4、それ以外はASTC 6x6です。
+Windowsのテクスチャ設定は変更しません。圧縮後の見た目は実機で確認してください。
+Python起動・UDP受信・HTTP背景・ffmpeg録画のコードはiOSプレイヤーから除外します。
+JSONパケットの型とネイティブコールバックは削除されないよう明示的に保持します。
+
+`Tools/publish_ios_unsigned.ps1`は新しい書き出しを検証してZIP化し、
+`Builds/iOS-WindowsPort.zip`だけをGit LFSへ保存します。その後専用ブランチへpushし、
+`Build unsigned iOS IPA`をRun workflowで起動、完了を待ってIPAをダウンロードします。
+ActionsはこのZIPだけを取得し、古いiOS出力やWindows/Pythonのファイルを取得しません。
+arm64のReleaseビルドにサイズ最適化と不要シンボル除去を適用します。
+成果物は`Builds/iOS-IPA/MyProject5-unsigned.ipa`に保存されます。
+Unsigned IPAのインストールには別途署名が必要です。

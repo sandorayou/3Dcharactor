@@ -1,3 +1,4 @@
+#if !UNITY_IOS || UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -136,3 +137,12 @@ namespace RealtimeBodyTracking
         }
     }
 }
+
+#else
+namespace RealtimeBodyTracking
+{
+    public sealed class TrackerAutoLauncher : UnityEngine.MonoBehaviour
+    {
+    }
+}
+#endif
