@@ -4,10 +4,13 @@ Windows版 `dc7e1ae` の SampleScene、キャラ、HumanoidPoseDriver、肘・�
 iPhoneではPython/UDP/HTTPを起動せず、AVFoundationとMediaPipeのPose・Hand・Faceで検出した
 同じPosePacketを共通のキャラ制御へ渡します。3つのモデルはWindows版と同一ファイルです。
 
-実写映像は人物の胴体・頭・四肢・手を16ピクセル単位でモザイクにし、透明なUnity画面の後ろへ
+実写映像は人物の胴体・四肢・手を16ピクセル、顔・頭を48ピクセル単位でモザイクにし、透明なUnity画面の後ろへ
 合成します。青背景への置換はありません。前面カメラの映像だけを左右反転し、検出座標は
 Windowsと同じ未反転のままです。ネイティブのモザイクはCoreImageを使うため、Windowsの
 OpenCVによる縮小・拡大とは境界の画素が完全一致するわけではありません。
+
+iOSの顔の左右への傾き（roll）は、ネイティブの顔回転を受け取る際に符号を補正します。
+左右を向く回転（yaw）と上下を向く回転（pitch）は維持します。
 
 ## Xcodeプロジェクトを作る
 
@@ -44,5 +47,5 @@ JSONパケットの型とネイティブコールバックは削除されない�
 `Build unsigned iOS IPA`をRun workflowで起動、完了を待ってIPAをダウンロードします。
 ActionsはこのZIPだけを取得し、古いiOS出力やWindows/Pythonのファイルを取得しません。
 arm64のReleaseビルドにサイズ最適化と不要シンボル除去を適用します。
-成果物は`Builds/iOS-IPA/MyProject5-unsigned.ipa`に保存されます。
+成果物は`Builds/iOS-IPA/<run_id>/MyProject5-unsigned.ipa`に保存されます。
 Unsigned IPAのインストールには別途署名が必要です。

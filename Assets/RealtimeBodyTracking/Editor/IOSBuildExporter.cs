@@ -11,6 +11,7 @@ namespace RealtimeBodyTracking.Editor
         [MenuItem("Build/Export updated iOS project")]
         public static void Export()
         {
+            ValidateHeadRollCorrection();
             var scenes = EditorBuildSettings.scenes.Where(x => x.enabled).Select(x => x.path).ToArray();
             if (scenes.Length == 0)
                 scenes = new[] { "Assets/Scenes/SampleScene.unity" };
@@ -72,6 +73,19 @@ namespace RealtimeBodyTracking.Editor
                     texture.importer.SetPlatformTextureSettings(texture.settings);
                     texture.importer.SaveAndReimport();
                 }
+            }
+        }
+        private static void ValidateHeadRollCorrection()
+        {
+            // Evaluate the actual runtime conversion using Unity's quaternion implementation.
+            foreach (var roll in new[] { -35f, 0f, 35f })
+            {
+                var input = UnityEngine.Quaternion.Euler(17f, 29f, roll);
+                var corrected = IOSNativePoseSource.CorrectNativeHeadRoll(input).eulerAngles;
+                if (UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.x, 17f)) > .01f ||
+                    UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.y, 29f)) > .01f ||
+                    UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.z, -roll)) > .01f)
+                    throw new BuildFailedException("iOS head-roll correction changed yaw/pitch or failed to reverse roll.");
             }
         }
     }

@@ -54,7 +54,7 @@ $portRun | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $portOutput 'git
 Write-Output "Workflow: $($portRun.url)"
 & gh run watch $portRun.databaseId --repo sandorayou/3Dcharactor --exit-status --interval 60
 if ($LASTEXITCODE -ne 0) { throw "Unsigned IPA build failed: $($portRun.url)" }
-$portArtifacts = Join-Path $portRoot 'Builds\iOS-IPA'
+$portArtifacts = Join-Path $portRoot ('Builds\iOS-IPA\' + $portRun.databaseId)
 & gh run download $portRun.databaseId --repo sandorayou/3Dcharactor --name MyProject5-unsigned-ipa --dir $portArtifacts
 if ($LASTEXITCODE -ne 0) { throw 'Build succeeded, but IPA artifact download failed.' }
 Write-Output "SUCCESS: unsigned IPA saved to $portArtifacts"

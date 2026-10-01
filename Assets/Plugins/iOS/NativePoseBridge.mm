@@ -139,7 +139,7 @@ static void FillPrivacyHull(CGContextRef context, std::vector<CGPoint> points) {
     CGContextFillPath(context);
 }
 
-static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent, NSInteger timestamp) {
+static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect extent, NSInteger timestamp, BOOL faceOnly = NO) {
     NSArray<MPPNormalizedLandmark *> *points = result.landmarks.firstObject;
     if (points.count < 25) return nil;
     const size_t width = (size_t)extent.size.width, height = (size_t)extent.size.height;
@@ -156,10 +156,11 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     CGFloat thickness = MAX(shoulder*.18, width*7.0/320.0);
     std::vector<CGPoint> torso;
     for (NSUInteger i : {11u,12u,24u,23u}) if (ReliablePrivacyPoint(points[i])) torso.push_back(point(i));
-    FillPrivacyHull(context, torso);
+    if (!faceOnly) FillPrivacyHull(context, torso);
     CGContextSetLineWidth(context, thickness);
     const NSUInteger edges[][2] = {{11,13},{13,15},{12,14},{14,16},{23,25},{25,27},{24,26},{26,28}};
     for (auto &edge : edges) {
+        if (faceOnly) break;
         if (edge[1]>=points.count || !ReliablePrivacyPoint(points[edge[0]]) || !ReliablePrivacyPoint(points[edge[1]])) continue;
         CGPoint a=point(edge[0]), b=point(edge[1]);
         CGContextMoveToPoint(context,a.x,a.y); CGContextAddLineToPoint(context,b.x,b.y); CGContextStrokePath(context);
@@ -189,7 +190,7 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
             }
             FillPrivacyHull(context,face);
         }
-        if (llabs(timestamp-s_handPrivacyTimestamp)<=150) {
+        if (!faceOnly && llabs(timestamp-s_handPrivacyTimestamp)<=150) {
             for (NSUInteger start=0; start<s_handPrivacyPoints.count; start+=21) {
                 std::vector<CGPoint> hand;
                 for (NSUInteger i=start; i<MIN(start+21,s_handPrivacyPoints.count); ++i) {
@@ -209,11 +210,11 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     return [[mask imageByApplyingFilter:@"CIGaussianBlur" withInputParameters:@{kCIInputRadiusKey:@1.0}] imageByCroppingToRect:extent];
 }
 
-static CIImage *WindowsStyleMosaic(CIImage *source) {
+static CIImage *WindowsStyleMosaic(CIImage *source, CGFloat scale) {
     CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
     [pixelate setValue:source forKey:kCIInputImageKey];
     // Same square-block mosaic size as the Windows tracker.
-    [pixelate setValue:@(MAX(2.0, s_mosaicScale)) forKey:kCIInputScaleKey];
+    [pixelate setValue:@(MAX(2.0, scale)) forKey:kCIInputScaleKey];
     [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent)
                                            Y:CGRectGetMidY(source.extent)]
                  forKey:kCIInputCenterKey];
@@ -236,10 +237,19 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     CIImage *processed = source;
     if (mask != nil) {
         CIFilter *blend = [CIFilter filterWithName:@"CIBlendWithMask"];
-        [blend setValue:WindowsStyleMosaic(source) forKey:kCIInputImageKey];
+        [blend setValue:WindowsStyleMosaic(source, s_mosaicScale) forKey:kCIInputImageKey];
         [blend setValue:source forKey:kCIInputBackgroundImageKey];
         [blend setValue:mask forKey:kCIInputMaskImageKey];
         processed = [blend.outputImage imageByCroppingToRect:source.extent];
+        // Only the head/profile uses larger blocks; body, hands and background keep their current look.
+        CIImage *faceMask = CurrentPosePrivacyMask(result, source.extent, timestamp, YES);
+        if (faceMask != nil) {
+            CIFilter *faceBlend = [CIFilter filterWithName:@"CIBlendWithMask"];
+            [faceBlend setValue:WindowsStyleMosaic(source, MAX(48.0, s_mosaicScale * 3.0)) forKey:kCIInputImageKey];
+            [faceBlend setValue:processed forKey:kCIInputBackgroundImageKey];
+            [faceBlend setValue:faceMask forKey:kCIInputMaskImageKey];
+            processed = [faceBlend.outputImage imageByCroppingToRect:source.extent];
+        }
     }
     {
         CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];

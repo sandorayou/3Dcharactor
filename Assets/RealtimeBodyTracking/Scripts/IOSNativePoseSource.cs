@@ -46,8 +46,26 @@ namespace RealtimeBodyTracking
         public void OnNativePoseJson(string json)
         {
             if (!isActiveAndEnabled) return;
-            try { latest = JsonUtility.FromJson<PosePacket>(json); }
+            try
+            {
+                latest = JsonUtility.FromJson<PosePacket>(json);
+                if (latest?.head_rotation != null)
+                {
+                    // The front-camera pipeline's roll is opposite to the displayed tilt.
+                    // Change roll only; the existing yaw/pitch and common driver mirroring stay intact.
+                    var corrected = CorrectNativeHeadRoll(latest.head_rotation.Rotation);
+                    latest.head_rotation.x = corrected.x;
+                    latest.head_rotation.y = corrected.y;
+                    latest.head_rotation.z = corrected.z;
+                    latest.head_rotation.w = corrected.w;
+                }
+            }
             catch (System.ArgumentException exception) { Debug.LogWarning(exception.Message, this); }
+        }
+        public static Quaternion CorrectNativeHeadRoll(Quaternion rotation)
+        {
+            var angles = rotation.eulerAngles;
+            return Quaternion.Euler(angles.x, angles.y, -angles.z);
         }
         public bool TryTakeLatest(out PosePacket packet)
         {
