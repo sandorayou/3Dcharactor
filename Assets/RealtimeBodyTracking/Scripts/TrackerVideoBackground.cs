@@ -12,20 +12,18 @@ namespace RealtimeBodyTracking
         [SerializeField] private string frameUrl = "http://127.0.0.1:39543/frame.jpg";
         [SerializeField, Range(5, 60)] private int refreshRate = 30;
         [SerializeField] private bool mirror;
-        [SerializeField] private bool useDeviceCameraOnMobile = true;
         [SerializeField, Min(1f)] private float backgroundDistance = 100f;
         private Camera targetCamera;
         private Transform background;
         private MeshRenderer backgroundRenderer;
         private Texture2D texture;
-        private WebCamTexture deviceCamera;
-        public static WebCamTexture DeviceCamera { get; private set; }
 
         private void Awake()
         {
             targetCamera = GetComponent<Camera>() ?? Camera.main;
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Tracker Video Background";
+            quad.layer = 31;
             background = quad.transform;
             background.SetParent(targetCamera.transform, false);
             background.localPosition = Vector3.forward * backgroundDistance;
@@ -35,49 +33,8 @@ namespace RealtimeBodyTracking
             var shader = Shader.Find("Unlit/Texture");
             backgroundRenderer.material = new Material(shader);
             backgroundRenderer.enabled = false;
-#if UNITY_ANDROID || UNITY_IOS
-            if (useDeviceCameraOnMobile) StartCoroutine(StartDeviceCamera());
-            else StartCoroutine(PollFrames());
-#else
             StartCoroutine(PollFrames());
-#endif
         }
-
-#if UNITY_ANDROID || UNITY_IOS
-        private IEnumerator StartDeviceCamera()
-        {
-#if UNITY_ANDROID
-            if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera))
-                UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Camera);
-            yield return new WaitUntil(() => UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera));
-#elif UNITY_IOS
-            yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
-            if (!Application.HasUserAuthorization(UserAuthorization.WebCam)) yield break;
-#endif
-            var devices = WebCamTexture.devices;
-            if (devices == null || devices.Length == 0) yield break;
-            var selected = devices[0].name;
-            for (var i = 0; i < devices.Length; i++)
-                if (devices[i].isFrontFacing) { selected = devices[i].name; break; }
-            deviceCamera = new WebCamTexture(selected, 1280, 720, 30);
-            DeviceCamera = deviceCamera;
-            deviceCamera.Play();
-            yield return new WaitUntil(() => deviceCamera.width > 16 && deviceCamera.height > 16);
-            backgroundRenderer.material.mainTexture = deviceCamera;
-            // WebCamTexture exposes the device sensor orientation separately
-            // from the pixels. Apply it to the quad so portrait camera input
-            // is not displayed sideways or stretched.
-            var rotation = deviceCamera.videoRotationAngle;
-            background.localRotation = Quaternion.Euler(0f, 0f, -rotation);
-            var flipX = mirror ^ deviceCamera.videoVerticallyMirrored;
-            backgroundRenderer.material.mainTextureScale = flipX ? new Vector2(-1f, 1f) : Vector2.one;
-            backgroundRenderer.material.mainTextureOffset = flipX ? new Vector2(1f, 0f) : Vector2.zero;
-            var rotatedWidth = rotation == 90 || rotation == 270 ? deviceCamera.height : deviceCamera.width;
-            var rotatedHeight = rotation == 90 || rotation == 270 ? deviceCamera.width : deviceCamera.height;
-            FitToSource(rotatedWidth, rotatedHeight);
-            backgroundRenderer.enabled = true;
-        }
-#endif
 
         private IEnumerator PollFrames()
         {
@@ -134,8 +91,6 @@ namespace RealtimeBodyTracking
 
         private void OnDestroy()
         {
-            if (deviceCamera != null && deviceCamera.isPlaying) deviceCamera.Stop();
-            if (DeviceCamera == deviceCamera) DeviceCamera = null;
             if (texture != null) Destroy(texture);
             if (backgroundRenderer != null && backgroundRenderer.material != null)
                 Destroy(backgroundRenderer.material);
