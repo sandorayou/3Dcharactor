@@ -37,6 +37,16 @@ if ((Get-Content -LiteralPath $portMarker -Raw).Trim() -ne 'WindowsPort-PoseHand
     throw 'Unexpected iOS export version.'
 }
 $portDestination = Join-Path $portRoot 'Builds\iOS-WindowsPort'
+$portBuildRoot = [IO.Path]::GetFullPath((Join-Path $portRoot 'Builds')) + [IO.Path]::DirectorySeparatorChar
+if (Test-Path -LiteralPath $portDestination) {
+    $portBackup = Join-Path $portRoot ('Builds\iOS-WindowsPort-previous-' + [Guid]::NewGuid().ToString('N'))
+    foreach ($portPath in @($portDestination, $portBackup)) {
+        if (-not [IO.Path]::GetFullPath($portPath).StartsWith($portBuildRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Export replacement path is outside the intended Builds directory.'
+        }
+    }
+    Move-Item -LiteralPath $portDestination -Destination $portBackup
+}
 New-Item -ItemType Directory -Path $portDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $portSource | Copy-Item -Destination $portDestination -Recurse -Force
 @{ commit=$portCommit; unity='2022.3.62f3'; sourceArchiveSHA256=(Get-FileHash -LiteralPath $portArchive).Hash;
