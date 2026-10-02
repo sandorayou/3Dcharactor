@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 static std::atomic<int> s_width{640}, s_height{480};
+static std::atomic<long long> s_orientationReadyTimestamp{0};
 static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
@@ -19,7 +20,7 @@ static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
 static BOOL s_useFrontCamera = YES;
-static CGFloat s_mosaicScale = 16.0;
+static CGFloat s_mosaicScale = 48.0;
 static CALayer *s_backgroundLayer;
 static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
@@ -213,7 +214,7 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
 static CIImage *WindowsStyleMosaic(CIImage *source, CGFloat scale) {
     CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
     [pixelate setValue:source forKey:kCIInputImageKey];
-    // Same square-block mosaic size as the Windows tracker.
+    // Uniform coarse blocks for the head, hands and body on iOS.
     [pixelate setValue:@(MAX(2.0, scale)) forKey:kCIInputScaleKey];
     [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent)
                                            Y:CGRectGetMidY(source.extent)]
@@ -241,15 +242,6 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
         [blend setValue:source forKey:kCIInputBackgroundImageKey];
         [blend setValue:mask forKey:kCIInputMaskImageKey];
         processed = [blend.outputImage imageByCroppingToRect:source.extent];
-        // Only the head/profile uses larger blocks; body, hands and background keep their current look.
-        CIImage *faceMask = CurrentPosePrivacyMask(result, source.extent, timestamp, YES);
-        if (faceMask != nil) {
-            CIFilter *faceBlend = [CIFilter filterWithName:@"CIBlendWithMask"];
-            [faceBlend setValue:WindowsStyleMosaic(source, MAX(48.0, s_mosaicScale * 3.0)) forKey:kCIInputImageKey];
-            [faceBlend setValue:processed forKey:kCIInputBackgroundImageKey];
-            [faceBlend setValue:faceMask forKey:kCIInputMaskImageKey];
-            processed = [faceBlend.outputImage imageByCroppingToRect:source.extent];
-        }
     }
     {
         CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
@@ -272,7 +264,7 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
         // wait for hand and face callbacks, which can legitimately miss an
         // independent live-stream frame.
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (s_backgroundLayer != nil)
+            if (timestamp >= s_orientationReadyTimestamp.load() && s_backgroundLayer != nil)
                 s_backgroundLayer.contents = (__bridge id)image.CGImage;
         });
     }
@@ -280,6 +272,7 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
 // Pose drives the body and must never wait for optional hand/face detectors.
 // Supplemental results are reused only for a short interval.
 static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timestamp) {
+    if (timestamp < s_orientationReadyTimestamp.load()) return;
     static NSObject *gate;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ gate = [NSObject new]; });
@@ -315,7 +308,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
         NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         NSString *receiver = [s_unityObject copy];
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (receiver && [receiver isEqualToString:s_unityObject] && json)
+            if (timestamp >= s_orientationReadyTimestamp.load() && receiver && [receiver isEqualToString:s_unityObject] && json)
                 UnitySendMessage(receiver.UTF8String, "OnNativePoseJson", json.UTF8String);
         });
     }
@@ -341,6 +334,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:pixelBuffer error:nil];
     if (image == nil) return;
     NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
+    if (timestamp < s_orientationReadyTimestamp.load()) return;
     @synchronized(FrameGate()) {
         if (s_pendingCameraFrames == nil) s_pendingCameraFrames = [NSMutableDictionary dictionary];
         CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
@@ -364,7 +358,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 @end
 @implementation NativePoseResultDelegate
 - (void)poseLandmarker:(MPPPoseLandmarker *)landmarker didFinishDetectionWithResult:(MPPPoseLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
-    if (s_unityObject == nil || landmarker != s_landmarker) return;
+    if (s_unityObject == nil || landmarker != s_landmarker || timestamp < s_orientationReadyTimestamp.load()) return;
     DisplaySynchronizedBackground(result, timestamp);
     if (result == nil) return;
     NSArray *points = result.landmarks.firstObject;
@@ -394,7 +388,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 
 @implementation NativeHandResultDelegate
 - (void)handLandmarker:(MPPHandLandmarker *)landmarker didFinishDetectionWithResult:(MPPHandLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
-    if (!result || !s_unityObject) return;
+    if (!result || !s_unityObject || timestamp < s_orientationReadyTimestamp.load()) return;
     NSArray *names = @[@"wrist", @"thumb_cmc", @"thumb_mcp", @"thumb_ip", @"thumb", @"index_mcp", @"index_pip", @"index_dip", @"index", @"middle_mcp", @"middle_pip", @"middle_dip", @"middle", @"ring_mcp", @"ring_pip", @"ring_dip", @"ring", @"pinky_mcp", @"pinky_pip", @"pinky_dip", @"pinky"];
     NSMutableArray *points = [NSMutableArray array];
     NSMutableArray<NSValue *> *privacyPoints = [NSMutableArray array];
@@ -453,7 +447,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 
 @implementation NativeFaceResultDelegate
 - (void)faceLandmarker:(MPPFaceLandmarker *)landmarker didFinishDetectionWithResult:(MPPFaceLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
-    if (!result || !s_unityObject) return;
+    if (!result || !s_unityObject || timestamp < s_orientationReadyTimestamp.load()) return;
     NSMutableArray *blend = [NSMutableArray array];
     NSMutableArray *points = [NSMutableArray array];
     if (result.faceBlendshapes.count > 0) for (MPPCategory *c in result.faceBlendshapes.firstObject.categories)
@@ -494,6 +488,18 @@ static void UpdateVideoOrientation() {
     AVCaptureVideoOrientation orientation = AVCaptureVideoOrientationPortrait;
     UIInterfaceOrientation ui = UIApplication.sharedApplication.statusBarOrientation;
     s_lastVideoOrientation = ui;
+    // Ignore detections and queued Unity callbacks from the previous camera orientation.
+    s_orientationReadyTimestamp = (long long)(CACurrentMediaTime() * 1000.0) + 150;
+    @synchronized(FrameGate()) {
+        [s_pendingCameraFrames removeAllObjects];
+        [s_pendingProcessedFrames removeAllObjects];
+    }
+    @synchronized(PrivacyGate()) {
+        s_facePrivacyPoints = nil; s_handPrivacyPoints = nil;
+        s_facePrivacyTimestamp = 0; s_handPrivacyTimestamp = 0;
+    }
+    if (s_unityObject != nil)
+        UnitySendMessage(s_unityObject.UTF8String, "OnNativeCameraOrientationChanged", "");
     if (ui == UIInterfaceOrientationLandscapeLeft) orientation = AVCaptureVideoOrientationLandscapeLeft;
     else if (ui == UIInterfaceOrientationLandscapeRight) orientation = AVCaptureVideoOrientationLandscapeRight;
     AVCaptureConnection *video = [s_output connectionWithMediaType:AVMediaTypeVideo];

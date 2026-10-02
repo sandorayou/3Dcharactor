@@ -3061,6 +3061,16 @@ namespace RealtimeBodyTracking
             stableShoulderWidth = 0f;
         }
 
+        public void ResetCameraOrientationTracking()
+        {
+            ResetTrackingFiltersOnly();
+            lastTrackedPose = null;
+            cameraFramingReady = false;
+            filteredHeadRotationInitialized = false;
+            lastHeadRotationTime = float.NegativeInfinity;
+            smoother.Reset();
+        }
+
         public void ResumeAfterManualMotion()
         {
             // Keep the last valid tracking/fallback state. Resetting landmark and arm

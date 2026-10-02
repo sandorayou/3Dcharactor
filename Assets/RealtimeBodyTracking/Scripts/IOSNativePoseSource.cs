@@ -15,9 +15,11 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetMosaicScale(float scale);
 #endif
         private PosePacket latest;
+        private IOSAvatarGaze gaze;
         private void OnEnable()
         {
 #if UNITY_IOS && !UNITY_EDITOR
+            gaze = GetComponent<IOSAvatarGaze>() ?? gameObject.AddComponent<IOSAvatarGaze>();
             var camera = Camera.main;
             if (camera != null)
             {
@@ -26,7 +28,7 @@ namespace RealtimeBodyTracking
                 camera.allowHDR = false;
             }
             NativePoseCaptureSetFrontCamera(1);
-            NativePoseCaptureSetMosaicScale(16f);
+            NativePoseCaptureSetMosaicScale(48f);
             StartCapture();
 #endif
         }
@@ -43,12 +45,21 @@ namespace RealtimeBodyTracking
         [UnityEngine.Scripting.Preserve]
         public void OnNativeCameraState(string state) { Debug.Log($"[iOS camera] {state}", this); }
         [UnityEngine.Scripting.Preserve]
+        public void OnNativeCameraOrientationChanged(string unused)
+        {
+            latest = null;
+            if (gaze != null) gaze.ResetNeutral();
+            var driver = GetComponentInParent<HumanoidPoseDriver>();
+            if (driver != null) driver.ResetCameraOrientationTracking();
+        }
+        [UnityEngine.Scripting.Preserve]
         public void OnNativePoseJson(string json)
         {
             if (!isActiveAndEnabled) return;
             try
             {
                 latest = JsonUtility.FromJson<PosePacket>(json);
+                if (gaze != null) gaze.SetFace(latest);
                 if (latest?.head_rotation != null)
                 {
                     // The front-camera pipeline's roll is opposite to the displayed tilt.
