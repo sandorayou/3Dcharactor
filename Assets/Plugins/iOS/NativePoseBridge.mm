@@ -20,7 +20,7 @@ static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
 static BOOL s_useFrontCamera = YES;
-static CGFloat s_mosaicScale = 48.0;
+static CGFloat s_mosaicScale = 128.0;
 static CALayer *s_backgroundLayer;
 static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
@@ -211,6 +211,49 @@ static CIImage *CurrentPosePrivacyMask(MPPPoseLandmarkerResult *result, CGRect e
     return [[mask imageByApplyingFilter:@"CIGaussianBlur" withInputParameters:@{kCIInputRadiusKey:@1.0}] imageByCroppingToRect:extent];
 }
 
+static bool PrivacySkinPixel(unsigned char r, unsigned char g, unsigned char b) {
+    // Include pale and shaded skin as well as saturated skin. No pose is required.
+    const float cb = 128.f - .168736f * r - .331264f * g + .5f * b;
+    const float cr = 128.f + .5f * r - .418688f * g - .081312f * b;
+    return r >= 35 && r >= g && r > b && cb >= 77.f && cb <= 135.f &&
+           cr >= 132.f && cr <= 185.f;
+}
+
+static CIImage *SkinPrivacyMask(CVPixelBufferRef source) {
+    if (CVPixelBufferGetPixelFormatType(source) != kCVPixelFormatType_32BGRA) return nil;
+    const size_t width = CVPixelBufferGetWidth(source), height = CVPixelBufferGetHeight(source);
+    CVPixelBufferRef bitmap = nullptr;
+    if (CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
+                           nullptr, &bitmap) != kCVReturnSuccess) return nil;
+    if (CVPixelBufferLockBaseAddress(source, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) {
+        CVPixelBufferRelease(bitmap);
+        return nil;
+    }
+    if (CVPixelBufferLockBaseAddress(bitmap, 0) != kCVReturnSuccess) {
+        CVPixelBufferUnlockBaseAddress(source, kCVPixelBufferLock_ReadOnly);
+        CVPixelBufferRelease(bitmap);
+        return nil;
+    }
+    const auto *pixels = static_cast<const unsigned char *>(CVPixelBufferGetBaseAddress(source));
+    auto *mask = static_cast<unsigned char *>(CVPixelBufferGetBaseAddress(bitmap));
+    const size_t sourceStride = CVPixelBufferGetBytesPerRow(source);
+    const size_t maskStride = CVPixelBufferGetBytesPerRow(bitmap);
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            const auto *p = pixels + y * sourceStride + x * 4;
+            auto *m = mask + y * maskStride + x * 4;
+            m[0] = m[1] = m[2] = PrivacySkinPixel(p[2], p[1], p[0]) ? 255 : 0;
+            m[3] = 255;
+        }
+    }
+    CVPixelBufferUnlockBaseAddress(bitmap, 0);
+    CVPixelBufferUnlockBaseAddress(source, kCVPixelBufferLock_ReadOnly);
+    // Both images use CVPixelBuffer coordinates, including after device rotation.
+    CIImage *image = [CIImage imageWithCVPixelBuffer:bitmap];
+    CVPixelBufferRelease(bitmap);
+    return image;
+}
+
 static CIImage *WindowsStyleMosaic(CIImage *source, CGFloat scale) {
     CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
     [pixelate setValue:source forKey:kCIInputImageKey];
@@ -233,7 +276,18 @@ static void DisplaySynchronizedBackground(MPPPoseLandmarkerResult *result, NSInt
     if (source == nil || s_backgroundLayer == nil) return;
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
     CIImage *mask = CurrentPosePrivacyMask(result, source.extent, timestamp);
-    // Like Windows, keep the live camera visible even when no person is detected.
+    CIImage *skin = captured[@"skin"];
+    // Union, never intersection: skin stays hidden when the avatar/pose disappears.
+    if (skin != nil) {
+        mask = mask != nil ? [mask imageByApplyingFilter:@"CIMaximumCompositing"
+                                   withInputParameters:@{kCIInputBackgroundImageKey: skin}] : skin;
+        mask = [[mask imageByApplyingFilter:@"CIMorphologyMaximum"
+                       withInputParameters:@{kCIInputRadiusKey: @4.0}] imageByCroppingToRect:source.extent];
+    } else {
+        // A mask allocation/read failure must not expose the current camera frame.
+        mask = [[CIImage imageWithColor:[CIColor colorWithRed:1 green:1 blue:1]]
+                imageByCroppingToRect:source.extent];
+    }
     UIImage *image = nil;
     CIImage *processed = source;
     if (mask != nil) {
@@ -335,10 +389,11 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     if (image == nil) return;
     NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
     if (timestamp < s_orientationReadyTimestamp.load()) return;
+    CIImage *skin = SkinPrivacyMask(pixelBuffer);
     @synchronized(FrameGate()) {
         if (s_pendingCameraFrames == nil) s_pendingCameraFrames = [NSMutableDictionary dictionary];
         CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
-        s_pendingCameraFrames[@(timestamp)] = @{@"source": source};
+        s_pendingCameraFrames[@(timestamp)] = skin != nil ? @{@"source": source, @"skin": skin} : @{@"source": source};
         while (s_pendingCameraFrames.count > 8) {
             NSNumber *oldest = [[s_pendingCameraFrames.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
             [s_pendingCameraFrames removeObjectForKey:oldest];

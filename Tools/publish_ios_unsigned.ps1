@@ -40,13 +40,15 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not stage iOS export.' }
 if ($LASTEXITCODE -ne 0) { throw 'Could not commit iOS export.' }
 & git push origin "HEAD:refs/heads/$Branch"
 if ($LASTEXITCODE -ne 0) { throw 'GitHub push failed.' }
+$portPublishedCommit = (& git rev-parse HEAD).Trim()
 & gh workflow run build-ios.yml --repo sandorayou/3Dcharactor --ref $Branch
 if ($LASTEXITCODE -ne 0) { throw 'GitHub workflow dispatch failed.' }
 $portRun = $null
 for ($attempt = 0; $attempt -lt 10; $attempt++) {
-    $portRuns = & gh run list --repo sandorayou/3Dcharactor --workflow build-ios.yml --branch $Branch --event workflow_dispatch --limit 1 --json databaseId,url,headSha | ConvertFrom-Json
+    $portRuns = & gh run list --repo sandorayou/3Dcharactor --workflow build-ios.yml --branch $Branch --event workflow_dispatch --limit 10 --json databaseId,url,headSha | ConvertFrom-Json
     if ($LASTEXITCODE -ne 0) { throw 'Could not identify workflow run.' }
-    if ($portRuns) { $portRun = $portRuns[0]; break }
+    $portRun = $portRuns | Where-Object { $_.headSha -eq $portPublishedCommit } | Select-Object -First 1
+    if ($portRun) { break }
     Start-Sleep -Seconds 2
 }
 if (-not $portRun) { throw 'Workflow dispatched, but its run is not visible yet.' }
