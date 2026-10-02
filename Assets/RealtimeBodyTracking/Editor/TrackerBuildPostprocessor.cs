@@ -22,6 +22,11 @@ namespace RealtimeBodyTracking.Editor
 
             var destination = Path.Combine(buildDirectory, "python-tracker");
             CopyDirectory(source, destination);
+            var skinModel = Path.Combine(Application.streamingAssetsPath, "selfie_multiclass.tflite");
+            if (!File.Exists(skinModel))
+                throw new BuildFailedException($"Skin segmentation model was not found: {skinModel}");
+            Directory.CreateDirectory(Path.Combine(destination, "models"));
+            File.Copy(skinModel, Path.Combine(destination, "models", "selfie_multiclass.tflite"), true);
             Debug.Log($"[TrackerBuildPostprocessor] Copied camera tracker to {destination}");
         }
 
