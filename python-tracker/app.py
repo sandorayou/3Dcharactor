@@ -43,13 +43,21 @@ class FastPersonHider:
         return np.rint(frame * (1.0 - alpha) + pixelated * alpha).astype(np.uint8)
 
     def apply(self, frame, estimator: PoseEstimator):
+        small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
+        # Skin privacy is evaluated on every frame, independently of pose/face tracking.
+        b, g, r = [small[:, :, i].astype(np.float32) for i in range(3)]
+        cb = 128.0 - .168736 * r - .331264 * g + .5 * b
+        cr = 128.0 + .5 * r - .418688 * g - .081312 * b
+        skin_mask = ((r >= 35) & (r >= g) & (r > b) &
+                     (cb >= 77) & (cb <= 135) &
+                     (cr >= 132) & (cr <= 185)).astype(np.uint8) * 255
+        skin_mask = cv2.dilate(skin_mask, np.ones((5, 5), np.uint8), iterations=1)
         if not estimator.last_normalized_landmarks:
             if (self._last_face_mask is not None and
                     time.perf_counter() - self._last_face_seen_at <= .1):
-                return self._apply_mosaic(frame, self._last_face_mask)
-            return frame
-        small = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
-        mask = np.zeros((self._size[1], self._size[0]), dtype=np.uint8)
+                skin_mask = cv2.bitwise_or(skin_mask, self._last_face_mask)
+            return self._apply_mosaic(frame, skin_mask) if np.any(skin_mask) else frame
+        mask = skin_mask.copy()
         face_mask = np.zeros_like(mask)
         skin_candidate = None
         points = estimator.last_normalized_landmarks
