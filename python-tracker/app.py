@@ -22,7 +22,7 @@ PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
 
 
 class FastPersonHider:
-    """Mosaic only MediaPipe's body-skin and face-skin categories."""
+    """Mosaic only the face mask from the existing face tracker."""
     def __init__(self) -> None:
         self._mosaic_block = 16
 
@@ -152,6 +152,7 @@ def main() -> None:
     privacy = PrivacyFramePipeline(
         person_hider._apply_mosaic,
         lambda frame: frame_server.update(cv2.flip(frame, 1) if settings.preview_mirror else frame),
+        lambda: estimator.last_privacy_face,
     )
     camera.privacy_submit = lambda frame, timestamp: privacy.submit(
         cv2.flip(frame, 1) if settings.tracking_mirror else frame, timestamp)

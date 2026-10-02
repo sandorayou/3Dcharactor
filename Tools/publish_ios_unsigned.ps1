@@ -15,7 +15,7 @@ $portCpp = Get-ChildItem -LiteralPath (Join-Path $portOutput 'Il2CppOutputProjec
 foreach ($symbol in @('OnNativePoseJson','OnNativeCameraPermissionGranted','TryTakeLatestPose','WindowsPortStartRecording','OnIOSRecordingState')) {
     if (-not ($portCpp -match $symbol)) { throw "The exported player is missing $symbol" }
 }
-foreach ($model in @('pose_landmarker_lite.task','hand_landmarker.task','face_landmarker.task','selfie_multiclass.tflite')) {
+foreach ($model in @('pose_landmarker_lite.task','hand_landmarker.task','face_landmarker.task')) {
     $sourceHash = (Get-FileHash -LiteralPath (Join-Path $portRoot "Assets\StreamingAssets\$model")).Hash
     $exportHash = (Get-FileHash -LiteralPath (Join-Path $portOutput "Data\Raw\$model")).Hash
     if ($sourceHash -ne $exportHash) { throw "Exported model mismatch: $model" }
