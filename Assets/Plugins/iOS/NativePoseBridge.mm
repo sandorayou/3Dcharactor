@@ -12,6 +12,13 @@ static std::atomic<long long> s_orientationReadyTimestamp{0};
 static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
+static dispatch_queue_t s_skinQueue;
+static dispatch_semaphore_t s_backgroundSlots;
+static NSMutableArray<NSDictionary *> *s_playbackFrames;
+static CADisplayLink *s_playbackLink;
+static CFTimeInterval s_playbackOffset;
+static BOOL s_playbackStarted;
+static std::atomic<bool> s_captureStopping{false};
 static MPPPoseLandmarker *s_landmarker;
 static MPPHandLandmarker *s_handLandmarker;
 static MPPFaceLandmarker *s_faceLandmarker;
@@ -33,7 +40,6 @@ static NSInteger s_handPrivacyTimestamp, s_facePrivacyTimestamp;
 static UIInterfaceOrientation s_lastVideoOrientation = UIInterfaceOrientationUnknown;
 static void UpdateVideoOrientation(void);
 static NSMutableDictionary<NSNumber *, NSDictionary *> *s_pendingCameraFrames;
-static NSMutableDictionary<NSNumber *, UIImage *> *s_pendingProcessedFrames;
 static NSDictionary *s_latestHandPacket;
 static NSDictionary *s_latestFacePacket;
 static NSInteger s_latestHandTimestamp;
@@ -149,16 +155,21 @@ static void DisplaySynchronizedBackground(NSInteger timestamp) {
     NSDictionary *captured = nil;
     @synchronized(FrameGate()) {
         captured = s_pendingCameraFrames[@(timestamp)];
-        for (NSNumber *key in [s_pendingCameraFrames.allKeys copy])
-            if (key.longLongValue <= timestamp) [s_pendingCameraFrames removeObjectForKey:key];
+        [s_pendingCameraFrames removeObjectForKey:@(timestamp)];
     }
     CIImage *source = captured[@"source"];
-    if (source == nil || s_backgroundLayer == nil) return;
+    if (source == nil || s_backgroundLayer == nil) {
+        dispatch_semaphore_signal(s_backgroundSlots);
+        return;
+    }
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer: @NO}];
     CIImage *mask = captured[@"skin"];
     // No colour threshold, pose hull or full-frame fallback: only classified skin.
     // On an inference error keep the previously processed frame displayed.
-    if (mask == nil) return;
+    if (mask == nil) {
+        dispatch_semaphore_signal(s_backgroundSlots);
+        return;
+    }
     mask = [[mask imageByApplyingTransform:CGAffineTransformMakeScale(
         source.extent.size.width / mask.extent.size.width,
         source.extent.size.height / mask.extent.size.height)] imageByCroppingToRect:source.extent];
@@ -181,19 +192,13 @@ static void DisplaySynchronizedBackground(NSInteger timestamp) {
     }
     if (image != nil) {
         @synchronized(FrameGate()) {
-            if (s_pendingProcessedFrames == nil) s_pendingProcessedFrames = [NSMutableDictionary dictionary];
-            s_pendingProcessedFrames[@(timestamp)] = image;
-            while (s_pendingProcessedFrames.count > 8) {
-                NSNumber *oldest = [[s_pendingProcessedFrames.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
-                [s_pendingProcessedFrames removeObjectForKey:oldest];
-            }
+            if (s_playbackFrames == nil) s_playbackFrames = [NSMutableArray array];
+            [s_playbackFrames addObject:@{@"timestamp": @(timestamp), @"image": image}];
         }
-        // Publish the classified frame without waiting for body/hand/face tracking.
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (timestamp >= s_orientationReadyTimestamp.load() && s_backgroundLayer != nil)
-                s_backgroundLayer.contents = (__bridge id)image.CGImage;
-        });
+    } else {
+        dispatch_semaphore_signal(s_backgroundSlots);
     }
+
 }
 // Pose drives the body and must never wait for optional hand/face detectors.
 // Supplemental results are reused only for a short interval.
@@ -240,22 +245,30 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     }
 }
 
-@interface NativeSkinResultDelegate : NSObject <MPPImageSegmenterLiveStreamDelegate>
+@interface NativeBackgroundPlayout : NSObject
+- (void)tick:(CADisplayLink *)link;
 @end
-@implementation NativeSkinResultDelegate
-- (void)imageSegmenter:(MPPImageSegmenter *)segmenter
-    didFinishSegmentationWithResult:(MPPImageSegmenterResult *)result
-    timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
-    if (error != nil || result == nil || segmenter != s_skinSegmenter || !s_unityObject || timestamp < s_orientationReadyTimestamp.load()) return;
-    CIImage *skin = SkinPrivacyMask(result.categoryMask);
-    if (skin == nil) return;
+@implementation NativeBackgroundPlayout
+- (void)tick:(CADisplayLink *)link {
     @synchronized(FrameGate()) {
-        NSDictionary *captured = s_pendingCameraFrames[@(timestamp)];
-        if (captured == nil) return;
-        s_pendingCameraFrames[@(timestamp)] = @{@"source": captured[@"source"], @"skin": skin};
+        if (s_captureStopping.load() || s_playbackFrames.count == 0 || s_backgroundLayer == nil) return;
+        NSDictionary *next = s_playbackFrames.firstObject;
+        CFTimeInterval captured = [next[@"timestamp"] doubleValue] / 1000.0;
+        if (!s_playbackStarted) {
+            // Buffer three completed frames, then preserve camera timestamp spacing.
+            if (s_playbackFrames.count < 3) return;
+            s_playbackOffset = link.timestamp + .1 - captured;
+            s_playbackStarted = YES;
+        }
+        CFTimeInterval due = captured + s_playbackOffset;
+        if (link.timestamp < due) return;
+        // Underflow adds delay; never skip a processed frame to catch up.
+        if (link.timestamp - due > .050) s_playbackOffset += link.timestamp - due;
+        UIImage *image = next[@"image"];
+        s_backgroundLayer.contents = (__bridge id)image.CGImage;
+        [s_playbackFrames removeObjectAtIndex:0];
+        dispatch_semaphore_signal(s_backgroundSlots);
     }
-    // Display the very frame that was segmented, independently of pose success.
-    DisplaySynchronizedBackground(timestamp);
 }
 @end
 
@@ -274,25 +287,51 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     if (pixelBuffer == nil) return;
 
     if (s_landmarker == nil || s_unityObject == nil) return;
+    dispatch_semaphore_t slots = s_backgroundSlots;
+    if (slots == nil || s_captureStopping.load()) return;
+    NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
+    // Bound retained frames; wait rather than overwrite them if processing falls behind.
+    while (dispatch_semaphore_wait(slots, dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC)) != 0) {
+        if (s_captureStopping.load()) return;
+    }
+    if (s_captureStopping.load()) { dispatch_semaphore_signal(slots); return; }
     s_width = (int)CVPixelBufferGetWidth(pixelBuffer);
     s_height = (int)CVPixelBufferGetHeight(pixelBuffer);
     MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:pixelBuffer error:nil];
-    if (image == nil) return;
-    NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
-    if (timestamp < s_orientationReadyTimestamp.load()) return;
+    if (image == nil) { dispatch_semaphore_signal(slots); return; }
+    if (timestamp < s_orientationReadyTimestamp.load()) { dispatch_semaphore_signal(slots); return; }
     @synchronized(FrameGate()) {
         if (s_pendingCameraFrames == nil) s_pendingCameraFrames = [NSMutableDictionary dictionary];
         CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
         s_pendingCameraFrames[@(timestamp)] = @{@"source": source};
-        while (s_pendingCameraFrames.count > 16) {
-            NSNumber *oldest = [[s_pendingCameraFrames.allKeys sortedArrayUsingSelector:@selector(compare:)] firstObject];
-            [s_pendingCameraFrames removeObjectForKey:oldest];
-        }
+
     }
     [s_landmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_handLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_faceLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
-    [s_skinSegmenter segmentAsyncImage:image timestampInMilliseconds:timestamp error:nil];
+    MPPImageSegmenter *segmenter = s_skinSegmenter;
+    dispatch_async(s_skinQueue, ^{
+        @autoreleasepool {
+            if (s_captureStopping.load() || segmenter != s_skinSegmenter || timestamp < s_orientationReadyTimestamp.load()) {
+                @synchronized(FrameGate()) { [s_pendingCameraFrames removeObjectForKey:@(timestamp)]; }
+                dispatch_semaphore_signal(slots);
+                return;
+            }
+            NSError *error = nil;
+            MPPImageSegmenterResult *result = [segmenter segmentVideoFrame:image timestampInMilliseconds:timestamp error:&error];
+            CIImage *skin = result != nil ? SkinPrivacyMask(result.categoryMask) : nil;
+            @synchronized(FrameGate()) {
+                NSDictionary *captured = s_pendingCameraFrames[@(timestamp)];
+                if (skin == nil || error != nil || captured == nil || timestamp < s_orientationReadyTimestamp.load()) {
+                    [s_pendingCameraFrames removeObjectForKey:@(timestamp)];
+                    dispatch_semaphore_signal(slots);
+                    return; // Never present the raw frame on inference failure.
+                }
+                s_pendingCameraFrames[@(timestamp)] = @{@"source": captured[@"source"], @"skin": skin};
+            }
+            DisplaySynchronizedBackground(timestamp);
+        }
+    });
 }
 @end
 
@@ -424,7 +463,7 @@ static NativePoseCaptureDelegate *s_delegate;
 static NativePoseResultDelegate *s_resultDelegate;
 static NativeHandResultDelegate *s_handDelegate;
 static NativeFaceResultDelegate *s_faceDelegate;
-static NativeSkinResultDelegate *s_skinDelegate;
+static NativeBackgroundPlayout *s_playbackTarget;
 static BOOL s_paused;
 static BOOL s_stopping;
 
@@ -438,7 +477,9 @@ static void UpdateVideoOrientation() {
     s_orientationReadyTimestamp = (long long)(CACurrentMediaTime() * 1000.0) + 150;
     @synchronized(FrameGate()) {
         [s_pendingCameraFrames removeAllObjects];
-        [s_pendingProcessedFrames removeAllObjects];
+        for (NSDictionary *unused in s_playbackFrames) dispatch_semaphore_signal(s_backgroundSlots);
+        [s_playbackFrames removeAllObjects];
+        s_playbackStarted = NO;
     }
     @synchronized(PrivacyGate()) {
         s_facePrivacyPoints = nil; s_handPrivacyPoints = nil;
@@ -475,6 +516,7 @@ extern "C" void NativePoseCaptureStop();
 
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
+    s_captureStopping = false;
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
     s_lastSafeBackgroundImage = nil;
     s_latestHandPacket = nil; s_latestFacePacket = nil;
@@ -522,13 +564,23 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (skinPath == nil) return -9;
     MPPImageSegmenterOptions *skinOptions = [MPPImageSegmenterOptions new];
     skinOptions.baseOptions.modelAssetPath = skinPath;
-    skinOptions.runningMode = MPPRunningModeLiveStream;
+    skinOptions.runningMode = MPPRunningModeVideo;
     skinOptions.shouldOutputCategoryMask = YES;
     skinOptions.shouldOutputConfidenceMasks = NO;
-    s_skinDelegate = [NativeSkinResultDelegate new];
-    skinOptions.imageSegmenterLiveStreamDelegate = s_skinDelegate;
-    s_skinSegmenter = [[MPPImageSegmenter alloc] initWithOptions:skinOptions error:nil];
+    skinOptions.baseOptions.delegate = MPPDelegateGPU;
+    s_skinQueue = dispatch_queue_create("jp.project.skin-fifo", DISPATCH_QUEUE_SERIAL);
+    // GPU creation and inference stay on the same queue.
+    dispatch_sync(s_skinQueue, ^{
+        s_skinSegmenter = [[MPPImageSegmenter alloc] initWithOptions:skinOptions error:nil];
+        if (s_skinSegmenter == nil) {
+            skinOptions.baseOptions.delegate = MPPDelegateCPU;
+            s_skinSegmenter = [[MPPImageSegmenter alloc] initWithOptions:skinOptions error:nil];
+        }
+    });
     if (s_skinSegmenter == nil) return -10;
+    s_backgroundSlots = dispatch_semaphore_create(60);
+    s_playbackStarted = NO;
+
 
     s_session = [AVCaptureSession new];
     [s_session beginConfiguration];
@@ -546,7 +598,7 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     s_output = [AVCaptureVideoDataOutput new];
     s_output.videoSettings = @{(id)kCVPixelBufferPixelFormatTypeKey:
                                @(kCVPixelFormatType_32BGRA)};
-    s_output.alwaysDiscardsLateVideoFrames = YES;
+    s_output.alwaysDiscardsLateVideoFrames = NO;
     s_queue = dispatch_queue_create("jp.project.native-pose-camera", DISPATCH_QUEUE_SERIAL);
     s_delegate = [NativePoseCaptureDelegate new];
     [s_output setSampleBufferDelegate:s_delegate queue:s_queue];
@@ -570,6 +622,10 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
             s_backgroundLayer.frame = unityView.frame;
             [container.layer insertSublayer:s_backgroundLayer below:unityView.layer];
         }
+        s_playbackTarget = [NativeBackgroundPlayout new];
+        s_playbackLink = [CADisplayLink displayLinkWithTarget:s_playbackTarget selector:@selector(tick:)];
+        s_playbackLink.preferredFramesPerSecond = 60;
+        [s_playbackLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
         UpdateVideoOrientation();
     });
     [s_session startRunning];
@@ -579,6 +635,7 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
 
 extern "C" void NativePoseCaptureSetPaused(int paused) {
     s_paused = paused != 0;
+    s_captureStopping = s_paused;
     if (s_paused) [s_session stopRunning];
     else if (s_session != nil) [s_session startRunning];
     if (s_unityObject != nil) NotifyCameraState(s_paused ? @"camera_paused" : @"camera_resumed");
@@ -600,7 +657,12 @@ extern "C" void NativePoseCaptureSetMosaicScale(float scale) {
 
 extern "C" void NativePoseCaptureStop() {
     s_stopping = YES;
+    s_captureStopping = true;
+    // Unblock capture before stopping the session or draining the worker queue.
+    if (s_backgroundSlots != nil) for (int i = 0; i < 60; ++i) dispatch_semaphore_signal(s_backgroundSlots);
+    [s_playbackLink invalidate]; s_playbackLink = nil; s_playbackTarget = nil;
     [s_session stopRunning];
+    if (s_skinQueue != nil) dispatch_sync(s_skinQueue, ^{});
     [s_output setSampleBufferDelegate:nil queue:NULL];
     [s_backgroundLayer removeFromSuperlayer];
     s_backgroundLayer = nil;
@@ -610,18 +672,19 @@ extern "C" void NativePoseCaptureStop() {
     s_latestHandTimestamp = 0; s_latestFaceTimestamp = 0;
     @synchronized(FrameGate()) {
         [s_pendingCameraFrames removeAllObjects]; s_pendingCameraFrames = nil;
-        [s_pendingProcessedFrames removeAllObjects]; s_pendingProcessedFrames = nil;
     }
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;
     s_handLandmarker = nil;
     s_faceLandmarker = nil;
-    s_skinSegmenter = nil;
     s_resultDelegate = nil;
     s_handDelegate = nil;
     s_faceDelegate = nil;
-    s_skinDelegate = nil;
+    [s_playbackFrames removeAllObjects]; s_playbackFrames = nil;
+    s_backgroundSlots = nil;
+    if (s_skinQueue != nil) dispatch_sync(s_skinQueue, ^{ s_skinSegmenter = nil; });
+    s_skinQueue = nil;
     @synchronized(PrivacyGate()) {
         s_posePrivacyPoints = nil;
         s_handPrivacyPoints = nil; s_facePrivacyPoints=nil;

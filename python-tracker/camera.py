@@ -16,6 +16,7 @@ class CameraCapture:
         self._frames = frames
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self.privacy_submit = None
         self.last_frame = None
         self.camera_fps = 0.0
         self.error: str | None = None
@@ -54,10 +55,14 @@ class CameraCapture:
                 captured_at_ms = time.monotonic_ns() // 1_000_000
                 self.last_frame = frame
                 self._frames.put(frame, captured_at_ms)
+                if self.privacy_submit is not None:
+                    self.privacy_submit(frame, captured_at_ms)
                 count += 1
                 elapsed = time.perf_counter() - window_start
                 if elapsed >= 1:
                     self.camera_fps, count, window_start = count / elapsed, 0, time.perf_counter()
+        except Exception as error:
+            self.error = str(error)
         finally:
             capture.release()
             self.finished = True

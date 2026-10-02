@@ -50,22 +50,6 @@ class PoseEstimator:
             output_facial_transformation_matrixes=True,
         )
         self._face_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(face_options)
-        # Run independently of body tracking: missing pose must not disable skin privacy.
-        tracker_root = Path(__file__).resolve().parent
-        skin_model = tracker_root / "models/selfie_multiclass.tflite"
-        if not skin_model.is_file():
-            skin_model = tracker_root.parent / "Assets/StreamingAssets/selfie_multiclass.tflite"
-        self._skin_segmenter = mp.tasks.vision.ImageSegmenter.create_from_options(
-            mp.tasks.vision.ImageSegmenterOptions(
-                base_options=mp.tasks.BaseOptions(model_asset_path=str(skin_model)),
-                running_mode=mp.tasks.vision.RunningMode.IMAGE,
-                output_category_mask=True,
-                output_confidence_masks=False,
-            ))
-        self.last_skin_mask = None
-        self.last_skin_frame = None
-        self._skin_future = None
-        self._skin_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="skin-privacy")
         self._inference_executor = ThreadPoolExecutor(
             max_workers=3,
             thread_name_prefix="mediapipe",
@@ -86,22 +70,9 @@ class PoseEstimator:
 
     def close(self) -> None:
         self._inference_executor.shutdown(wait=True, cancel_futures=True)
-        self._skin_executor.shutdown(wait=True, cancel_futures=True)
         self._landmarker.close()
         self._hand_landmarker.close()
         self._face_landmarker.close()
-        self._skin_segmenter.close()
-
-    def _segment_skin_frame(self, frame):
-        # Keep the classified frame with its mask; never apply old labels to a new frame.
-        image = mp.Image(image_format=mp.ImageFormat.SRGB,
-                         data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        result = self._skin_segmenter.segment(image)
-        if result.category_mask is None:
-            raise RuntimeError("Skin segmentation returned no category mask")
-        labels = result.category_mask.numpy_view().squeeze()
-        mask = ((labels == 2) | (labels == 3)).astype(np.uint8) * 255
-        return frame, mask
 
     def estimate(self, frame: np.ndarray, timestamp_ms: int, frame_number: int) -> PosePacket:
         resized, scale, pad_left, pad_top = self._letterbox(frame)
@@ -117,12 +88,6 @@ class PoseEstimator:
         face_future = self._inference_executor.submit(
             self._face_landmarker.detect_for_video, media_image, timestamp_ms
         )
-        # Keep one skin job in flight. Do not make avatar tracking wait for segmentation.
-        if self._skin_future is not None and self._skin_future.done():
-            self.last_skin_frame, self.last_skin_mask = self._skin_future.result()
-            self._skin_future = None
-        if self._skin_future is None:
-            self._skin_future = self._skin_executor.submit(self._segment_skin_frame, frame.copy())
         result = pose_future.result()
         hand_result = hand_future.result()
         face_result = face_future.result()

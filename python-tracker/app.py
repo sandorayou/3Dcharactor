@@ -14,6 +14,7 @@ from camera import CameraCapture
 from debug_recorder import DebugRecorder, DebugVideoRecorder
 from frame_buffer import LatestFrameBuffer
 from pose_estimator import PoseEstimator
+from privacy_pipeline import PrivacyFramePipeline
 from settings import TrackerSettings
 from udp_sender import UdpPoseSender
 
@@ -36,12 +37,6 @@ class FastPersonHider:
         # Hard category boundaries keep clothes/background outside the effect.
         return np.where((full_mask > 0)[:, :, None], pixelated, frame)
 
-    def apply(self, frame, estimator: PoseEstimator):
-        mask = estimator.last_skin_mask
-        if mask is None:
-            return None  # Wait for a classified frame rather than displaying raw camera input.
-        source = estimator.last_skin_frame
-        return self._apply_mosaic(source, mask) if np.any(mask) else source
 
 
 class TrackerFrameServer:
@@ -154,11 +149,19 @@ def main() -> None:
     video_recorder = DebugVideoRecorder(settings.debug_video_path, settings.camera_fps)
     frame_server = TrackerFrameServer(settings.video_port)
     person_hider = FastPersonHider()
+    privacy = PrivacyFramePipeline(
+        person_hider._apply_mosaic,
+        lambda frame: frame_server.update(cv2.flip(frame, 1) if settings.preview_mirror else frame),
+    )
+    camera.privacy_submit = lambda frame, timestamp: privacy.submit(
+        cv2.flip(frame, 1) if settings.tracking_mirror else frame, timestamp)
     camera.start()
     frame_number, last_inference = 0, 0.0
 
     try:
         while camera.error is None and not camera.finished:
+            if privacy.error:
+                raise RuntimeError(privacy.error)
             now = time.monotonic()
             item = frames.take() if now - last_inference >= 1.0 / settings.inference_fps else None
             if item is not None:
@@ -169,10 +172,6 @@ def main() -> None:
                 packet = estimator.estimate(frame, timestamp_ms, frame_number)
                 sender.send(packet)
                 recorder.write(packet, estimator.last_hand_assignments)
-                hidden_frame = person_hider.apply(frame, estimator)
-                if hidden_frame is not None:
-                    unity_background = cv2.flip(hidden_frame, 1) if settings.preview_mirror else hidden_frame
-                    frame_server.update(unity_background)
                 last_inference = now
             if settings.preview and camera.last_frame is not None:
                 latency = time.monotonic_ns() // 1_000_000 - (item[1] if item else 0)
@@ -193,6 +192,7 @@ def main() -> None:
                 time.sleep(0.001)
     finally:
         camera.stop()
+        privacy.close()
         estimator.close()
         sender.close()
         recorder.close()
