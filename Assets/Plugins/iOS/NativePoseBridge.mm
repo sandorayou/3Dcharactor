@@ -20,7 +20,7 @@ static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
 static BOOL s_useFrontCamera = YES;
-static CGFloat s_mosaicScale = 128.0;
+static CGFloat s_mosaicScale = 48.0;
 static CALayer *s_backgroundLayer;
 static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;

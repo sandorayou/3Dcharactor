@@ -28,7 +28,7 @@ namespace RealtimeBodyTracking
                 camera.allowHDR = false;
             }
             NativePoseCaptureSetFrontCamera(1);
-            NativePoseCaptureSetMosaicScale(128f);
+            NativePoseCaptureSetMosaicScale(48f);
             StartCapture();
 #endif
         }
