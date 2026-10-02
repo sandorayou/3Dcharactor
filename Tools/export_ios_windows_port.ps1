@@ -82,6 +82,19 @@ foreach ($portTree in @('Assets','Packages','ProjectSettings')) {
 if ([IO.Path]::GetFullPath($portSnapshot).StartsWith($portCheckout + '\', [StringComparison]::OrdinalIgnoreCase)) {
     Remove-Item -LiteralPath $portSnapshot -Recurse -Force
 } else { throw 'Snapshot cleanup escaped its managed directory.' }
+# Editor automation is not a player dependency. Exclude it only in this managed
+# export copy, so its editor-only assembly references cannot block the app build.
+$portExcludedEditorPackages = @('com.gamelovers.mcp-unity')
+foreach ($portPackageFile in @('manifest.json', 'packages-lock.json')) {
+    $portPackagePath = Join-Path $portCheckout "Packages\$portPackageFile"
+    if (Test-Path -LiteralPath $portPackagePath) {
+        $portPackageData = Get-Content -LiteralPath $portPackagePath -Raw | ConvertFrom-Json
+        foreach ($portExcludedPackage in $portExcludedEditorPackages) {
+            $portPackageData.dependencies.PSObject.Properties.Remove($portExcludedPackage)
+        }
+        $portPackageData | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $portPackagePath -Encoding utf8
+    }
+}
 # Reuse import/IL2CPP caches, but create a clean Xcode output to prevent stale files.
 $portSource = Join-Path $portCheckout 'Builds\iOS-WindowsPort'
 if ([IO.Path]::GetFullPath($portSource) -ne $portCheckout + '\Builds\iOS-WindowsPort') {
@@ -123,6 +136,7 @@ New-Item -ItemType Directory -Path $portDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $portSource | Copy-Item -Destination $portDestination -Recurse -Force
 @{ commit=$portCommit; unity='2022.3.62f3'; sourceArchiveSHA256=(Get-FileHash -LiteralPath $portArchive).Hash;
    exportedUTC=[DateTime]::UtcNow.ToString('o'); unityLog=$portLog;
-   cacheReused=$portCacheReused; syncSeconds=$portSyncSeconds; totalSeconds=$portTimer.Elapsed.TotalSeconds } |
+   cacheReused=$portCacheReused; syncSeconds=$portSyncSeconds; totalSeconds=$portTimer.Elapsed.TotalSeconds;
+   excludedEditorPackages=$portExcludedEditorPackages } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $portDestination 'source-manifest.json') -Encoding utf8
 Write-Output "SUCCESS: Xcode export at $portDestination ($portCommit)"
