@@ -14,7 +14,7 @@ static std::atomic<long long> s_orientationReadyTimestamp{0};
 static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
-static float s_skinCb = 105.f, s_skinCr = 151.f;
+static float s_skinCb = 116.f, s_skinCr = 142.f;
 static bool s_skinRegistered = false;
 static std::atomic<bool> s_captureStopping{false};
 static MPPPoseLandmarker *s_landmarker;
@@ -139,9 +139,10 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
     for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
         const auto *p = pixels + y*stride + x*4;
         const float luma = .299f*p[2] + .587f*p[1] + .114f*p[0];
-        const float cb = 128.f + .564f*(p[0]-luma), cr = 128.f + .713f*(p[2]-luma);
-        const float dc=(cb-s_skinCb)/9.f, dr=(cr-s_skinCr)/8.f, distance=dc*dc+dr*dr;
-        const bool skin = luma>20 && luma<250 && cr>132 && cb<132 && cr<s_skinCr+7 && distance<1.44f;
+        const float normalizer = 140.f / MAX(luma,20.f);
+        const float cb = 128.f + .564f*(p[0]-luma)*normalizer, cr = 128.f + .713f*(p[2]-luma)*normalizer;
+        const float dc=(cb-s_skinCb)/4.f, dr=(cr-s_skinCr)/5.f, distance=dc*dc+dr*dr;
+        const bool skin = luma>20 && luma<250 && cr>132 && cb<132 && cr<s_skinCr+7 && distance<2.25f;
         raw[y*width+x] = skin ? 255 : 0;
         luminance[y*width+x] = luma;
         if (skin && distance<.64f && x>=width*35/100 && x<width*65/100 && y>=height/10 && y<height*3/5) {
@@ -150,7 +151,7 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
     }
     CVPixelBufferUnlockBaseAddress(current, kCVPixelBufferLock_ReadOnly);
     if (samples>=40) for(size_t i=0;i<count;++i)
-        if(luminance[i]<sumY/samples*.8f) raw[i]=0;
+        if(luminance[i]<sumY/samples*.55f) raw[i]=0;
     // Separable closing: four 9-pixel passes instead of two 9x9 passes.
     std::vector<unsigned char> temporary(count);
     for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
@@ -215,8 +216,8 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
     CVPixelBufferRelease(bitmap);
     if(samples>=40) {
         float rate=s_skinRegistered ? .04f : .25f;
-        s_skinCb=ClampColour(s_skinCb+ClampColour(sumCb/samples-s_skinCb,-4.f,4.f)*rate,95.f,115.f);
-        s_skinCr=ClampColour(s_skinCr+ClampColour(sumCr/samples-s_skinCr,-4.f,4.f)*rate,143.f,165.f);
+        s_skinCb=ClampColour(s_skinCb+ClampColour(sumCb/samples-s_skinCb,-4.f,4.f)*rate,110.f,122.f);
+        s_skinCr=ClampColour(s_skinCr+ClampColour(sumCr/samples-s_skinCr,-4.f,4.f)*rate,136.f,148.f);
         s_skinRegistered=true;
     }
     return mask;
@@ -495,7 +496,7 @@ extern "C" void NativePoseCaptureStop();
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
     s_captureStopping = false;
-    s_skinCb=105.f; s_skinCr=151.f; s_skinRegistered=false;
+    s_skinCb=116.f; s_skinCr=142.f; s_skinRegistered=false;
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
     s_lastSafeBackgroundImage = nil;
     s_latestHandPacket = nil; s_latestFacePacket = nil;

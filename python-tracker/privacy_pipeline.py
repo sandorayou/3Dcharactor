@@ -9,18 +9,18 @@ class AdaptiveSkinMask:
     """Colour-only classification; luminance is separate from skin chroma."""
 
     def __init__(self):
-        self.center = np.array([105., 151.], np.float32)  # Cb, Cr bootstrap prior
-        self.spread = np.array([9., 8.], np.float32)
+        self.center = np.array([116., 142.], np.float32)  # Cb, Cr measured from the supplied skin sample
+        self.spread = np.array([4., 5.], np.float32)
         self.registered = False
 
     def classify(self, frame):
         height = max(1, round(160 * frame.shape[0] / frame.shape[1]))
         small = cv2.resize(frame, (160, height), interpolation=cv2.INTER_LINEAR)
         ycc = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb).astype(np.float32)
-        chroma = ycc[:, :, [2, 1]]
+        chroma = 128. + (ycc[:, :, [2, 1]] - 128.) * (140. / np.maximum(ycc[:, :, 0], 20.))[:, :, None]
         distance = np.sum(((chroma - self.center) / self.spread) ** 2, axis=2)
         plausible = (ycc[:, :, 0] > 20) & (ycc[:, :, 0] < 250) & (chroma[:, :, 1] > 132) & (chroma[:, :, 0] < 132) & (chroma[:, :, 1] < self.center[1] + 7)
-        raw = (plausible & (distance < 1.44)).astype(np.uint8) * 255
+        raw = (plausible & (distance < 2.25)).astype(np.uint8) * 255
         # Estimate local illumination from central high-confidence colour samples.
         h, w = raw.shape
         sample = (raw > 0) & (distance < .64)
@@ -29,7 +29,7 @@ class AdaptiveSkinMask:
         sample &= region
         if np.count_nonzero(sample) >= 40:
             illumination = float(np.mean(ycc[:, :, 0][sample]))
-            raw[ycc[:, :, 0] < illumination * .8] = 0
+            raw[ycc[:, :, 0] < illumination * .55] = 0
         # Close small gaps around eyebrows; fill enclosed non-skin eye/mouth holes.
         mask = cv2.morphologyEx(raw, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
         # A cropped eye can connect to the image edge: bridge short bounded row gaps too.
@@ -45,7 +45,7 @@ class AdaptiveSkinMask:
             target = np.mean(chroma[sample], axis=0)
             rate = .25 if not self.registered else .04
             self.center += np.clip(target - self.center, -4, 4) * rate
-            self.center = np.clip(self.center, [95, 143], [115, 165])
+            self.center = np.clip(self.center, [110, 136], [122, 148])
             self.registered = True
         return mask
 
