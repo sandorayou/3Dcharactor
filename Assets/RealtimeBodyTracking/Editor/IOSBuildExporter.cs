@@ -8,6 +8,9 @@ namespace RealtimeBodyTracking.Editor
 {
     public static class IOSBuildExporter
     {
+        public const string AppDisplayName = "MyProject5";
+        public const string AppBundleIdentifier = "com.sandorayou.myproject5";
+
         [MenuItem("Build/Export updated iOS project")]
         public static void Export()
         {
@@ -17,6 +20,8 @@ namespace RealtimeBodyTracking.Editor
             if (scenes.Length == 0)
                 scenes = new[] { "Assets/Scenes/SampleScene.unity" };
 
+            var oldProductName = PlayerSettings.productName;
+            var oldIdentifier = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.iOS);
             var oldAlpha = PlayerSettings.preserveFramebufferAlpha;
             var oldVersion = PlayerSettings.iOS.targetOSVersionString;
             var oldUsage = PlayerSettings.iOS.cameraUsageDescription;
@@ -27,6 +32,8 @@ namespace RealtimeBodyTracking.Editor
             var textures = new List<(TextureImporter importer, TextureImporterPlatformSettings settings)>();
             try
             {
+                PlayerSettings.productName = AppDisplayName;
+                PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.iOS, AppBundleIdentifier);
                 // Both are necessary: transparent camera clear and an alpha-capable framebuffer.
                 PlayerSettings.preserveFramebufferAlpha = true;
                 PlayerSettings.iOS.targetOSVersionString = "15.0";
@@ -62,6 +69,8 @@ namespace RealtimeBodyTracking.Editor
             }
             finally
             {
+                PlayerSettings.productName = oldProductName;
+                PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.iOS, oldIdentifier);
                 PlayerSettings.preserveFramebufferAlpha = oldAlpha;
                 PlayerSettings.iOS.targetOSVersionString = oldVersion;
                 PlayerSettings.iOS.cameraUsageDescription = oldUsage;

@@ -18,6 +18,15 @@ namespace RealtimeBodyTracking.Editor
             var project = new PBXProject();
             project.ReadFromFile(projectPath);
             var framework = project.GetUnityFrameworkTargetGuid();
+            var appTarget = project.GetUnityMainTargetGuid();
+            project.SetBuildProperty(appTarget, "PRODUCT_BUNDLE_IDENTIFIER", IOSBuildExporter.AppBundleIdentifier);
+            var infoPath = Path.Combine(output, "Info.plist");
+            var info = new PlistDocument();
+            info.ReadFromFile(infoPath);
+            info.root.SetString("CFBundleDisplayName", IOSBuildExporter.AppDisplayName);
+            info.root.SetString("CFBundleName", IOSBuildExporter.AppDisplayName);
+            info.root.SetString("CFBundleIdentifier", IOSBuildExporter.AppBundleIdentifier);
+            info.WriteToFile(infoPath);
             foreach (var name in new[] { "AVFoundation.framework", "CoreMedia.framework", "CoreVideo.framework",
                 "CoreImage.framework", "QuartzCore.framework", "UIKit.framework", "Metal.framework", "ReplayKit.framework" })
                 project.AddFrameworkToProject(framework, name, false);

@@ -97,6 +97,8 @@ jobs:
           rm -rf "$RUNNER_TEMP/Payload"
           mkdir -p "$RUNNER_TEMP/Payload"
           APP_PATH=$(find "$RUNNER_TEMP/App" -name "*.app" | head -n 1)
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")" = "MyProject5"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = "com.sandorayou.myproject5"
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/"
           du -sh "$APP_PATH"
           find "$RUNNER_TEMP/Payload" -name '*.dSYM' -type d -prune -exec rm -rf {} +
