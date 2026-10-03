@@ -5,6 +5,7 @@
 #import "UnityInterface.h"
 #import <MediaPipeTasksVision/MediaPipeTasksVision.h>
 
+#include "PrivacyMosaicCore.h"
 #include <atomic>
 #include <cmath>
 #include <vector>
@@ -14,8 +15,7 @@ static std::atomic<long long> s_orientationReadyTimestamp{0};
 static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
-static float s_skinCb = 116.f, s_skinCr = 142.f;
-static bool s_skinRegistered = false;
+static PrivacyMosaic::SkinClassifier s_skinClassifier(107.f,157.f,6.f,7.f);
 static std::atomic<bool> s_captureStopping{false};
 static MPPPoseLandmarker *s_landmarker;
 static MPPHandLandmarker *s_handLandmarker;
@@ -23,7 +23,7 @@ static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
 static BOOL s_useFrontCamera = YES;
-static CGFloat s_mosaicScale = 48.0;
+static CGFloat s_mosaicScale = 16.0;
 static CALayer *s_backgroundLayer;
 static CIContext *s_ciContext;
 static CFTimeInterval s_lastBackgroundFrame;
@@ -105,25 +105,38 @@ static NSDictionary *HeadRotationFromFaceMatrix(MPPTransformMatrix *matrix) {
     return @{@"x": @(x/norm), @"y": @(y/norm), @"z": @(z/norm), @"w": @(w/norm)};
 }
 
+static CGColorSpaceRef PrivacySRGB() {
+    static CGColorSpaceRef space;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ space=CGColorSpaceCreateWithName(kCGColorSpaceSRGB); });
+    return space;
+}
 static CIImage *WindowsStyleMosaic(CIImage *source, CGFloat scale) {
-    CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
-    [pixelate setValue:source forKey:kCIInputImageKey];
-    // Preserve the existing 48-pixel face mosaic.
-    [pixelate setValue:@(MAX(2.0, scale)) forKey:kCIInputScaleKey];
-    [pixelate setValue:[CIVector vectorWithX:CGRectGetMidX(source.extent)
-                                           Y:CGRectGetMidY(source.extent)]
-                 forKey:kCIInputCenterKey];
-    return [pixelate.outputImage imageByCroppingToRect:source.extent];
+    int w=(int)source.extent.size.width,h=(int)source.extent.size.height;
+    CVPixelBufferRef pixels=nullptr;
+    if(CVPixelBufferCreate(kCFAllocatorDefault,w,h,kCVPixelFormatType_32BGRA,nullptr,&pixels)!=kCVReturnSuccess) return source;
+    [s_ciContext render:source toCVPixelBuffer:pixels bounds:CGRectMake(0,0,w,h) colorSpace:PrivacySRGB()];
+    if(CVPixelBufferLockBaseAddress(pixels,kCVPixelBufferLock_ReadOnly)!=kCVReturnSuccess) {CVPixelBufferRelease(pixels);return source;}
+    auto result=PrivacyMosaic::Pixelate(static_cast<const uint8_t *>(CVPixelBufferGetBaseAddress(pixels)),w,h,CVPixelBufferGetBytesPerRow(pixels),MAX(2,(int)scale));
+    CVPixelBufferUnlockBaseAddress(pixels,kCVPixelBufferLock_ReadOnly);
+    if(CVPixelBufferLockBaseAddress(pixels,0)!=kCVReturnSuccess) {CVPixelBufferRelease(pixels);return source;}
+    auto *output=static_cast<uint8_t *>(CVPixelBufferGetBaseAddress(pixels));
+    size_t outputStride=CVPixelBufferGetBytesPerRow(pixels);
+    for(int y=0;y<h;++y) std::copy(result.begin()+y*w*4,result.begin()+(y+1)*w*4,output+y*outputStride);
+    CVPixelBufferUnlockBaseAddress(pixels,0);
+    CIImage *image=[CIImage imageWithCVPixelBuffer:pixels options:@{kCIImageColorSpace:(__bridge id)PrivacySRGB()}];
+    CVPixelBufferRelease(pixels);
+    return image;
 }
 
 static CVPixelBufferRef ColourFrame(CIImage *source) {
-    size_t width = 160, height = MAX(1, (size_t)(160 * source.extent.size.height / source.extent.size.width));
+    size_t width = 160, height = MAX(1, (size_t)std::lround(160 * source.extent.size.height / source.extent.size.width));
     CVPixelBufferRef buffer = nullptr;
     if (CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
                            nullptr, &buffer) != kCVReturnSuccess) return nullptr;
-    CIImage *small = [source imageByApplyingTransform:CGAffineTransformMakeScale(
+    CIImage *small = [[source imageBySamplingLinear] imageByApplyingTransform:CGAffineTransformMakeScale(
         width / source.extent.size.width, height / source.extent.size.height)];
-    [s_ciContext render:small toCVPixelBuffer:buffer];
+    [s_ciContext render:small toCVPixelBuffer:buffer bounds:CGRectMake(0,0,width,height) colorSpace:PrivacySRGB()];
     return buffer;
 }
 
@@ -132,108 +145,34 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
     const int width = (int)CVPixelBufferGetWidth(current), height = (int)CVPixelBufferGetHeight(current);
     const size_t stride = CVPixelBufferGetBytesPerRow(current);
     const auto *pixels = static_cast<const unsigned char *>(CVPixelBufferGetBaseAddress(current));
-    const size_t count = (size_t)width * height;
-    std::vector<unsigned char> raw(count), dilated(count), closed(count), outside(count);
-    std::vector<float> luminance(count);
-    float sumCb=0, sumCr=0, sumY=0; int samples=0;
-    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
-        const auto *p = pixels + y*stride + x*4;
-        const float luma = .299f*p[2] + .587f*p[1] + .114f*p[0];
-        const float normalizer = 140.f / MAX(luma,20.f);
-        const float cb = 128.f + .564f*(p[0]-luma)*normalizer, cr = 128.f + .713f*(p[2]-luma)*normalizer;
-        const float dc=(cb-s_skinCb)/4.f, dr=(cr-s_skinCr)/5.f, distance=dc*dc+dr*dr;
-        const bool skin = luma>20 && luma<250 && cr>132 && cb<132 && cr<s_skinCr+7 && distance<2.25f;
-        raw[y*width+x] = skin ? 255 : 0;
-        luminance[y*width+x] = luma;
-        if (skin && distance<.64f && x>=width*35/100 && x<width*65/100 && y>=height/10 && y<height*3/5) {
-            sumCb+=cb; sumCr+=cr; sumY+=luma; ++samples;
-        }
-    }
-    CVPixelBufferUnlockBaseAddress(current, kCVPixelBufferLock_ReadOnly);
-    if (samples>=40) for(size_t i=0;i<count;++i)
-        if(luminance[i]<sumY/samples*.55f) raw[i]=0;
-    // Separable closing: four 9-pixel passes instead of two 9x9 passes.
-    std::vector<unsigned char> temporary(count);
-    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
-        unsigned char value=0;
-        for(int dx=-4;dx<=4;++dx) value=MAX(value,raw[y*width+ClampColour(x+dx,0,width-1)]);
-        temporary[y*width+x]=value;
-    }
-    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
-        unsigned char value=0;
-        for(int dy=-4;dy<=4;++dy) value=MAX(value,temporary[ClampColour(y+dy,0,height-1)*width+x]);
-        dilated[y*width+x]=value;
-    }
-    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
-        unsigned char value=255;
-        for(int dx=-4;dx<=4;++dx) value=MIN(value,dilated[y*width+ClampColour(x+dx,0,width-1)]);
-        temporary[y*width+x]=value;
-    }
-    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
-        unsigned char value=255;
-        for(int dy=-4;dy<=4;++dy) value=MIN(value,temporary[ClampColour(y+dy,0,height-1)*width+x]);
-        closed[y*width+x]=value;
-    }
-    // Bridge short bounded horizontal gaps even when an eye hole reaches the frame edge.
-    for(int y=0;y<height;++y) {
-        int x=0;
-        while(x<width) {
-            if(closed[y*width+x]) { ++x; continue; }
-            int start=x;
-            while(x<width && !closed[y*width+x]) ++x;
-            if(start>0 && x<width && x-start<=width/5)
-                for(int fill=start;fill<x;++fill) closed[y*width+fill]=255;
-        }
-    }
-    std::vector<int> queue;
-    queue.reserve(count);
-    auto add = [&](int x,int y) {
-        int index=y*width+x;
-        if (!closed[index] && !outside[index]) { outside[index]=255; queue.push_back(index); }
-    };
-    for (int x=0; x<width; ++x) { add(x,0); add(x,height-1); }
-    for (int y=0; y<height; ++y) { add(0,y); add(width-1,y); }
-    for (size_t head=0; head<queue.size(); ++head) {
-        int x=queue[head]%width, y=queue[head]/width;
-        if (x>0) add(x-1,y); if(x+1<width) add(x+1,y);
-        if (y>0) add(x,y-1); if(y+1<height) add(x,y+1);
-    }
-    for (size_t i=0;i<count;++i) closed[i]=closed[i] || !outside[i] ? 255 : 0;
+    auto mask=s_skinClassifier.Classify(pixels,width,height,stride);
+    CVPixelBufferUnlockBaseAddress(current,kCVPixelBufferLock_ReadOnly);
     CVPixelBufferRef bitmap=nullptr;
     if (CVPixelBufferCreate(kCFAllocatorDefault,width,height,kCVPixelFormatType_32BGRA,nullptr,&bitmap)!=kCVReturnSuccess) return nil;
     if (CVPixelBufferLockBaseAddress(bitmap,0)!=kCVReturnSuccess) { CVPixelBufferRelease(bitmap); return nil; }
     auto *output=static_cast<unsigned char *>(CVPixelBufferGetBaseAddress(bitmap));
     const size_t outputStride=CVPixelBufferGetBytesPerRow(bitmap);
     for(int y=0;y<height;++y) for(int x=0;x<width;++x) {
-        unsigned char value=0;
-        for(int dy=-1;dy<=1;++dy) for(int dx=-1;dx<=1;++dx)
-            value=MAX(value,closed[ClampColour(y+dy,0,height-1)*width+ClampColour(x+dx,0,width-1)]);
         auto *p=output+y*outputStride+x*4;
-        p[0]=p[1]=p[2]=value; p[3]=255;
+        p[0]=p[1]=p[2]=mask[y*width+x];p[3]=255;
     }
     CVPixelBufferUnlockBaseAddress(bitmap,0);
-    CIImage *mask=[CIImage imageWithCVPixelBuffer:bitmap];
+    CIImage *maskImage=[CIImage imageWithCVPixelBuffer:bitmap options:@{kCIImageColorSpace:[NSNull null]}];
     CVPixelBufferRelease(bitmap);
-    if(samples>=40) {
-        float rate=s_skinRegistered ? .04f : .25f;
-        s_skinCb=ClampColour(s_skinCb+ClampColour(sumCb/samples-s_skinCb,-4.f,4.f)*rate,110.f,122.f);
-        s_skinCr=ClampColour(s_skinCr+ClampColour(sumCr/samples-s_skinCr,-4.f,4.f)*rate,136.f,148.f);
-        s_skinRegistered=true;
-    }
-    return mask;
+    return maskImage;
 }
 
 static void DisplayLiveBackground(CIImage *source, CIImage *mask, NSInteger timestamp) {
     if (source == nil || s_backgroundLayer == nil) return;
     CIImage *processed = source;
     if (mask != nil) {
-        mask = [[mask imageByApplyingTransform:CGAffineTransformMakeScale(
+        mask = [[[mask imageBySamplingNearest] imageByApplyingTransform:CGAffineTransformMakeScale(
             source.extent.size.width / mask.extent.size.width,
             source.extent.size.height / mask.extent.size.height)] imageByCroppingToRect:source.extent];
         processed = [WindowsStyleMosaic(source, s_mosaicScale) imageByApplyingFilter:@"CIBlendWithMask"
             withInputParameters:@{kCIInputBackgroundImageKey:source, kCIInputMaskImageKey:mask}];
     }
-    CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent];
+    CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent format:kCIFormatRGBA8 colorSpace:PrivacySRGB()];
     if (frame == nil) return;
     UIImage *image = [UIImage imageWithCGImage:frame];
     CGImageRelease(frame);
@@ -496,7 +435,7 @@ extern "C" void NativePoseCaptureStop();
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
     s_captureStopping = false;
-    s_skinCb=116.f; s_skinCr=142.f; s_skinRegistered=false;
+    s_skinClassifier=PrivacyMosaic::SkinClassifier(107.f,157.f,6.f,7.f);
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
     s_lastSafeBackgroundImage = nil;
     s_latestHandPacket = nil; s_latestFacePacket = nil;

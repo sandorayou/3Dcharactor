@@ -14,6 +14,8 @@ namespace RealtimeBodyTracking.Editor
         {
             if (report.summary.platform != BuildTarget.iOS) return;
             var output = report.summary.outputPath;
+            File.Copy(Path.Combine(UnityEngine.Application.dataPath, "Plugins/iOS/PrivacyMosaicCore.h"),
+                Path.Combine(output, "Libraries/Plugins/iOS/PrivacyMosaicCore.h"), true);
             var projectPath = PBXProject.GetPBXProjectPath(output);
             var project = new PBXProject();
             project.ReadFromFile(projectPath);

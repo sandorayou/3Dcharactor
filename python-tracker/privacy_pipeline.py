@@ -8,18 +8,25 @@ import numpy as np
 class AdaptiveSkinMask:
     """Colour-only classification; luminance is separate from skin chroma."""
 
-    def __init__(self):
-        self.center = np.array([116., 142.], np.float32)  # Cb, Cr measured from the supplied skin sample
-        self.spread = np.array([4., 5.], np.float32)
+    def __init__(self, center=(116., 142.), spread=(4., 5.)):
+        self.center = np.array(center, np.float32)
+        self.seed = self.center.copy()
+        self.spread = np.array(spread, np.float32)
         self.registered = False
 
     def classify(self, frame):
         height = max(1, round(160 * frame.shape[0] / frame.shape[1]))
         small = cv2.resize(frame, (160, height), interpolation=cv2.INTER_LINEAR)
-        ycc = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb).astype(np.float32)
-        chroma = 128. + (ycc[:, :, [2, 1]] - 128.) * (140. / np.maximum(ycc[:, :, 0], 20.))[:, :, None]
+        return self.classify_small(small)
+
+    def classify_small(self, small):
+        bgr = small.astype(np.float32)
+        luminance = .299 * bgr[:, :, 2] + .587 * bgr[:, :, 1] + .114 * bgr[:, :, 0]
+        normalizer = 140. / np.maximum(luminance, 20.)
+        chroma = np.stack((128. + .564 * (bgr[:, :, 0] - luminance) * normalizer,
+                           128. + .713 * (bgr[:, :, 2] - luminance) * normalizer), axis=-1)
         distance = np.sum(((chroma - self.center) / self.spread) ** 2, axis=2)
-        plausible = (ycc[:, :, 0] > 20) & (ycc[:, :, 0] < 250) & (chroma[:, :, 1] > 132) & (chroma[:, :, 0] < 132) & (chroma[:, :, 1] < self.center[1] + 7)
+        plausible = (luminance > 20) & (luminance < 250) & (chroma[:, :, 1] > 132) & (chroma[:, :, 0] < 132) & (chroma[:, :, 1] < self.center[1] + 7)
         raw = (plausible & (distance < 2.25)).astype(np.uint8) * 255
         # Estimate local illumination from central high-confidence colour samples.
         h, w = raw.shape
@@ -27,15 +34,28 @@ class AdaptiveSkinMask:
         region = np.zeros_like(sample)
         region[max(0, h//10):max(1, h*3//5), w*35//100:w*65//100] = True
         sample &= region
+        if not self.registered and np.count_nonzero(sample) < 40:
+            candidates = region & (luminance > 40) & (luminance < 230)
+            candidates &= (chroma[:, :, 0] > 90) & (chroma[:, :, 0] < 124)
+            candidates &= (chroma[:, :, 1] > 135) & (chroma[:, :, 1] < 180)
+            candidates &= np.all(np.abs(chroma - self.seed) < (14, 18), axis=2)
+            if np.count_nonzero(candidates) >= 40:
+                self.center = np.clip(np.mean(chroma[candidates], axis=0), self.seed - 6, self.seed + 6)
+                self.registered = True
+                return self.classify_small(small)
         if np.count_nonzero(sample) >= 40:
-            illumination = float(np.mean(ycc[:, :, 0][sample]))
-            raw[ycc[:, :, 0] < illumination * .55] = 0
+            illumination = float(np.mean(luminance[sample]))
+            raw[luminance < illumination * .55] = 0
         # Close small gaps around eyebrows; fill enclosed non-skin eye/mouth holes.
-        mask = cv2.morphologyEx(raw, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+        mask = cv2.morphologyEx(raw, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8), borderType=cv2.BORDER_REPLICATE)
         # A cropped eye can connect to the image edge: bridge short bounded row gaps too.
-        gap = max(3, raw.shape[1] // 5)
-        extended = cv2.copyMakeBorder(mask, 0, 0, gap, gap, cv2.BORDER_CONSTANT, value=0)
-        mask = cv2.morphologyEx(extended, cv2.MORPH_CLOSE, np.ones((1, gap + 1), np.uint8))[:, gap:-gap]
+        gap = max(1, raw.shape[1] // 5)
+        for row in mask:
+            edges = np.diff(np.r_[1, (row > 0).astype(np.int8), 1])
+            starts, ends = np.flatnonzero(edges == -1), np.flatnonzero(edges == 1)
+            for start, end in zip(starts, ends):
+                if start > 0 and end < row.size and end - start <= gap:
+                    row[start:end] = 255
         padded = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
         outside = padded.copy()
         cv2.floodFill(outside, None, (0, 0), 255)
@@ -45,7 +65,7 @@ class AdaptiveSkinMask:
             target = np.mean(chroma[sample], axis=0)
             rate = .25 if not self.registered else .04
             self.center += np.clip(target - self.center, -4, 4) * rate
-            self.center = np.clip(self.center, [110, 136], [122, 148])
+            self.center = np.clip(self.center, self.seed - 6, self.seed + 6)
             self.registered = True
         return mask
 
