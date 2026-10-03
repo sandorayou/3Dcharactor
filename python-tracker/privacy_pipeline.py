@@ -10,7 +10,7 @@ class AdaptiveSkinMask:
 
     def __init__(self):
         self.center = np.array([105., 151.], np.float32)  # Cb, Cr bootstrap prior
-        self.spread = np.array([13., 10.], np.float32)
+        self.spread = np.array([9., 8.], np.float32)
         self.registered = False
 
     def classify(self, frame):
@@ -19,11 +19,11 @@ class AdaptiveSkinMask:
         ycc = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb).astype(np.float32)
         chroma = ycc[:, :, [2, 1]]
         distance = np.sum(((chroma - self.center) / self.spread) ** 2, axis=2)
-        plausible = (ycc[:, :, 0] > 20) & (ycc[:, :, 0] < 250) & (chroma[:, :, 1] > 132) & (chroma[:, :, 0] < 132) & (chroma[:, :, 1] < self.center[1] + 10)
-        raw = (plausible & (distance < 2.25)).astype(np.uint8) * 255
+        plausible = (ycc[:, :, 0] > 20) & (ycc[:, :, 0] < 250) & (chroma[:, :, 1] > 132) & (chroma[:, :, 0] < 132) & (chroma[:, :, 1] < self.center[1] + 7)
+        raw = (plausible & (distance < 1.44)).astype(np.uint8) * 255
         # Estimate local illumination from central high-confidence colour samples.
         h, w = raw.shape
-        sample = (raw > 0) & (distance < 1.0)
+        sample = (raw > 0) & (distance < .64)
         region = np.zeros_like(sample)
         region[max(0, h//10):max(1, h*3//5), w*35//100:w*65//100] = True
         sample &= region
@@ -45,7 +45,7 @@ class AdaptiveSkinMask:
             target = np.mean(chroma[sample], axis=0)
             rate = .25 if not self.registered else .04
             self.center += np.clip(target - self.center, -4, 4) * rate
-            self.center = np.clip(self.center, [85, 137], [125, 173])
+            self.center = np.clip(self.center, [95, 143], [115, 165])
             self.registered = True
         return mask
 

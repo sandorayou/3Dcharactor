@@ -140,11 +140,11 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
         const auto *p = pixels + y*stride + x*4;
         const float luma = .299f*p[2] + .587f*p[1] + .114f*p[0];
         const float cb = 128.f + .564f*(p[0]-luma), cr = 128.f + .713f*(p[2]-luma);
-        const float dc=(cb-s_skinCb)/13.f, dr=(cr-s_skinCr)/10.f, distance=dc*dc+dr*dr;
-        const bool skin = luma>20 && luma<250 && cr>132 && cb<132 && cr<s_skinCr+10 && distance<2.25f;
+        const float dc=(cb-s_skinCb)/9.f, dr=(cr-s_skinCr)/8.f, distance=dc*dc+dr*dr;
+        const bool skin = luma>20 && luma<250 && cr>132 && cb<132 && cr<s_skinCr+7 && distance<1.44f;
         raw[y*width+x] = skin ? 255 : 0;
         luminance[y*width+x] = luma;
-        if (skin && distance<1 && x>=width*35/100 && x<width*65/100 && y>=height/10 && y<height*3/5) {
+        if (skin && distance<.64f && x>=width*35/100 && x<width*65/100 && y>=height/10 && y<height*3/5) {
             sumCb+=cb; sumCr+=cr; sumY+=luma; ++samples;
         }
     }
@@ -215,8 +215,8 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
     CVPixelBufferRelease(bitmap);
     if(samples>=40) {
         float rate=s_skinRegistered ? .04f : .25f;
-        s_skinCb=ClampColour(s_skinCb+ClampColour(sumCb/samples-s_skinCb,-4.f,4.f)*rate,85.f,125.f);
-        s_skinCr=ClampColour(s_skinCr+ClampColour(sumCr/samples-s_skinCr,-4.f,4.f)*rate,137.f,173.f);
+        s_skinCb=ClampColour(s_skinCb+ClampColour(sumCb/samples-s_skinCb,-4.f,4.f)*rate,95.f,115.f);
+        s_skinCr=ClampColour(s_skinCr+ClampColour(sumCr/samples-s_skinCr,-4.f,4.f)*rate,143.f,165.f);
         s_skinRegistered=true;
     }
     return mask;
