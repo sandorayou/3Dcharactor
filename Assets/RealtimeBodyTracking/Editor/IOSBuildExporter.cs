@@ -14,7 +14,7 @@ namespace RealtimeBodyTracking.Editor
         [MenuItem("Build/Export updated iOS project")]
         public static void Export()
         {
-            ValidateHeadRollCorrection();
+            ValidateHeadRotationCorrection();
             ValidateAvatarGaze();
             var scenes = EditorBuildSettings.scenes.Where(x => x.enabled).Select(x => x.path).ToArray();
             if (scenes.Length == 0)
@@ -85,17 +85,22 @@ namespace RealtimeBodyTracking.Editor
                 }
             }
         }
-        private static void ValidateHeadRollCorrection()
+        private static void ValidateHeadRotationCorrection()
         {
             // Evaluate the actual runtime conversion using Unity's quaternion implementation.
+            foreach (var yaw in new[] { -60f, 0f, 60f })
             foreach (var roll in new[] { -35f, 0f, 35f })
             {
-                var input = UnityEngine.Quaternion.Euler(17f, 29f, roll);
-                var corrected = IOSNativePoseSource.CorrectNativeHeadRoll(input).eulerAngles;
+                var input = UnityEngine.Quaternion.Euler(17f, yaw, roll);
+                var source = IOSNativePoseSource.CorrectNativeHeadRotation(input);
+                var corrected = source.eulerAngles;
                 if (UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.x, 17f)) > .01f ||
-                    UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.y, 29f)) > .01f ||
+                    UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.y, -yaw)) > .01f ||
                     UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.z, -roll)) > .01f)
-                    throw new BuildFailedException("iOS head-roll correction changed yaw/pitch or failed to reverse roll.");
+                    throw new BuildFailedException("iOS head orientation must preserve pitch and reverse yaw/roll before common mirroring.");
+                var displayed = new UnityEngine.Quaternion(source.x, -source.y, -source.z, source.w).normalized;
+                if (UnityEngine.Quaternion.Angle(input, displayed) > .05f)
+                    throw new BuildFailedException("iOS head orientation differs after the common driver's reflection.");
             }
         }
         private static void ValidateAvatarGaze()

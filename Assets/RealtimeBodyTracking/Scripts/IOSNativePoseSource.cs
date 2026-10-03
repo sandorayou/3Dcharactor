@@ -62,9 +62,9 @@ namespace RealtimeBodyTracking
                 if (gaze != null) gaze.SetFace(latest);
                 if (latest?.head_rotation != null)
                 {
-                    // The front-camera pipeline's roll is opposite to the displayed tilt.
-                    // Change roll only; the existing yaw/pitch and common driver mirroring stay intact.
-                    var corrected = CorrectNativeHeadRoll(latest.head_rotation.Rotation);
+                    // Native front-camera orientation already matches the displayed face.
+                    // Cancel the common driver's reflection for yaw and roll together.
+                    var corrected = CorrectNativeHeadRotation(latest.head_rotation.Rotation);
                     latest.head_rotation.x = corrected.x;
                     latest.head_rotation.y = corrected.y;
                     latest.head_rotation.z = corrected.z;
@@ -73,10 +73,9 @@ namespace RealtimeBodyTracking
             }
             catch (System.ArgumentException exception) { Debug.LogWarning(exception.Message, this); }
         }
-        public static Quaternion CorrectNativeHeadRoll(Quaternion rotation)
+        public static Quaternion CorrectNativeHeadRotation(Quaternion rotation)
         {
-            var angles = rotation.eulerAngles;
-            return Quaternion.Euler(angles.x, angles.y, -angles.z);
+            return new Quaternion(rotation.x, -rotation.y, -rotation.z, rotation.w).normalized;
         }
         public bool TryTakeLatest(out PosePacket packet)
         {
