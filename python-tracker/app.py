@@ -24,7 +24,7 @@ PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
 class FastPersonHider:
     """Mosaic colour-classified skin regions, including enclosed eye holes."""
     def __init__(self) -> None:
-        self._mosaic_block = 16
+        self._mosaic_block = 48
 
     def _apply_mosaic(self, frame, mask):
         full_size = (frame.shape[1], frame.shape[0])
