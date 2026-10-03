@@ -60,7 +60,9 @@ jobs:
       - name: Audit Windows and native privacy parity
         run: |
           set -euo pipefail
-          cmp Assets/Plugins/iOS/PrivacyMosaicCore.h Builds/iOS-WindowsPort/Libraries/Plugins/iOS/PrivacyMosaicCore.h
+          sed 's/\r$//' Assets/Plugins/iOS/PrivacyMosaicCore.h > "$RUNNER_TEMP/privacy-source.h"
+          sed 's/\r$//' Builds/iOS-WindowsPort/Libraries/Plugins/iOS/PrivacyMosaicCore.h > "$RUNNER_TEMP/privacy-export.h"
+          cmp "$RUNNER_TEMP/privacy-source.h" "$RUNNER_TEMP/privacy-export.h"
           clang++ -std=c++14 -O2 Tools/PrivacyAudit/audit.cpp -o "$RUNNER_TEMP/privacy-audit"
           "$RUNNER_TEMP/privacy-audit" Tools/PrivacyAudit/cases
           clang++ -std=c++14 -fobjc-arc Tools/PrivacyAudit/audit_core_image.mm -framework Foundation -framework CoreImage -framework CoreVideo -framework CoreGraphics -o "$RUNNER_TEMP/privacy-colour-audit"
