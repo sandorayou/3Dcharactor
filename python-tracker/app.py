@@ -22,7 +22,7 @@ PREVIEW_WINDOW = "Realtime Body Tracker (Q to stop)"
 
 
 class FastPersonHider:
-    """Mosaic only the face mask from the existing face tracker."""
+    """Mosaic colour-classified skin regions, including enclosed eye holes."""
     def __init__(self) -> None:
         self._mosaic_block = 16
 
@@ -34,8 +34,8 @@ class FastPersonHider:
                        max(1, (frame.shape[0] + block - 1) // block))
         pixelated = cv2.resize(frame, mosaic_size, interpolation=cv2.INTER_AREA)
         pixelated = cv2.resize(pixelated, full_size, interpolation=cv2.INTER_NEAREST)
-        # Hard category boundaries keep clothes/background outside the effect.
-        return np.where((full_mask > 0)[:, :, None], pixelated, frame)
+        # Apply the mask to the current camera frame.
+        return cv2.copyTo(pixelated, full_mask, frame.copy())
 
 
 
@@ -152,7 +152,6 @@ def main() -> None:
     privacy = PrivacyFramePipeline(
         person_hider._apply_mosaic,
         lambda frame: frame_server.update(cv2.flip(frame, 1) if settings.preview_mirror else frame),
-        lambda: estimator.last_privacy_face,
     )
     camera.privacy_submit = lambda frame, timestamp: privacy.submit(
         cv2.flip(frame, 1) if settings.tracking_mirror else frame, timestamp)

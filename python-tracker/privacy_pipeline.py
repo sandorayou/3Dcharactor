@@ -1,84 +1,73 @@
 from __future__ import annotations
 
-import threading
 import time
-
 import cv2
 import numpy as np
 
 
-class PrivacyFramePipeline:
-    """Live camera presentation with existing face detection and mask motion tracking."""
+class AdaptiveSkinMask:
+    """Colour-only classification; luminance is separate from skin chroma."""
 
-    def __init__(self, mosaic, publish, face_provider):
+    def __init__(self):
+        self.center = np.array([105., 151.], np.float32)  # Cb, Cr bootstrap prior
+        self.spread = np.array([13., 10.], np.float32)
+        self.registered = False
+
+    def classify(self, frame):
+        height = max(1, round(160 * frame.shape[0] / frame.shape[1]))
+        small = cv2.resize(frame, (160, height), interpolation=cv2.INTER_LINEAR)
+        ycc = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb).astype(np.float32)
+        chroma = ycc[:, :, [2, 1]]
+        distance = np.sum(((chroma - self.center) / self.spread) ** 2, axis=2)
+        plausible = (ycc[:, :, 0] > 20) & (ycc[:, :, 0] < 250) & (chroma[:, :, 1] > 132) & (chroma[:, :, 0] < 132) & (chroma[:, :, 1] < self.center[1] + 10)
+        raw = (plausible & (distance < 2.25)).astype(np.uint8) * 255
+        # Estimate local illumination from central high-confidence colour samples.
+        h, w = raw.shape
+        sample = (raw > 0) & (distance < 1.0)
+        region = np.zeros_like(sample)
+        region[max(0, h//10):max(1, h*3//5), w*35//100:w*65//100] = True
+        sample &= region
+        if np.count_nonzero(sample) >= 40:
+            illumination = float(np.mean(ycc[:, :, 0][sample]))
+            raw[ycc[:, :, 0] < illumination * .8] = 0
+        # Close small gaps around eyebrows; fill enclosed non-skin eye/mouth holes.
+        mask = cv2.morphologyEx(raw, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+        # A cropped eye can connect to the image edge: bridge short bounded row gaps too.
+        gap = max(3, raw.shape[1] // 5)
+        extended = cv2.copyMakeBorder(mask, 0, 0, gap, gap, cv2.BORDER_CONSTANT, value=0)
+        mask = cv2.morphologyEx(extended, cv2.MORPH_CLOSE, np.ones((1, gap + 1), np.uint8))[:, gap:-gap]
+        padded = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+        outside = padded.copy()
+        cv2.floodFill(outside, None, (0, 0), 255)
+        mask = cv2.bitwise_or(padded, cv2.bitwise_not(outside))[1:-1, 1:-1]
+        mask = cv2.dilate(mask, np.ones((3, 3), np.uint8))
+        if np.count_nonzero(sample) >= 40:
+            target = np.mean(chroma[sample], axis=0)
+            rate = .25 if not self.registered else .04
+            self.center += np.clip(target - self.center, -4, 4) * rate
+            self.center = np.clip(self.center, [85, 137], [125, 173])
+            self.registered = True
+        return mask
+
+
+class PrivacyFramePipeline:
+    """Classify the current frame with colours only; no detector waits or optical flow."""
+
+    def __init__(self, mosaic, publish):
         self._mosaic, self._publish = mosaic, publish
-        self._face_provider = face_provider
-        self._last_seen = -1
-        self._epoch = -1
-        self._stop = threading.Event()
-        self._applied_sequence = -1
-        self._frame_shape = None
-        self._previous_gray = None
-        self._mask = None
-        self._history = []
-        self._size = (160, 120)
-        x, y = np.meshgrid(np.arange(160), np.arange(120))
-        self._grid = np.stack((x, y), axis=-1).astype(np.float32)
+        self._skin = AdaptiveSkinMask()
+        self._closed = False
         self.error = None
         self.displayed_frames = 0
         self.latency_ms = 0.0
 
-    def _warp(self, mask, backward_flow):
-        coords = self._grid + backward_flow
-        return cv2.remap(mask, coords[:, :, 0], coords[:, :, 1], cv2.INTER_NEAREST,
-                         borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-
     def submit(self, frame, captured_at_ms):
-        if self._stop.is_set():
-            if self.error:
-                raise RuntimeError(self.error)
+        if self._closed:
             return
-        sequence = captured_at_ms
-        if self._frame_shape != frame.shape[:2]:
-            self._frame_shape = frame.shape[:2]
-            self._previous_gray = None
-            self._history = []
-            self._mask = None
-            self._applied_sequence = sequence - 1
-            self._epoch = sequence
-        gray = cv2.cvtColor(cv2.resize(frame, self._size), cv2.COLOR_BGR2GRAY)
-        if self._previous_gray is not None and gray.shape == self._previous_gray.shape:
-            # Backward flow samples the preceding mask at each current pixel.
-            flow = cv2.calcOpticalFlowFarneback(gray, self._previous_gray, None,
-                                               .5, 3, 15, 2, 5, 1.2, 0)
-            self._history.append((sequence, flow))
-            self._history = self._history[-30:]
-            if self._mask is not None:
-                self._mask = self._warp(self._mask, flow)
-        self._previous_gray = gray
-        result = self._face_provider()
-        if result is not None:
-            anchor, points, shape = result
-            if anchor > self._applied_sequence and anchor >= self._epoch and shape == self._frame_shape:
-                if len(points) >= 3 and captured_at_ms - anchor <= 400:
-                    vertices = np.asarray(points, dtype=np.float32)
-                    center = vertices.mean(axis=0)
-                    vertices = center + (vertices - center) * (1.12, 1.15)
-                    vertices = np.rint(vertices * self._size).astype(np.int32)
-                    corrected = np.zeros((120, 160), np.uint8)
-                    cv2.fillConvexPoly(corrected, cv2.convexHull(vertices), 255)
-                    for stamp, flow in self._history:
-                        if stamp > anchor:
-                            corrected = self._warp(corrected, flow)
-                    self._mask = corrected
-                    self._last_seen = anchor
-                self._applied_sequence = anchor
-        if captured_at_ms - self._last_seen > 400:
-            self._mask = None
-        output = self._mosaic(frame, self._mask) if self._mask is not None and np.any(self._mask) else frame
-        self._publish(output)
+        mask = self._skin.classify(frame)
+        self._publish(self._mosaic(frame, mask) if np.any(mask) else frame)
         self.displayed_frames += 1
         self.latency_ms = (time.monotonic() - captured_at_ms / 1000.0) * 1000.0
 
     def close(self):
-        self._stop.set()
+        self._closed = True

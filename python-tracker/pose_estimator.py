@@ -61,7 +61,6 @@ class PoseEstimator:
         self._fps_count = 0
         self.last_normalized_landmarks = None
         self.last_face_landmarks: list[SimpleNamespace] = []
-        self.last_privacy_face = None
         self.last_hand_landmarks: list[list[SimpleNamespace]] = []
         self.last_hand_assignments: list[dict] = []
         self._hand_positions: dict[str, tuple[float, float]] = {}
@@ -118,7 +117,6 @@ class PoseEstimator:
             )
             for landmark in (face_result.face_landmarks[0] if face_result.face_landmarks else [])
         ]
-        self.last_privacy_face = (timestamp_ms, tuple((p.x, p.y) for p in self.last_face_landmarks), frame.shape[:2])
         points: list[PosePoint] = []
         if result.pose_world_landmarks:
             world = result.pose_world_landmarks[0]

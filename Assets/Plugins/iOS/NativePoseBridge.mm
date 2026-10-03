@@ -2,13 +2,11 @@
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <CoreImage/CoreImage.h>
-#import <Vision/Vision.h>
 #import "UnityInterface.h"
 #import <MediaPipeTasksVision/MediaPipeTasksVision.h>
 
 #include <atomic>
 #include <cmath>
-#include <map>
 #include <vector>
 #include <algorithm>
 static std::atomic<int> s_width{640}, s_height{480};
@@ -16,10 +14,8 @@ static std::atomic<long long> s_orientationReadyTimestamp{0};
 static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
-static std::map<NSInteger, CVPixelBufferRef> s_faceMotionFrames;
-static NSInteger s_faceMaskTimestamp;
-static CIImage *s_anchorFaceMask;
-static CVPixelBufferRef s_anchorMotionFrame;
+static float s_skinCb = 105.f, s_skinCr = 151.f;
+static bool s_skinRegistered = false;
 static std::atomic<bool> s_captureStopping{false};
 static MPPPoseLandmarker *s_landmarker;
 static MPPHandLandmarker *s_handLandmarker;
@@ -44,11 +40,8 @@ static NSDictionary *s_latestHandPacket;
 static NSDictionary *s_latestFacePacket;
 static NSInteger s_latestHandTimestamp;
 static NSInteger s_latestFaceTimestamp;
-static NSObject *FrameGate() {
-    static NSObject *gate;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ gate = [NSObject new]; });
-    return gate;
+template<typename T> static T ClampColour(T value, T low, T high) {
+    return std::max(low, std::min(high, value));
 }
 static CGPoint s_leftPoseWrist;
 static CGPoint s_rightPoseWrist;
@@ -112,54 +105,6 @@ static NSDictionary *HeadRotationFromFaceMatrix(MPPTransformMatrix *matrix) {
     return @{@"x": @(x/norm), @"y": @(y/norm), @"z": @(z/norm), @"w": @(w/norm)};
 }
 
-static void ClearFaceMotionFrames() {
-    for (auto &entry : s_faceMotionFrames) CVPixelBufferRelease(entry.second);
-    s_faceMotionFrames.clear();
-}
-
-static CIImage *FacePrivacyMask(NSArray<MPPNormalizedLandmark *> *face, size_t width, size_t height) {
-    if (face.count < 3) return nil;
-    NSMutableData *data = [NSMutableData dataWithLength:width * height];
-    CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
-    CGContextRef context = CGBitmapContextCreate(data.mutableBytes, width, height, 8, width, gray, kCGImageAlphaNone);
-    CGColorSpaceRelease(gray);
-    if (!context) return nil;
-    CGPoint center = CGPointZero;
-    for (MPPNormalizedLandmark *p in face) { center.x += p.x; center.y += p.y; }
-    center.x /= face.count; center.y /= face.count;
-    std::vector<CGPoint> points;
-    for (MPPNormalizedLandmark *p in face)
-        points.push_back(CGPointMake((center.x + (p.x-center.x)*1.12)*width,
-                                    (1-center.y-(p.y-center.y)*1.15)*height));
-    std::sort(points.begin(), points.end(), [](CGPoint a, CGPoint b) {
-        return a.x < b.x || (a.x == b.x && a.y < b.y);
-    });
-    auto cross = [](CGPoint a, CGPoint b, CGPoint c) {
-        return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
-    };
-    std::vector<CGPoint> hull;
-    for (const auto &p : points) {
-        while (hull.size() >= 2 && cross(hull[hull.size()-2], hull.back(), p) <= 0) hull.pop_back();
-        hull.push_back(p);
-    }
-    size_t lower = hull.size();
-    for (size_t i=points.size()-1; i-- > 0;) {
-        while (hull.size() > lower && cross(hull[hull.size()-2], hull.back(), points[i]) <= 0) hull.pop_back();
-        hull.push_back(points[i]);
-    }
-    if (hull.size() >= 4) {
-        CGContextSetGrayFillColor(context, 1, 1);
-        CGContextAddLines(context, hull.data(), hull.size()-1);
-        CGContextClosePath(context); CGContextFillPath(context);
-    }
-    CGImageRef image = CGBitmapContextCreateImage(context);
-    CGContextRelease(context);
-    if (!image) return nil;
-    CIImage *mask = [CIImage imageWithCGImage:image];
-    CGImageRelease(image);
-    return mask;
-}
-
 static CIImage *WindowsStyleMosaic(CIImage *source, CGFloat scale) {
     CIFilter *pixelate = [CIFilter filterWithName:@"CIPixellate"];
     [pixelate setValue:source forKey:kCIInputImageKey];
@@ -171,7 +116,7 @@ static CIImage *WindowsStyleMosaic(CIImage *source, CGFloat scale) {
     return [pixelate.outputImage imageByCroppingToRect:source.extent];
 }
 
-static CVPixelBufferRef MotionFrame(CIImage *source) {
+static CVPixelBufferRef ColourFrame(CIImage *source) {
     size_t width = 160, height = MAX(1, (size_t)(160 * source.extent.size.height / source.extent.size.width));
     CVPixelBufferRef buffer = nullptr;
     if (CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
@@ -182,69 +127,98 @@ static CVPixelBufferRef MotionFrame(CIImage *source) {
     return buffer;
 }
 
-static CIImage *TrackFaceMask(CVPixelBufferRef current) {
-    CIImage *mask = nil;
-    CVPixelBufferRef anchor = nullptr;
-    @synchronized(FrameGate()) {
-        mask = (NSInteger)(CACurrentMediaTime()*1000.0)-s_faceMaskTimestamp <= 400 ? s_anchorFaceMask : nil;
-        anchor = s_anchorMotionFrame;
-        if (anchor != nullptr) CVPixelBufferRetain(anchor);
-    }
-    if (mask == nil || anchor == nullptr || current == nullptr) {
-        if (anchor != nullptr) CVPixelBufferRelease(anchor);
-        return mask;
-    }
-    VNGenerateOpticalFlowRequest *request = [[VNGenerateOpticalFlowRequest alloc]
-        initWithTargetedCVPixelBuffer:anchor options:@{}];
-    request.revision = 1;
-    request.computationAccuracy = VNGenerateOpticalFlowRequestComputationAccuracyLow;
-    request.outputPixelFormat = kCVPixelFormatType_TwoComponent32Float;
-    VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCVPixelBuffer:current options:@{}];
-    if ([handler performRequests:@[request] error:nil]) {
-        VNPixelBufferObservation *observation = request.results.firstObject;
-        if (observation != nil) {
-            CVPixelBufferRef flow = observation.pixelBuffer;
-            CVPixelBufferRef maskPixels = MotionFrame(mask);
-            CVPixelBufferRef warped = nullptr;
-            const size_t width = CVPixelBufferGetWidth(current), height = CVPixelBufferGetHeight(current);
-            if (maskPixels != nullptr && CVPixelBufferGetWidth(flow) == width && CVPixelBufferGetHeight(flow) == height &&
-                CVPixelBufferGetPixelFormatType(flow) == kCVPixelFormatType_TwoComponent32Float &&
-                CVPixelBufferGetWidth(maskPixels) == width && CVPixelBufferGetHeight(maskPixels) == height &&
-                CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, nullptr, &warped) == kCVReturnSuccess) {
-                bool flowLocked = CVPixelBufferLockBaseAddress(flow, kCVPixelBufferLock_ReadOnly) == kCVReturnSuccess;
-                bool maskLocked = CVPixelBufferLockBaseAddress(maskPixels, kCVPixelBufferLock_ReadOnly) == kCVReturnSuccess;
-                bool outputLocked = CVPixelBufferLockBaseAddress(warped, 0) == kCVReturnSuccess;
-                if (flowLocked && maskLocked && outputLocked) {
-                    const size_t flowStride = CVPixelBufferGetBytesPerRow(flow), maskStride = CVPixelBufferGetBytesPerRow(maskPixels);
-                    const size_t outputStride = CVPixelBufferGetBytesPerRow(warped);
-                    const auto *vectors = static_cast<const unsigned char *>(CVPixelBufferGetBaseAddress(flow));
-                    const auto *pixels = static_cast<const unsigned char *>(CVPixelBufferGetBaseAddress(maskPixels));
-                    auto *output = static_cast<unsigned char *>(CVPixelBufferGetBaseAddress(warped));
-                    // All buffers use the same top-down pixel coordinates: current -> anchor.
-                    for (size_t y = 0; y < height; ++y) {
-                        const float *row = reinterpret_cast<const float *>(vectors + y * flowStride);
-                        for (size_t x = 0; x < width; ++x) {
-                            float fx = x + row[x * 2], fy = y + row[x * 2 + 1];
-                            unsigned char value = 0;
-                            if (isfinite(fx) && isfinite(fy) && fx >= 0 && fy >= 0 && fx < width && fy < height) {
-                                size_t sx = MIN(width - 1, (size_t)roundf(fx)), sy = MIN(height - 1, (size_t)roundf(fy));
-                                value = pixels[sy * maskStride + sx * 4];
-                            }
-                            auto *m = output + y * outputStride + x * 4;
-                            m[0] = m[1] = m[2] = value; m[3] = 255;
-                        }
-                    }
-                    mask = [CIImage imageWithCVPixelBuffer:warped];
-                }
-                if (outputLocked) CVPixelBufferUnlockBaseAddress(warped, 0);
-                if (maskLocked) CVPixelBufferUnlockBaseAddress(maskPixels, kCVPixelBufferLock_ReadOnly);
-                if (flowLocked) CVPixelBufferUnlockBaseAddress(flow, kCVPixelBufferLock_ReadOnly);
-                CVPixelBufferRelease(warped);
-            }
-            if (maskPixels != nullptr) CVPixelBufferRelease(maskPixels);
+static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
+    if (current == nullptr || CVPixelBufferLockBaseAddress(current, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) return nil;
+    const int width = (int)CVPixelBufferGetWidth(current), height = (int)CVPixelBufferGetHeight(current);
+    const size_t stride = CVPixelBufferGetBytesPerRow(current);
+    const auto *pixels = static_cast<const unsigned char *>(CVPixelBufferGetBaseAddress(current));
+    const size_t count = (size_t)width * height;
+    std::vector<unsigned char> raw(count), dilated(count), closed(count), outside(count);
+    std::vector<float> luminance(count);
+    float sumCb=0, sumCr=0, sumY=0; int samples=0;
+    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
+        const auto *p = pixels + y*stride + x*4;
+        const float luma = .299f*p[2] + .587f*p[1] + .114f*p[0];
+        const float cb = 128.f + .564f*(p[0]-luma), cr = 128.f + .713f*(p[2]-luma);
+        const float dc=(cb-s_skinCb)/13.f, dr=(cr-s_skinCr)/10.f, distance=dc*dc+dr*dr;
+        const bool skin = luma>20 && luma<250 && cr>132 && cb<132 && cr<s_skinCr+10 && distance<2.25f;
+        raw[y*width+x] = skin ? 255 : 0;
+        luminance[y*width+x] = luma;
+        if (skin && distance<1 && x>=width*35/100 && x<width*65/100 && y>=height/10 && y<height*3/5) {
+            sumCb+=cb; sumCr+=cr; sumY+=luma; ++samples;
         }
     }
-    CVPixelBufferRelease(anchor);
+    CVPixelBufferUnlockBaseAddress(current, kCVPixelBufferLock_ReadOnly);
+    if (samples>=40) for(size_t i=0;i<count;++i)
+        if(luminance[i]<sumY/samples*.8f) raw[i]=0;
+    // Separable closing: four 9-pixel passes instead of two 9x9 passes.
+    std::vector<unsigned char> temporary(count);
+    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
+        unsigned char value=0;
+        for(int dx=-4;dx<=4;++dx) value=MAX(value,raw[y*width+ClampColour(x+dx,0,width-1)]);
+        temporary[y*width+x]=value;
+    }
+    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
+        unsigned char value=0;
+        for(int dy=-4;dy<=4;++dy) value=MAX(value,temporary[ClampColour(y+dy,0,height-1)*width+x]);
+        dilated[y*width+x]=value;
+    }
+    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
+        unsigned char value=255;
+        for(int dx=-4;dx<=4;++dx) value=MIN(value,dilated[y*width+ClampColour(x+dx,0,width-1)]);
+        temporary[y*width+x]=value;
+    }
+    for (int y=0; y<height; ++y) for (int x=0; x<width; ++x) {
+        unsigned char value=255;
+        for(int dy=-4;dy<=4;++dy) value=MIN(value,temporary[ClampColour(y+dy,0,height-1)*width+x]);
+        closed[y*width+x]=value;
+    }
+    // Bridge short bounded horizontal gaps even when an eye hole reaches the frame edge.
+    for(int y=0;y<height;++y) {
+        int x=0;
+        while(x<width) {
+            if(closed[y*width+x]) { ++x; continue; }
+            int start=x;
+            while(x<width && !closed[y*width+x]) ++x;
+            if(start>0 && x<width && x-start<=width/5)
+                for(int fill=start;fill<x;++fill) closed[y*width+fill]=255;
+        }
+    }
+    std::vector<int> queue;
+    queue.reserve(count);
+    auto add = [&](int x,int y) {
+        int index=y*width+x;
+        if (!closed[index] && !outside[index]) { outside[index]=255; queue.push_back(index); }
+    };
+    for (int x=0; x<width; ++x) { add(x,0); add(x,height-1); }
+    for (int y=0; y<height; ++y) { add(0,y); add(width-1,y); }
+    for (size_t head=0; head<queue.size(); ++head) {
+        int x=queue[head]%width, y=queue[head]/width;
+        if (x>0) add(x-1,y); if(x+1<width) add(x+1,y);
+        if (y>0) add(x,y-1); if(y+1<height) add(x,y+1);
+    }
+    for (size_t i=0;i<count;++i) closed[i]=closed[i] || !outside[i] ? 255 : 0;
+    CVPixelBufferRef bitmap=nullptr;
+    if (CVPixelBufferCreate(kCFAllocatorDefault,width,height,kCVPixelFormatType_32BGRA,nullptr,&bitmap)!=kCVReturnSuccess) return nil;
+    if (CVPixelBufferLockBaseAddress(bitmap,0)!=kCVReturnSuccess) { CVPixelBufferRelease(bitmap); return nil; }
+    auto *output=static_cast<unsigned char *>(CVPixelBufferGetBaseAddress(bitmap));
+    const size_t outputStride=CVPixelBufferGetBytesPerRow(bitmap);
+    for(int y=0;y<height;++y) for(int x=0;x<width;++x) {
+        unsigned char value=0;
+        for(int dy=-1;dy<=1;++dy) for(int dx=-1;dx<=1;++dx)
+            value=MAX(value,closed[ClampColour(y+dy,0,height-1)*width+ClampColour(x+dx,0,width-1)]);
+        auto *p=output+y*outputStride+x*4;
+        p[0]=p[1]=p[2]=value; p[3]=255;
+    }
+    CVPixelBufferUnlockBaseAddress(bitmap,0);
+    CIImage *mask=[CIImage imageWithCVPixelBuffer:bitmap];
+    CVPixelBufferRelease(bitmap);
+    if(samples>=40) {
+        float rate=s_skinRegistered ? .04f : .25f;
+        s_skinCb=ClampColour(s_skinCb+ClampColour(sumCb/samples-s_skinCb,-4.f,4.f)*rate,85.f,125.f);
+        s_skinCr=ClampColour(s_skinCr+ClampColour(sumCr/samples-s_skinCr,-4.f,4.f)*rate,137.f,173.f);
+        s_skinRegistered=true;
+    }
     return mask;
 }
 
@@ -337,22 +311,9 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     if (image == nil) return;
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer:@NO}];
     CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
-    CVPixelBufferRef motion = MotionFrame(source);
-    DisplayLiveBackground(source, TrackFaceMask(motion), timestamp);
-    if (motion != nullptr) {
-        @synchronized(FrameGate()) {
-            if (timestamp >= s_orientationReadyTimestamp.load() && !s_captureStopping.load()) {
-                auto existing = s_faceMotionFrames.find(timestamp);
-                if (existing != s_faceMotionFrames.end()) CVPixelBufferRelease(existing->second);
-                s_faceMotionFrames[timestamp] = CVPixelBufferRetain(motion);
-                while (s_faceMotionFrames.size() > 24) {
-                    auto oldest = s_faceMotionFrames.begin();
-                    CVPixelBufferRelease(oldest->second); s_faceMotionFrames.erase(oldest);
-                }
-            }
-        }
-        CVPixelBufferRelease(motion);
-    }
+    CVPixelBufferRef colours = ColourFrame(source);
+    DisplayLiveBackground(source, AdaptiveSkinMask(colours), timestamp);
+    if (colours != nullptr) CVPixelBufferRelease(colours);
     [s_landmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_handLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_faceLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
@@ -479,23 +440,6 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     for (MPPNormalizedLandmark *p in result.faceLandmarks.firstObject)
         [privacy addObject:[NSValue valueWithCGPoint:CGPointMake(p.x,p.y)]];
     @synchronized(PrivacyGate()) { s_facePrivacyPoints=[privacy copy]; s_facePrivacyTimestamp=timestamp; }
-    @synchronized(FrameGate()) {
-        auto captured = s_faceMotionFrames.find(timestamp);
-        if (captured != s_faceMotionFrames.end() && face.count >= 3 &&
-            timestamp >= s_orientationReadyTimestamp.load() && !s_captureStopping.load() && timestamp > s_faceMaskTimestamp) {
-            CIImage *mask = FacePrivacyMask(face, CVPixelBufferGetWidth(captured->second), CVPixelBufferGetHeight(captured->second));
-            if (mask != nil) {
-                s_anchorFaceMask = mask;
-                if (s_anchorMotionFrame != nullptr) CVPixelBufferRelease(s_anchorMotionFrame);
-                s_anchorMotionFrame = CVPixelBufferRetain(captured->second);
-                s_faceMaskTimestamp = timestamp;
-            }
-        }
-        while (!s_faceMotionFrames.empty() && s_faceMotionFrames.begin()->first <= timestamp) {
-            auto oldest = s_faceMotionFrames.begin();
-            CVPixelBufferRelease(oldest->second); s_faceMotionFrames.erase(oldest);
-        }
-    }
     SubmitResult(@"face", packet, timestamp);
 }
 @end
@@ -515,13 +459,6 @@ static void UpdateVideoOrientation() {
     s_lastVideoOrientation = ui;
     // Ignore detections and queued Unity callbacks from the previous camera orientation.
     s_orientationReadyTimestamp = (long long)(CACurrentMediaTime() * 1000.0) + 150;
-    @synchronized(FrameGate()) {
-        ClearFaceMotionFrames();
-        s_faceMaskTimestamp = 0;
-        s_anchorFaceMask = nil;
-        if (s_anchorMotionFrame != nullptr) CVPixelBufferRelease(s_anchorMotionFrame);
-        s_anchorMotionFrame = nullptr;
-    }
     @synchronized(PrivacyGate()) {
         s_facePrivacyPoints = nil; s_handPrivacyPoints = nil;
         s_facePrivacyTimestamp = 0; s_handPrivacyTimestamp = 0;
@@ -558,6 +495,7 @@ extern "C" void NativePoseCaptureStop();
 extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (s_session != nil || s_stopping) return 1;
     s_captureStopping = false;
+    s_skinCb=105.f; s_skinCr=151.f; s_skinRegistered=false;
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
     s_lastSafeBackgroundImage = nil;
     s_latestHandPacket = nil; s_latestFacePacket = nil;
@@ -684,13 +622,6 @@ extern "C" void NativePoseCaptureStop() {
     s_lastSafeBackgroundImage = nil;
     s_latestHandPacket = nil; s_latestFacePacket = nil;
     s_latestHandTimestamp = 0; s_latestFaceTimestamp = 0;
-    @synchronized(FrameGate()) {
-        ClearFaceMotionFrames();
-        s_faceMaskTimestamp = 0;
-        s_anchorFaceMask = nil;
-        if (s_anchorMotionFrame != nullptr) CVPixelBufferRelease(s_anchorMotionFrame);
-        s_anchorMotionFrame = nullptr;
-    }
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;

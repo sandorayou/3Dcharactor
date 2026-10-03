@@ -19,7 +19,7 @@ namespace RealtimeBodyTracking.Editor
             project.ReadFromFile(projectPath);
             var framework = project.GetUnityFrameworkTargetGuid();
             foreach (var name in new[] { "AVFoundation.framework", "CoreMedia.framework", "CoreVideo.framework",
-                "Vision.framework", "CoreImage.framework", "QuartzCore.framework", "UIKit.framework", "Metal.framework", "ReplayKit.framework" })
+                "CoreImage.framework", "QuartzCore.framework", "UIKit.framework", "Metal.framework", "ReplayKit.framework" })
                 project.AddFrameworkToProject(framework, name, false);
             project.AddBuildProperty(framework, "OTHER_LDFLAGS", "-ObjC");
             project.SetBuildProperty(framework, "CLANG_ENABLE_MODULES", "YES");
