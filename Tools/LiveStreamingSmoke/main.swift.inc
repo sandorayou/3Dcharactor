@@ -70,7 +70,9 @@ func sound(_ index: Int) -> CMSampleBuffer {
     return sample!
 }
 
-LBLogger.with(HaishinKitIdentifier).appender = NullAppender.shared
+// CocoaPods exports the Objective-C identifier; SwiftPM keeps it in its
+// support module. Use that same identifier in this SwiftPM-only harness.
+LBLogger.with("com.haishinkit.HaishinKit").appender = NullAppender.shared
 private let outputs = ["youtube", "twitch", "twitcast"].map { name -> StreamOutput in
     let output = StreamOutput(Destination(name: name, server: "rtmp://127.0.0.1:1935/live", key: name))
     output.stateChanged = { print("\(name): \($0)") }
