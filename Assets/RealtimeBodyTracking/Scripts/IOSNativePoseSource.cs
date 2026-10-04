@@ -59,7 +59,6 @@ namespace RealtimeBodyTracking
             try
             {
                 latest = JsonUtility.FromJson<PosePacket>(json);
-                if (gaze != null) gaze.SetFace(latest);
                 if (latest?.head_rotation != null)
                 {
                     // Preserve the verified yaw/roll direction, correct native pitch,

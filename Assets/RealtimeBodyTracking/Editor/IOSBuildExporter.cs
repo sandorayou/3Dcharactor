@@ -120,15 +120,6 @@ namespace RealtimeBodyTracking.Editor
                 var restPosition = eye.localPosition;
                 head.Head = headBone;
                 applyer.SendMessage("Start");
-                var packet = new PosePacket { version = 4, face_blendshapes = new List<FaceBlendshape>() };
-                packet.face_blendshapes.Add(new FaceBlendshape { name = "eyeLookInLeft", score = 1f });
-                packet.face_blendshapes.Add(new FaceBlendshape { name = "eyeLookOutRight", score = 1f });
-                var gaze = IOSAvatarGaze.ReadMirroredGaze(packet);
-                if (gaze.x >= 0f || UnityEngine.Mathf.Abs(gaze.y) > .01f)
-                    throw new BuildFailedException("Mirrored horizontal gaze mapping failed.");
-                head.RaiseYawPitchChanged(gaze.x, gaze.y);
-                if (UnityEngine.Quaternion.Angle(eye.localRotation, restRotation) < .1f)
-                    throw new BuildFailedException("Avatar eye did not respond to native gaze.");
                 headBone.localRotation *= UnityEngine.Quaternion.Euler(20f, 30f, 15f);
                 head.RaiseYawPitchChanged(0f, 0f);
                 if (UnityEngine.Quaternion.Angle(eye.localRotation, restRotation) > .05f ||

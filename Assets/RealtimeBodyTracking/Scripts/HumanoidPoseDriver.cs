@@ -814,10 +814,13 @@ namespace RealtimeBodyTracking
             if (!enableFaceExpressions || faceBlendShapeProxy == null) return;
             var t = 1f - Mathf.Exp(-faceExpressionSmoothing * Time.unscaledDeltaTime);
             var blinkStep = faceExpressionSmoothing * Time.unscaledDeltaTime;
+            // A reflected avatar closes the opposite anatomical eye.
+            var leftBlinkSource = avatarMirror ? "eyeBlinkRight" : "eyeBlinkLeft";
+            var rightBlinkSource = avatarMirror ? "eyeBlinkLeft" : "eyeBlinkRight";
             filteredBlinkLeft = Mathf.MoveTowards(filteredBlinkLeft,
-                NormalizeBlink(pose.GetFaceBlendshape("eyeBlinkLeft")), blinkStep);
+                NormalizeBlink(pose.GetFaceBlendshape(leftBlinkSource)), blinkStep);
             filteredBlinkRight = Mathf.MoveTowards(filteredBlinkRight,
-                NormalizeBlink(pose.GetFaceBlendshape("eyeBlinkRight")), blinkStep);
+                NormalizeBlink(pose.GetFaceBlendshape(rightBlinkSource)), blinkStep);
             filteredJawOpen = Mathf.Lerp(filteredJawOpen, pose.GetFaceBlendshape("jawOpen"), t);
             filteredSmile = Mathf.Lerp(filteredSmile,
                 (pose.GetFaceBlendshape("mouthSmileLeft") + pose.GetFaceBlendshape("mouthSmileRight")) * .5f, t);
