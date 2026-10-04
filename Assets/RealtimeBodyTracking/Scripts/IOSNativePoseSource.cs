@@ -62,8 +62,8 @@ namespace RealtimeBodyTracking
                 if (gaze != null) gaze.SetFace(latest);
                 if (latest?.head_rotation != null)
                 {
-                    // Native front-camera orientation already matches the displayed face.
-                    // Cancel the common driver's reflection for yaw and roll together.
+                    // Preserve the verified yaw/roll direction, correct native pitch,
+                    // then cancel the common driver's yaw/roll reflection.
                     var corrected = CorrectNativeHeadRotation(latest.head_rotation.Rotation);
                     latest.head_rotation.x = corrected.x;
                     latest.head_rotation.y = corrected.y;
@@ -75,7 +75,9 @@ namespace RealtimeBodyTracking
         }
         public static Quaternion CorrectNativeHeadRotation(Quaternion rotation)
         {
-            return new Quaternion(rotation.x, -rotation.y, -rotation.z, rotation.w).normalized;
+            var angles = rotation.eulerAngles;
+            var displayed = Quaternion.Euler(-angles.x, angles.y, angles.z);
+            return new Quaternion(displayed.x, -displayed.y, -displayed.z, displayed.w).normalized;
         }
         public bool TryTakeLatest(out PosePacket packet)
         {

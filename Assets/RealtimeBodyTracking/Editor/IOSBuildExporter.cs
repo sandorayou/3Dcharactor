@@ -88,19 +88,21 @@ namespace RealtimeBodyTracking.Editor
         private static void ValidateHeadRotationCorrection()
         {
             // Evaluate the actual runtime conversion using Unity's quaternion implementation.
+            foreach (var pitch in new[] { -30f, 0f, 30f })
             foreach (var yaw in new[] { -60f, 0f, 60f })
             foreach (var roll in new[] { -35f, 0f, 35f })
             {
-                var input = UnityEngine.Quaternion.Euler(17f, yaw, roll);
+                var input = UnityEngine.Quaternion.Euler(pitch, yaw, roll);
                 var source = IOSNativePoseSource.CorrectNativeHeadRotation(input);
                 var corrected = source.eulerAngles;
-                if (UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.x, 17f)) > .01f ||
+                if (UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.x, -pitch)) > .01f ||
                     UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.y, -yaw)) > .01f ||
                     UnityEngine.Mathf.Abs(UnityEngine.Mathf.DeltaAngle(corrected.z, -roll)) > .01f)
-                    throw new BuildFailedException("iOS head orientation must preserve pitch and reverse yaw/roll before common mirroring.");
+                    throw new BuildFailedException("iOS head conversion must reverse pitch/yaw/roll before common mirroring.");
                 var displayed = new UnityEngine.Quaternion(source.x, -source.y, -source.z, source.w).normalized;
-                if (UnityEngine.Quaternion.Angle(input, displayed) > .05f)
-                    throw new BuildFailedException("iOS head orientation differs after the common driver's reflection.");
+                var expected = UnityEngine.Quaternion.Euler(-pitch, yaw, roll);
+                if (UnityEngine.Quaternion.Angle(expected, displayed) > .05f)
+                    throw new BuildFailedException("iOS displayed head must reverse only pitch and preserve verified yaw/roll.");
             }
         }
         private static void ValidateAvatarGaze()
