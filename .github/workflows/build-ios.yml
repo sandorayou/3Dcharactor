@@ -23,6 +23,8 @@ jobs:
             Builds/iOS-WindowsPort.zip
             /Tools/PrivacyAudit/
             /Assets/Plugins/iOS/PrivacyMosaicCore.h
+            /Assets/Plugins/iOS/IOSLiveStreaming.swift
+            /Tools/LiveStreamingSmoke/
           sparse-checkout-cone-mode: false
 
       - name: Ensure Git LFS objects are hydrated
@@ -78,6 +80,7 @@ jobs:
           if ! command -v pod >/dev/null 2>&1; then
             brew install cocoapods
           fi
+
           test -f "$PROJECT_DIR/Libraries/Plugins/iOS/NativePoseBridge.mm"
           test -f "$PROJECT_DIR/Libraries/Plugins/iOS/IOSScreenRecording.mm"
           (cd "$PROJECT_DIR" && pod install --repo-update --silent)
@@ -104,6 +107,21 @@ jobs:
             echo "::error::Legacy MediaPipeUnity.framework was embedded alongside MediaPipeTasksVision"
             exit 1
           fi
+
+      - name: Verify three simultaneous RTMP outputs
+        run: |
+          set -euo pipefail
+          brew install mediamtx ffmpeg
+          python3 Tools/LiveStreamingSmoke/run.py
+
+      - name: Upload streaming verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-streaming-verification
+          path: Output/live-streaming-smoke
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Package IPA
         run: |

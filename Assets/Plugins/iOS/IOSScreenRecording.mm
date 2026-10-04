@@ -10,9 +10,14 @@ static NSString *s_recordingReceiver;
 }
 @end
 static WindowsPortRecordingPreview *s_previewDelegate;
+extern "C" bool MyProjectLiveStreamingBusy();
 
 extern "C" void WindowsPortStartRecording(const char *receiver) {
     s_recordingReceiver = [NSString stringWithUTF8String:receiver];
+    if (MyProjectLiveStreamingBusy()) {
+        UnitySendMessage(s_recordingReceiver.UTF8String, "OnIOSRecordingState", "配信を終了してから録画してください");
+        return;
+    }
     RPScreenRecorder *recorder = [RPScreenRecorder sharedRecorder];
     recorder.microphoneEnabled = NO;
     [recorder startRecordingWithHandler:^(NSError *error) {

@@ -12,8 +12,16 @@ $sourceChanges = & git diff --name-only $portManifest.commit HEAD -- Assets Pack
 if ($LASTEXITCODE -ne 0 -or $sourceChanges) { throw 'The export is older than the committed source. Export again before publishing.' }
 $portCpp = Get-ChildItem -LiteralPath (Join-Path $portOutput 'Il2CppOutputProject\Source\il2cppOutput') -Filter 'Assembly-CSharp*.cpp' |
     ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
-foreach ($symbol in @('OnNativePoseJson','OnNativeCameraPermissionGranted','TryTakeLatestPose','WindowsPortStartRecording','OnIOSRecordingState')) {
+foreach ($symbol in @('OnNativePoseJson','OnNativeCameraPermissionGranted','TryTakeLatestPose','WindowsPortStartRecording','OnIOSRecordingState',
+    'OnLiveStreamingState','MyProjectShowLiveStreaming','MyProjectStopLiveStreaming')) {
     if (-not ($portCpp -match $symbol)) { throw "The exported player is missing $symbol" }
+}
+foreach ($plugin in @('IOSLiveStreaming.swift', 'IOSLiveStreamingBridge.mm', 'IOSScreenRecording.mm')) {
+    $pluginSource = Join-Path $portRoot "Assets/Plugins/iOS/$plugin"
+    $pluginExport = Join-Path $portOutput "Libraries/Plugins/iOS/$plugin"
+    if ((Get-FileHash -LiteralPath $pluginSource).Hash -ne (Get-FileHash -LiteralPath $pluginExport).Hash) {
+        throw "Exported streaming plugin does not match the source: $plugin"
+    }
 }
 $privacyCoreSource = Join-Path $portRoot 'Assets/Plugins/iOS/PrivacyMosaicCore.h'
 $privacyCoreExport = Join-Path $portOutput 'Libraries/Plugins/iOS/PrivacyMosaicCore.h'
