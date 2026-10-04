@@ -22,6 +22,12 @@ namespace RealtimeBodyTracking
             var host = new GameObject("IOSLiveStreaming");
             DontDestroyOnLoad(host);
             host.AddComponent<IOSLiveStreaming>();
+            // Reserve the upper fifth for local controls; ReplayKit crops it.
+            foreach (var camera in Camera.allCameras)
+            {
+                var rect = camera.rect;
+                camera.rect = new Rect(rect.x, rect.y * .8f, rect.width, rect.height * .8f);
+            }
 #endif
         }
 
@@ -36,12 +42,16 @@ namespace RealtimeBodyTracking
         private void OnGUI()
         {
 #if UNITY_IOS && !UNITY_EDITOR
-            if (GUI.Button(new Rect(16, 76, 180, 48), active ? "配信終了" : "ライブ配信"))
+            var previousMatrix = GUI.matrix;
+            // A fixed logical toolbar fits every phone and orientation.
+            GUI.matrix = Matrix4x4.Scale(new Vector3(Screen.width / 600f, Screen.height * .2f / 120f, 1));
+            if (GUI.Button(new Rect(16, 12, 180, 48), active ? "配信終了" : "配信開始"))
             {
                 if (active) MyProjectStopLiveStreaming();
                 else MyProjectShowLiveStreaming(gameObject.name);
             }
-            if (!string.IsNullOrEmpty(summary)) GUI.Label(new Rect(16, 130, Screen.width - 32, 65), summary);
+            if (!string.IsNullOrEmpty(summary)) GUI.Label(new Rect(210, 12, 374, 96), summary);
+            GUI.matrix = previousMatrix;
 #endif
         }
 

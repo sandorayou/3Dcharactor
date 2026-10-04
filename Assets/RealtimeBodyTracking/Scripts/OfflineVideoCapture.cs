@@ -262,15 +262,7 @@ namespace RealtimeBodyTracking
         }
         private void OnGUI()
         {
-            var oldEnabled = GUI.enabled;
-            GUI.enabled = !pending;
-            if (GUI.Button(new Rect(16,16,180,48), recording ? "録画終了" : "録画開始"))
-            {
-                if (recording) StopRecording();
-                else { pending = true; WindowsPortStartRecording(gameObject.name); }
-            }
-            GUI.enabled = oldEnabled;
-            if (recording) GUI.Label(new Rect(210,28,300,30), "REC  実写モザイク + アバター");
+            // iPhone now exposes streaming controls only.
         }
         private void StopRecording() { pending = true; WindowsPortStopRecording(); }
         private void OnDisable() { if (recording && !pending) StopRecording(); }

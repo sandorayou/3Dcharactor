@@ -309,12 +309,16 @@ final class MyProjectLiveStreaming: NSObject, RPScreenRecorderDelegate {
     // ReplayKit buffers carry orientation separately. Bake it into the pixels
     // so all three services receive upright video, including on iOS 15.
     private func orient(_ sample: CMSampleBuffer) -> CMSampleBuffer? {
-        guard let value = CMGetAttachment(sample, key: RPVideoSampleOrientationKey as CFString,
-                attachmentModeOut: nil) as? NSNumber,
-              let orientation = CGImagePropertyOrientation(rawValue: value.uint32Value),
-              orientation != .up, let input = CMSampleBufferGetImageBuffer(sample) else { return sample }
-        let image = CIImage(cvPixelBuffer: input).oriented(orientation)
-        let extent = image.extent
+        guard let input = CMSampleBufferGetImageBuffer(sample) else { return nil }
+        let value = CMGetAttachment(sample, key: RPVideoSampleOrientationKey as CFString,
+                attachmentModeOut: nil) as? NSNumber
+        let orientation = value.flatMap { CGImagePropertyOrientation(rawValue: $0.uint32Value) } ?? .up
+        let oriented = CIImage(cvPixelBuffer: input).oriented(orientation)
+        // Core Image has a bottom-left origin. Never transmit the top toolbar.
+        let full = oriented.extent
+        let extent = CGRect(x: full.minX, y: full.minY, width: full.width,
+                            height: floor(full.height * 0.8))
+        let image = oriented.cropped(to: extent)
         var pixels: CVPixelBuffer?
         guard CVPixelBufferCreate(kCFAllocatorDefault, Int(extent.width), Int(extent.height),
             kCVPixelFormatType_32BGRA, [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &pixels) == kCVReturnSuccess,
