@@ -15,47 +15,93 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          lfs: false
+          sparse-checkout: |
+            .github/workflows
+            .gitattributes
+            Builds/iOS-WindowsPort.zip
+          sparse-checkout-cone-mode: false
+
+      - name: Ensure Git LFS objects are hydrated
+        run: git lfs pull --include="Builds/iOS-WindowsPort.zip" --exclude=""
+
+      - name: Extract iOS-only Xcode export
+        run: |
+          set -euo pipefail
+          test -f Builds/iOS-WindowsPort.zip
+          mkdir -p Builds/iOS-WindowsPort
+          ditto -x -k Builds/iOS-WindowsPort.zip Builds/iOS-WindowsPort
 
       - name: Locate Xcode Project
         id: find-project
         run: |
-          XCODEPROJ=$(find . -name "*.xcodeproj" -not -path "*/Pods/*" | head -n 1)
-          if [ -z "$XCODEPROJ" ]; then
-            echo "::error::No .xcodeproj found in repository. Please export Unity to iOS and commit the Xcode project, or see GITHUB_SIDELOAD.md."
+          XCODEPROJ="Builds/iOS-WindowsPort/Unity-iPhone.xcodeproj"
+          if [ ! -d "$XCODEPROJ" ]; then
+            echo "::error::Export the current Unity iOS player to Builds/iOS-WindowsPort first."
             exit 1
           fi
+          test "$(cat Builds/iOS-WindowsPort/windows-port-export.txt)" = "WindowsPort-PoseHandFace-Blue-v1"
           echo "Found project: $XCODEPROJ"
           PROJECT_NAME=$(basename "$XCODEPROJ" .xcodeproj)
           echo "project_path=$XCODEPROJ" >> $GITHUB_OUTPUT
           echo "scheme=Unity-iPhone" >> $GITHUB_OUTPUT
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || true
-
-      - name: Add HaishinKit Swift Package
         run: |
-          python3 Tools/add_haishinkit_spm.py "${{ steps.find-project.outputs.project_path }}"
-          xcodebuild -resolvePackageDependencies -project "${{ steps.find-project.outputs.project_path }}" -scheme "Unity-iPhone"
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name 'Xcode*.app' -print | sort -V | tail -n 1)
+          if [ -z "$XCODE_PATH" ]; then echo "::error::No Xcode installation found"; exit 1; fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E 'iphoneos|iPhoneOS'
 
       - name: Build unsigned app
+        env:
+          XCODE_PROJECT: ${{ steps.find-project.outputs.project_path }}
         run: |
+          set -euo pipefail
+          PROJECT_DIR=$(dirname "$XCODE_PROJECT")
+          test -f "$PROJECT_DIR/Podfile"
+          if ! command -v pod >/dev/null 2>&1; then
+            brew install cocoapods
+          fi
+          test -f "$PROJECT_DIR/Libraries/Plugins/iOS/NativePoseBridge.mm"
+          test -f "$PROJECT_DIR/Libraries/Plugins/iOS/IOSScreenRecording.mm"
+          (cd "$PROJECT_DIR" && pod install --repo-update --silent)
+          WORKSPACE="${XCODE_PROJECT%.xcodeproj}.xcworkspace"
+          test -d "$WORKSPACE"
           xcodebuild \
-            -project "${{ steps.find-project.outputs.project_path }}" \
+            -workspace "$WORKSPACE" \
             -scheme "Unity-iPhone" \
             -configuration Release \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/App" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS=arm64 \
+            GCC_OPTIMIZATION_LEVEL=s \
+            STRIP_INSTALLED_PRODUCT=YES \
+            DEAD_CODE_STRIPPING=YES \
+            COPY_PHASE_STRIP=YES \
             clean build
+          if find "$RUNNER_TEMP/App" -name 'MediaPipeUnity.framework' -print -quit | grep -q .; then
+            echo "::error::Legacy MediaPipeUnity.framework was embedded alongside MediaPipeTasksVision"
+            exit 1
+          fi
 
       - name: Package IPA
         run: |
           rm -rf "$RUNNER_TEMP/Payload"
           mkdir -p "$RUNNER_TEMP/Payload"
           APP_PATH=$(find "$RUNNER_TEMP/App" -name "*.app" | head -n 1)
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")" = "MyProject5"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = "com.sandorayou.myproject5"
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/"
+          du -sh "$APP_PATH"
+          find "$RUNNER_TEMP/Payload" -name '*.dSYM' -type d -prune -exec rm -rf {} +
           cd "$RUNNER_TEMP"
           ditto -c -k --sequesterRsrc --keepParent Payload MyProject5-unsigned.ipa
 
@@ -65,3 +111,4 @@ jobs:
           name: MyProject5-unsigned-ipa
           path: ${{ runner.temp }}/MyProject5-unsigned.ipa
           if-no-files-found: error
+          retention-days: 7
