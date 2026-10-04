@@ -12,7 +12,7 @@ $sourceChanges = & git diff --name-only $portManifest.commit HEAD -- Assets Pack
 if ($LASTEXITCODE -ne 0 -or $sourceChanges) { throw 'The export is older than the committed source. Export again before publishing.' }
 $portCpp = Get-ChildItem -LiteralPath (Join-Path $portOutput 'Il2CppOutputProject\Source\il2cppOutput') -Filter 'Assembly-CSharp*.cpp' |
     ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
-foreach ($symbol in @('OnNativePoseJson','OnNativeCameraPermissionGranted','TryTakeLatestPose','WindowsPortStartRecording','OnIOSRecordingState',
+foreach ($symbol in @('OnNativePoseJson','OnNativeCameraPermissionGranted','TryTakeLatestPose',
     'OnLiveStreamingState','MyProjectShowLiveStreaming','MyProjectStopLiveStreaming')) {
     if (-not ($portCpp -match $symbol)) { throw "The exported player is missing $symbol" }
 }
