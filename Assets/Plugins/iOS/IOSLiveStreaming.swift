@@ -207,6 +207,22 @@ final class MyProjectLiveStreaming: NSObject, RPScreenRecorderDelegate {
     private func showSettings(_ receiver: String) {
         guard !Self.isActive(), settings == nil else { return }
         self.receiver = receiver
+        // Personal builds receive this file locally, after CI has built the IPA.
+        // Credentials never enter source control or the remote build environment.
+        if let url = Bundle.main.url(forResource: "personal-stream", withExtension: "json"),
+           let data = try? Data(contentsOf: url),
+           let config = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+           let key = config["key"], let server = config["server"],
+           let revision = config["revision"],
+           UserDefaults.standard.string(forKey: "live.personal.revision") != revision,
+           !key.isEmpty, server.hasPrefix("rtmp://"),
+           StreamSecrets.save(key, service: "Twitch"),
+           StreamSecrets.save(server, service: "Twitch.server") {
+            for name in ["YouTube", "Twitch", "ツイキャス"] {
+                UserDefaults.standard.set(name == "Twitch", forKey: "live.enabled." + name)
+            }
+            UserDefaults.standard.set(revision, forKey: "live.personal.revision")
+        }
         guard !RPScreenRecorder.shared().isRecording else { emit("録画を終了してから配信を開始してください"); return }
         guard let root = UIApplication.shared.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
         let controller = StreamSettingsController()
