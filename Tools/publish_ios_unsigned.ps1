@@ -19,7 +19,10 @@ foreach ($symbol in @('OnNativePoseJson','OnNativeCameraPermissionGranted','TryT
 foreach ($plugin in @('IOSLiveStreaming.swift', 'IOSLiveStreamingBridge.mm', 'IOSScreenRecording.mm')) {
     $pluginSource = Join-Path $portRoot "Assets/Plugins/iOS/$plugin"
     $pluginExport = Join-Path $portOutput "Libraries/Plugins/iOS/$plugin"
-    if ((Get-FileHash -LiteralPath $pluginSource).Hash -ne (Get-FileHash -LiteralPath $pluginExport).Hash) {
+    # Git archives normalize text line endings; require identical source content.
+    $pluginSourceText = [IO.File]::ReadAllText($pluginSource).Replace("`r`n", "`n")
+    $pluginExportText = [IO.File]::ReadAllText($pluginExport).Replace("`r`n", "`n")
+    if ($pluginSourceText -cne $pluginExportText) {
         throw "Exported streaming plugin does not match the source: $plugin"
     }
 }

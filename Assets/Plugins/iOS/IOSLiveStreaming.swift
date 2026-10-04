@@ -198,7 +198,7 @@ final class MyProjectLiveStreaming: NSObject, RPScreenRecorderDelegate {
     @objc private func background() { if active { finish("バックグラウンドに移ったため配信終了") } }
 
     private func emit(_ summary: String? = nil) {
-        let text = summary ?? outputs.map { $0.destination.name + ": " + (states[$0.destination.name] ?? "接続中") }.joined(separator: "  /  ")
+        let text = summary ?? outputs.map { $0.destination.name + ": " + (states[$0.destination.name] ?? "接続中") }.joined(separator: "\n")
         guard let data = try? JSONSerialization.data(withJSONObject: ["active": active, "summary": text]),
               let json = String(data: data, encoding: .utf8) else { return }
         receiver.withCString { r in json.withCString { notifyUnity(r, $0) } }
