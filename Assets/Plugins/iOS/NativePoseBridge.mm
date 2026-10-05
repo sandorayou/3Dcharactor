@@ -162,6 +162,44 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
     return maskImage;
 }
 
+// Landmark coordinates have a top-left origin; Core Image uses bottom-left.
+// Cover the whole expanded head, including dark eyes and hair, without holes.
+static CIImage *HeadPrivacyMask(CIImage *source, CIImage *skin, NSInteger timestamp) {
+    NSArray<NSValue *> *points;
+    NSInteger detectedAt;
+    @synchronized(PrivacyGate()) {
+        points = s_facePrivacyPoints;
+        detectedAt = s_facePrivacyTimestamp;
+    }
+    CGRect full = source.extent;
+    CIImage *white = [CIImage imageWithColor:[CIColor colorWithRed:1 green:1 blue:1 alpha:1]];
+    // Old coordinates cannot protect a moving face. Fail closed on startup,
+    // detector loss, rotation and a face result more than 150 ms behind video.
+    if (points.count < 100 || timestamp < detectedAt || timestamp - detectedAt > 150)
+        return [white imageByCroppingToRect:full];
+    CGFloat left=1, right=0, top=1, bottom=0;
+    for (NSValue *value in points) {
+        CGPoint p=value.CGPointValue;
+        if (!std::isfinite(p.x) || !std::isfinite(p.y))
+            return [white imageByCroppingToRect:full];
+        left=MIN(left,p.x);right=MAX(right,p.x);top=MIN(top,p.y);bottom=MAX(bottom,p.y);
+    }
+    CGFloat width=right-left, height=bottom-top;
+    if (width <= 0 || height <= 0) return [white imageByCroppingToRect:full];
+    // Face landmarks end near the forehead. Extend above it for the crown,
+    // sideways for hair and motion, and below the chin for the head boundary.
+    left=MAX(0,left-width*.5); right=MIN(1,right+width*.5);
+    top=MAX(0,top-height*.8); bottom=MIN(1,bottom+height*.35);
+    CGRect head=CGRectMake(full.origin.x+left*full.size.width,
+        full.origin.y+(1-bottom)*full.size.height,
+        (right-left)*full.size.width,(bottom-top)*full.size.height);
+    CIImage *headMask=[white imageByCroppingToRect:head];
+    CIImage *base=skin ? [[[skin imageBySamplingNearest] imageByApplyingTransform:CGAffineTransformMakeScale(
+        full.size.width/skin.extent.size.width,full.size.height/skin.extent.size.height)] imageByCroppingToRect:full]
+        : [[CIImage imageWithColor:[CIColor colorWithRed:0 green:0 blue:0 alpha:1]] imageByCroppingToRect:full];
+    return [[headMask imageByCompositingOverImage:base] imageByCroppingToRect:full];
+}
+
 static void DisplayLiveBackground(CIImage *source, CIImage *mask, NSInteger timestamp) {
     if (source == nil || s_backgroundLayer == nil) return;
     CIImage *processed = source;
@@ -252,7 +290,7 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer:@NO}];
     CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
     CVPixelBufferRef colours = ColourFrame(source);
-    DisplayLiveBackground(source, AdaptiveSkinMask(colours), timestamp);
+    DisplayLiveBackground(source, HeadPrivacyMask(source, AdaptiveSkinMask(colours), timestamp), timestamp);
     if (colours != nullptr) CVPixelBufferRelease(colours);
     [s_landmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_handLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
