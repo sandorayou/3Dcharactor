@@ -5,19 +5,6 @@
 #include <chrono>
 std::vector<uint8_t> Read(const std::string &p) { std::ifstream f(p,std::ios::binary); return {std::istreambuf_iterator<char>(f),std::istreambuf_iterator<char>()}; }
 int main(int argc,char **argv) {
-    PrivacyMosaic::EmptySceneGate empty;
-    // Production empty-scene decision: stable absence clears; loss does not.
-    if(empty.ClearBackground(1000,0,false,0,false))return 20;
-    if(empty.ClearBackground(1000,1000,false,1000,false))return 21;
-    if(empty.ClearBackground(1299,1299,false,1299,false))return 22;
-    if(!empty.ClearBackground(1300,1300,false,1300,false))return 23;
-    if(empty.ClearBackground(1301,1301,true,1301,false))return 24;
-    if(empty.ClearBackground(1400,1400,false,1400,true))return 25;
-    if(empty.ClearBackground(1500,1500,false,1500,false))return 26;
-    if(empty.ClearBackground(1800,1500,false,1800,false))return 27;
-    if(empty.ClearBackground(1900,1900,false,1900,false))return 28;
-    if(!empty.ClearBackground(2200,2200,false,2200,false))return 29;
-    std::cout<<"PASS: empty room clears after 300 ms; person entry and stale detection retain protection\n";
     if(argc!=2)return 2;std::string root=argv[1],name;std::ifstream manifest(root+"/manifest.txt");
     if(!manifest)return 3;int w,h,count=0;float cb,cr,sc,sr;
     while(manifest>>name>>w>>h>>cb>>cr>>sc>>sr) {

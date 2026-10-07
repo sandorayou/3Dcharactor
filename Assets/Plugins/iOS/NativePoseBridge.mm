@@ -35,7 +35,6 @@ static NSArray<NSValue *> *s_handPrivacyPoints;
 static NSArray<NSValue *> *s_facePrivacyPoints;
 static NSInteger s_handPrivacyTimestamp, s_facePrivacyTimestamp;
 static NSInteger s_posePrivacyTimestamp;
-static PrivacyMosaic::EmptySceneGate s_emptySceneGate;
 static UIInterfaceOrientation s_lastVideoOrientation = UIInterfaceOrientationUnknown;
 static void UpdateVideoOrientation(void);
 static NSDictionary *s_latestHandPacket;
@@ -169,33 +168,25 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
 static CIImage *HeadPrivacyMask(CIImage *source, CIImage *skin, NSInteger timestamp) {
     NSArray<NSValue *> *points;
     NSInteger detectedAt;
-    NSInteger poseAt;
-    BOOL posePresent;
     @synchronized(PrivacyGate()) {
         points = s_facePrivacyPoints;
         detectedAt = s_facePrivacyTimestamp;
-        poseAt = s_posePrivacyTimestamp;
-        posePresent = s_posePrivacyPoints.count > 0;
     }
-    // A fresh, sustained empty result from both detectors is an empty room,
-    // not a failed face detector. Return nil to show the unchanged background.
-    if (s_emptySceneGate.ClearBackground(timestamp, detectedAt, points.count > 0, poseAt, posePresent))
-        return nil;
     CGRect full = source.extent;
     CIImage *white = [CIImage imageWithColor:[CIColor colorWithRed:1 green:1 blue:1 alpha:1]];
-    // Old coordinates cannot protect a moving face. Fail closed on startup,
-    // detector loss, rotation and a face result more than 150 ms behind video.
+    // Without a current face, use only the existing skin mask. Never replace
+    // the entire background with mosaic because a face detector missed.
     if (points.count < 100 || timestamp < detectedAt || timestamp - detectedAt > 150)
-        return [white imageByCroppingToRect:full];
+        return skin;
     CGFloat left=1, right=0, top=1, bottom=0;
     for (NSValue *value in points) {
         CGPoint p=value.CGPointValue;
         if (!std::isfinite(p.x) || !std::isfinite(p.y))
-            return [white imageByCroppingToRect:full];
+            return skin;
         left=MIN(left,p.x);right=MAX(right,p.x);top=MIN(top,p.y);bottom=MAX(bottom,p.y);
     }
     CGFloat width=right-left, height=bottom-top;
-    if (width <= 0 || height <= 0) return [white imageByCroppingToRect:full];
+    if (width <= 0 || height <= 0) return skin;
     // Face landmarks end near the forehead. Extend above it for the crown,
     // sideways for hair and motion, and below the chin for the head boundary.
     left=MAX(0,left-width*.5); right=MIN(1,right+width*.5);
