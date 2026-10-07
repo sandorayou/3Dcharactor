@@ -5,6 +5,16 @@
 #include <vector>
 
 namespace PrivacyMosaic {
+struct EmptySceneGate {
+    int64_t emptySince=-1;
+    bool ClearBackground(int64_t now,int64_t faceAt,bool facePresent,int64_t poseAt,bool posePresent) {
+        bool fresh=faceAt>0 && poseAt>0 && now>=faceAt && now>=poseAt &&
+            now-faceAt<=150 && now-poseAt<=150;
+        if (!fresh || facePresent || posePresent) { emptySince=-1;return false; }
+        if (emptySince<0 || now<emptySince) emptySince=now;
+        return now-emptySince>=300;
+    }
+};
 template<class T> inline T Clamp(T v,T low,T high) { return std::max(low,std::min(high,v)); }
 struct SkinClassifier {
     float cb, cr, seedCb, seedCr, spreadCb, spreadCr;

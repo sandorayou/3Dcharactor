@@ -34,6 +34,8 @@ static NSArray<NSValue *> *s_posePrivacyPoints;
 static NSArray<NSValue *> *s_handPrivacyPoints;
 static NSArray<NSValue *> *s_facePrivacyPoints;
 static NSInteger s_handPrivacyTimestamp, s_facePrivacyTimestamp;
+static NSInteger s_posePrivacyTimestamp;
+static PrivacyMosaic::EmptySceneGate s_emptySceneGate;
 static UIInterfaceOrientation s_lastVideoOrientation = UIInterfaceOrientationUnknown;
 static void UpdateVideoOrientation(void);
 static NSDictionary *s_latestHandPacket;
@@ -167,10 +169,18 @@ static CIImage *AdaptiveSkinMask(CVPixelBufferRef current) {
 static CIImage *HeadPrivacyMask(CIImage *source, CIImage *skin, NSInteger timestamp) {
     NSArray<NSValue *> *points;
     NSInteger detectedAt;
+    NSInteger poseAt;
+    BOOL posePresent;
     @synchronized(PrivacyGate()) {
         points = s_facePrivacyPoints;
         detectedAt = s_facePrivacyTimestamp;
+        poseAt = s_posePrivacyTimestamp;
+        posePresent = s_posePrivacyPoints.count > 0;
     }
+    // A fresh, sustained empty result from both detectors is an empty room,
+    // not a failed face detector. Return nil to show the unchanged background.
+    if (s_emptySceneGate.ClearBackground(timestamp, detectedAt, points.count > 0, poseAt, posePresent))
+        return nil;
     CGRect full = source.extent;
     CIImage *white = [CIImage imageWithColor:[CIColor colorWithRed:1 green:1 blue:1 alpha:1]];
     // Old coordinates cannot protect a moving face. Fail closed on startup,
@@ -322,7 +332,9 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
         [jsonPoints addObject:@{@"name": names[i], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": p.visibility ?: @0.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
     }
     @synchronized(PrivacyGate()) {
+        if (timestamp < s_posePrivacyTimestamp) return;
         s_posePrivacyPoints = [privacyPoints copy];
+        s_posePrivacyTimestamp = timestamp;
         s_hasLeftPoseWrist = points.count > 15;
         s_hasRightPoseWrist = points.count > 16;
         if (s_hasLeftPoseWrist) { MPPNormalizedLandmark *p = points[15]; s_leftPoseWrist = CGPointMake(p.x, p.y); }
@@ -417,7 +429,10 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     NSMutableArray<NSValue *> *privacy = [NSMutableArray array];
     for (MPPNormalizedLandmark *p in result.faceLandmarks.firstObject)
         [privacy addObject:[NSValue valueWithCGPoint:CGPointMake(p.x,p.y)]];
-    @synchronized(PrivacyGate()) { s_facePrivacyPoints=[privacy copy]; s_facePrivacyTimestamp=timestamp; }
+    @synchronized(PrivacyGate()) {
+        if (timestamp < s_facePrivacyTimestamp) return;
+        s_facePrivacyPoints=[privacy copy]; s_facePrivacyTimestamp=timestamp;
+    }
     SubmitResult(@"face", packet, timestamp);
 }
 @end
