@@ -50,18 +50,7 @@ namespace RealtimeBodyTracking
 
         private void OnGUI()
         {
-            var old = GUI.backgroundColor;
-            GUI.backgroundColor = recording ? new Color(1f, .35f, .35f) : new Color(.35f, 1f, .45f);
-            if (GUI.Button(new Rect(16, 16, 180, 48), recording ? "録画終了" : "録画開始"))
-            {
-                if (recording) StopRecording(); else StartRecording();
-            }
-            GUI.backgroundColor = old;
-#if UNITY_IOS && !UNITY_EDITOR
-            if (recording) GUI.Label(new Rect(210, 28, 300, 30), "REC  実写モザイク + アバター");
-#else
-            if (recording) GUI.Label(new Rect(210, 28, 300, 30), "REC  実写マスク + 透過アバター");
-#endif
+            // Recording UI is intentionally omitted; this app is for live camera use.
         }
 
         private void StartRecording()

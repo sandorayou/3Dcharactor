@@ -20,6 +20,24 @@ namespace RealtimeBodyTracking
 
         private UdpPoseReceiver receiver;
         private Process ownedTracker;
+        [SerializeField, Tooltip("Selected camera index")] private int cameraSource;
+
+        [Serializable] private sealed class CameraSettings { public int source; }
+
+        public int CameraSource => cameraSource;
+        public string Failure => ownedTracker != null && !ownedTracker.HasExited ? null : lastFailure;
+
+        public void SelectCamera(int index)
+        {
+            if (index < 0) return;
+            cameraSource = index;
+            var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            var settingsDirectory = Path.Combine(root, "UserSettings");
+            Directory.CreateDirectory(settingsDirectory);
+            File.WriteAllText(Path.Combine(settingsDirectory, "MirrorInput.json"),
+                JsonUtility.ToJson(new CameraSettings { source = index }));
+            if (isActiveAndEnabled) RestartOwnedTracker("Camera selection changed");
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -42,6 +60,16 @@ namespace RealtimeBodyTracking
             yield break;
 #else
             receiver = GetComponent<UdpPoseReceiver>();
+            var configPath = Path.Combine(Path.GetFullPath(Path.Combine(Application.dataPath, "..")), "UserSettings", "MirrorInput.json");
+            if (File.Exists(configPath))
+            {
+                try
+                {
+                    var settings = JsonUtility.FromJson<CameraSettings>(File.ReadAllText(configPath));
+                    if (settings != null && settings.source >= 0) cameraSource = settings.source;
+                }
+                catch (Exception exception) { Debug.LogWarning($"[TrackerAutoLauncher] Camera settings could not be read: {exception.Message}", this); }
+            }
             if (!autoLaunchLiveTracker)
             {
                 launcherState = "replay_or_external_tracker";
@@ -57,6 +85,8 @@ namespace RealtimeBodyTracking
         private void RestartOwnedTracker(string reason)
         {
             StopOwnedTracker();
+            receiver.TryTakeLatest(out _);
+            foreach (var driver in FindObjectsOfType<HumanoidPoseDriver>()) driver.ResetForCameraSource();
             var applicationRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var trackerDirectory = Path.Combine(applicationRoot, "python-tracker");
             var appPath = Path.Combine(trackerDirectory, "app.py");
@@ -75,7 +105,7 @@ namespace RealtimeBodyTracking
                 ownedTracker = Process.Start(new ProcessStartInfo
                 {
                     FileName = python,
-                    Arguments = $"\"{appPath}\" --source 0 --host 127.0.0.1 --port {receiver.Port} --no-preview",
+                    Arguments = $"\"{appPath}\" --source {cameraSource} --host 127.0.0.1 --port {receiver.Port} --no-preview",
                     WorkingDirectory = trackerDirectory,
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -94,7 +124,7 @@ namespace RealtimeBodyTracking
             }
         }
 
-        private static string ResolvePythonExecutable(string projectRoot)
+        public static string ResolvePythonExecutable(string projectRoot)
         {
             var localPythonw = Path.Combine(projectRoot, "python-tracker", ".venv", "Scripts", "pythonw.exe");
             if (File.Exists(localPythonw)) return localPythonw;
@@ -113,7 +143,11 @@ namespace RealtimeBodyTracking
             {
                 if (!ownedTracker.HasExited && ownedTracker.CloseMainWindow())
                     ownedTracker.WaitForExit(1500);
-                if (!ownedTracker.HasExited) ownedTracker.Kill();
+                if (!ownedTracker.HasExited)
+                {
+                    ownedTracker.Kill();
+                    ownedTracker.WaitForExit(3000);
+                }
             }
             catch (Exception exception)
             {

@@ -8,9 +8,23 @@
 #include "PrivacyMosaicCore.h"
 #include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <map>
+#include <mutex>
 #include <vector>
 #include <algorithm>
-static std::atomic<int> s_width{640}, s_height{480};
+#include <limits>
+static constexpr int kInferenceSize = 256;
+struct LetterboxGeometry {
+    int sourceWidth;
+    int sourceHeight;
+    int left;
+    int top;
+    double scale;
+    int frameNumber;
+};
+static std::mutex s_geometryMutex;
+static std::map<long long, LetterboxGeometry> s_frameGeometry;
 static std::atomic<long long> s_orientationReadyTimestamp{0};
 static AVCaptureSession *s_session;
 static AVCaptureVideoDataOutput *s_output;
@@ -22,6 +36,7 @@ static MPPHandLandmarker *s_handLandmarker;
 static MPPFaceLandmarker *s_faceLandmarker;
 static NSString *s_unityObject;
 static long long s_frame;
+static long long s_lastInferenceTimestamp;
 static BOOL s_useFrontCamera = YES;
 static CGFloat s_mosaicScale = 48.0;
 static CALayer *s_backgroundLayer;
@@ -37,17 +52,136 @@ static NSInteger s_handPrivacyTimestamp, s_facePrivacyTimestamp;
 static NSInteger s_posePrivacyTimestamp;
 static UIInterfaceOrientation s_lastVideoOrientation = UIInterfaceOrientationUnknown;
 static void UpdateVideoOrientation(void);
-static NSDictionary *s_latestHandPacket;
-static NSDictionary *s_latestFacePacket;
-static NSInteger s_latestHandTimestamp;
-static NSInteger s_latestFaceTimestamp;
+static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *s_pendingFramePackets;
+static NSMutableDictionary<NSNumber *, NSDictionary *> *s_poseWristsByTimestamp;
+static NSMutableDictionary<NSNumber *, MPPHandLandmarkerResult *> *s_pendingHandResults;
+static NSMutableDictionary<NSString *, NSDictionary *> *s_handTrackState;
+
+// Match python-tracker/pose_estimator.py: resize to the fit size with area
+// filtering, center on a black square, and put any odd extra pixel on the
+// bottom/right. Keep geometry per timestamp so all three results use the same
+// source dimensions and capture rotation cannot mix coordinate systems.
+static bool MakeSquareInferenceBuffer(CVPixelBufferRef source,
+                                      CVPixelBufferRef *squareBuffer,
+                                      LetterboxGeometry *geometry) {
+    if (source == nullptr || squareBuffer == nullptr || geometry == nullptr) return false;
+    const int width = (int)CVPixelBufferGetWidth(source);
+    const int height = (int)CVPixelBufferGetHeight(source);
+    if (width <= 0 || height <= 0 ||
+        CVPixelBufferGetPixelFormatType(source) != kCVPixelFormatType_32BGRA) return false;
+
+    const double scale = std::min((double)kInferenceSize / width,
+                                  (double)kInferenceSize / height);
+    const int scaledWidth = std::max(1, std::min(kInferenceSize,
+        (int)std::nearbyint(width * scale)));
+    const int scaledHeight = std::max(1, std::min(kInferenceSize,
+        (int)std::nearbyint(height * scale)));
+    const int left = (kInferenceSize - scaledWidth) / 2;
+    const int top = (kInferenceSize - scaledHeight) / 2;
+
+    NSDictionary *attributes = @{
+        (id)kCVPixelBufferIOSurfacePropertiesKey: @{},
+        (id)kCVPixelBufferMetalCompatibilityKey: @YES
+    };
+    CVPixelBufferRef output = nullptr;
+    if (CVPixelBufferCreate(kCFAllocatorDefault, kInferenceSize, kInferenceSize,
+                            kCVPixelFormatType_32BGRA,
+                            (__bridge CFDictionaryRef)attributes, &output) != kCVReturnSuccess)
+        return false;
+    if (CVPixelBufferLockBaseAddress(source, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) {
+        CVPixelBufferRelease(output);
+        return false;
+    }
+    if (CVPixelBufferLockBaseAddress(output, 0) != kCVReturnSuccess) {
+        CVPixelBufferUnlockBaseAddress(source, kCVPixelBufferLock_ReadOnly);
+        CVPixelBufferRelease(output);
+        return false;
+    }
+
+    const uint8_t *input = static_cast<const uint8_t *>(CVPixelBufferGetBaseAddress(source));
+    uint8_t *pixels = static_cast<uint8_t *>(CVPixelBufferGetBaseAddress(output));
+    const size_t inputStride = CVPixelBufferGetBytesPerRow(source);
+    const size_t outputStride = CVPixelBufferGetBytesPerRow(output);
+    if (input == nullptr || pixels == nullptr || inputStride < (size_t)width * 4 ||
+        outputStride < (size_t)kInferenceSize * 4) {
+        CVPixelBufferUnlockBaseAddress(output, 0);
+        CVPixelBufferUnlockBaseAddress(source, kCVPixelBufferLock_ReadOnly);
+        CVPixelBufferRelease(output);
+        return false;
+    }
+
+    // OpenCV's three-channel zero border corresponds to opaque black in BGRA.
+    for (int y = 0; y < kInferenceSize; ++y) {
+        uint8_t *row = pixels + (size_t)y * outputStride;
+        for (int x = 0; x < kInferenceSize; ++x) {
+            row[x * 4 + 0] = row[x * 4 + 1] = row[x * 4 + 2] = 0;
+            row[x * 4 + 3] = 255;
+        }
+    }
+
+    // Pixel-area integration matches INTER_AREA for this downscale while
+    // avoiding a second image-processing runtime in the iOS build.
+    const double scaleX = (double)width / scaledWidth;
+    const double scaleY = (double)height / scaledHeight;
+    for (int y = 0; y < scaledHeight; ++y) {
+        const double y0 = y * scaleY, y1 = (y + 1) * scaleY;
+        const int sourceY0 = (int)std::floor(y0);
+        const int sourceY1 = std::min(height, (int)std::ceil(y1));
+        for (int x = 0; x < scaledWidth; ++x) {
+            const double x0 = x * scaleX, x1 = (x + 1) * scaleX;
+            const int sourceX0 = (int)std::floor(x0);
+            const int sourceX1 = std::min(width, (int)std::ceil(x1));
+            double sums[3] = {0.0, 0.0, 0.0};
+            for (int sourceY = sourceY0; sourceY < sourceY1; ++sourceY) {
+                const double weightY = std::min(y1, sourceY + 1.0) - std::max(y0, (double)sourceY);
+                const uint8_t *inputRow = input + (size_t)sourceY * inputStride;
+                for (int sourceX = sourceX0; sourceX < sourceX1; ++sourceX) {
+                    const double weightX = std::min(x1, sourceX + 1.0) - std::max(x0, (double)sourceX);
+                    const double weight = weightX * weightY;
+                    const uint8_t *pixel = inputRow + (size_t)sourceX * 4;
+                    for (int channel = 0; channel < 3; ++channel)
+                        sums[channel] += pixel[channel] * weight;
+                }
+            }
+            uint8_t *destination = pixels + (size_t)(top + y) * outputStride + (size_t)(left + x) * 4;
+            const double area = scaleX * scaleY;
+            for (int channel = 0; channel < 3; ++channel)
+                destination[channel] = (uint8_t)std::max(0.0, std::min(255.0,
+                    std::nearbyint(sums[channel] / area)));
+            destination[3] = 255;
+        }
+    }
+
+    CVPixelBufferUnlockBaseAddress(output, 0);
+    CVPixelBufferUnlockBaseAddress(source, kCVPixelBufferLock_ReadOnly);
+    *squareBuffer = output;
+    *geometry = {width, height, left, top, scale, 0};
+    return true;
+}
+
+static void RememberFrameGeometry(long long timestamp, const LetterboxGeometry &geometry) {
+    std::lock_guard<std::mutex> lock(s_geometryMutex);
+    s_frameGeometry[timestamp] = geometry;
+    while (s_frameGeometry.size() > 64) s_frameGeometry.erase(s_frameGeometry.begin());
+}
+
+static bool GeometryForFrame(long long timestamp, LetterboxGeometry *geometry) {
+    std::lock_guard<std::mutex> lock(s_geometryMutex);
+    auto found = s_frameGeometry.find(timestamp);
+    if (found == s_frameGeometry.end()) return false;
+    *geometry = found->second;
+    return true;
+}
+
+static CGPoint RestoreOriginalImagePoint(CGFloat x, CGFloat y, const LetterboxGeometry &geometry) {
+    return CGPointMake((x * kInferenceSize - geometry.left) /
+                           (geometry.scale * geometry.sourceWidth),
+                       (y * kInferenceSize - geometry.top) /
+                           (geometry.scale * geometry.sourceHeight));
+}
 template<typename T> static T ClampColour(T value, T low, T high) {
     return std::max(low, std::min(high, value));
 }
-static CGPoint s_leftPoseWrist;
-static CGPoint s_rightPoseWrist;
-static BOOL s_hasLeftPoseWrist;
-static BOOL s_hasRightPoseWrist;
 static NSObject *PrivacyGate() {
     static NSObject *gate;
     static dispatch_once_t once;
@@ -57,52 +191,57 @@ static NSObject *PrivacyGate() {
 
 static NSDictionary *HeadRotationFromFaceMatrix(MPPTransformMatrix *matrix) {
     if (matrix == nil || matrix.rows < 3 || matrix.columns < 3) return nil;
-    float r[3][3];
+    double r[3][3];
     for (NSUInteger row = 0; row < 3; ++row)
         for (NSUInteger column = 0; column < 3; ++column)
             r[row][column] = [matrix valueAtRow:row column:column];
     // Newton polar decomposition produces the same nearest orthogonal matrix as
     // Windows' U @ Vh SVD scale removal, without adding another native library.
-    for (NSUInteger iteration = 0; iteration < 6; ++iteration) {
-        float determinant =
+    for (NSUInteger iteration = 0; iteration < 12; ++iteration) {
+        double determinant =
             r[0][0] * (r[1][1] * r[2][2] - r[1][2] * r[2][1]) -
             r[0][1] * (r[1][0] * r[2][2] - r[1][2] * r[2][0]) +
             r[0][2] * (r[1][0] * r[2][1] - r[1][1] * r[2][0]);
-        if (fabsf(determinant) < .000001f) return nil;
-        float inverseTranspose[3][3] = {
+        if (std::fabs(determinant) < 1e-12) return nil;
+        double inverseTranspose[3][3] = {
             {(r[1][1]*r[2][2]-r[1][2]*r[2][1])/determinant, (r[1][2]*r[2][0]-r[1][0]*r[2][2])/determinant, (r[1][0]*r[2][1]-r[1][1]*r[2][0])/determinant},
             {(r[0][2]*r[2][1]-r[0][1]*r[2][2])/determinant, (r[0][0]*r[2][2]-r[0][2]*r[2][0])/determinant, (r[0][1]*r[2][0]-r[0][0]*r[2][1])/determinant},
             {(r[0][1]*r[1][2]-r[0][2]*r[1][1])/determinant, (r[0][2]*r[1][0]-r[0][0]*r[1][2])/determinant, (r[0][0]*r[1][1]-r[0][1]*r[1][0])/determinant}
         };
+        double maximumDelta = 0;
         for (NSUInteger row = 0; row < 3; ++row)
-            for (NSUInteger column = 0; column < 3; ++column)
-                r[row][column] = .5f * (r[row][column] + inverseTranspose[row][column]);
+            for (NSUInteger column = 0; column < 3; ++column) {
+                const double next = .5 * (r[row][column] + inverseTranspose[row][column]);
+                maximumDelta = std::max(maximumDelta, std::fabs(next - r[row][column]));
+                r[row][column] = next;
+            }
+        if (maximumDelta < 1e-12) break;
     }
-    const float axis[3] = {1, -1, -1};
+    const double axis[3] = {1, -1, -1};
     for (NSUInteger row = 0; row < 3; ++row)
         for (NSUInteger column = 0; column < 3; ++column)
             r[row][column] *= axis[row] * axis[column];
-    float x, y, z, w;
-    float trace = r[0][0] + r[1][1] + r[2][2];
+    double x, y, z, w;
+    double trace = r[0][0] + r[1][1] + r[2][2];
     if (trace > 0) {
-        float scale = sqrtf(trace + 1) * 2;
-        w = .25f * scale; x = (r[2][1] - r[1][2]) / scale;
+        double scale = std::sqrt(trace + 1) * 2;
+        w = .25 * scale; x = (r[2][1] - r[1][2]) / scale;
         y = (r[0][2] - r[2][0]) / scale; z = (r[1][0] - r[0][1]) / scale;
     } else if (r[0][0] > r[1][1] && r[0][0] > r[2][2]) {
-        float scale = sqrtf(1 + r[0][0] - r[1][1] - r[2][2]) * 2;
-        x = .25f * scale; y = (r[0][1] + r[1][0]) / scale;
+        double scale = std::sqrt(1 + r[0][0] - r[1][1] - r[2][2]) * 2;
+        x = .25 * scale; y = (r[0][1] + r[1][0]) / scale;
         z = (r[0][2] + r[2][0]) / scale; w = (r[2][1] - r[1][2]) / scale;
     } else if (r[1][1] > r[2][2]) {
-        float scale = sqrtf(1 + r[1][1] - r[0][0] - r[2][2]) * 2;
-        x = (r[0][1] + r[1][0]) / scale; y = .25f * scale;
+        double scale = std::sqrt(1 + r[1][1] - r[0][0] - r[2][2]) * 2;
+        x = (r[0][1] + r[1][0]) / scale; y = .25 * scale;
         z = (r[1][2] + r[2][1]) / scale; w = (r[0][2] - r[2][0]) / scale;
     } else {
-        float scale = sqrtf(1 + r[2][2] - r[0][0] - r[1][1]) * 2;
+        double scale = std::sqrt(1 + r[2][2] - r[0][0] - r[1][1]) * 2;
         x = (r[0][2] + r[2][0]) / scale; y = (r[1][2] + r[2][1]) / scale;
-        z = .25f * scale; w = (r[1][0] - r[0][1]) / scale;
+        z = .25 * scale; w = (r[1][0] - r[0][1]) / scale;
     }
-    float norm = sqrtf(x*x + y*y + z*z + w*w);
-    if (norm < .00001f) return nil;
+    double norm = std::sqrt(x*x + y*y + z*z + w*w);
+    if (norm < 1e-12) return nil;
     return @{@"x": @(x/norm), @"y": @(y/norm), @"z": @(z/norm), @"w": @(w/norm)};
 }
 
@@ -221,50 +360,67 @@ static void DisplayLiveBackground(CIImage *source, CIImage *mask, NSInteger time
     });
 }
 
-// Pose drives the body and must never wait for optional hand/face detectors.
-// Supplemental results are reused only for a short interval.
+// Assemble one packet from results for the same captured frame, matching the
+// Windows estimator. Never reuse a later or earlier hand/face result.
 static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timestamp) {
     if (timestamp < s_orientationReadyTimestamp.load()) return;
-    static NSObject *gate;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ gate = [NSObject new]; });
-    @synchronized(gate) {
-        if ([kind isEqualToString:@"hand"]) {
-            s_latestHandPacket = packet;
-            s_latestHandTimestamp = timestamp;
-            return;
+    NSString *json = nil;
+    NSString *receiver = nil;
+    @synchronized(PrivacyGate()) {
+        if (s_pendingFramePackets == nil) s_pendingFramePackets = [NSMutableDictionary dictionary];
+        NSNumber *key = @(timestamp);
+        NSMutableDictionary *parts = s_pendingFramePackets[key];
+        if (parts == nil) {
+            parts = [NSMutableDictionary dictionary];
+            s_pendingFramePackets[key] = parts;
         }
-        if ([kind isEqualToString:@"face"]) {
-            s_latestFacePacket = packet;
-            s_latestFaceTimestamp = timestamp;
-            return;
+        parts[kind] = packet;
+
+        if (parts[@"pose"] != nil && parts[@"hand"] != nil && parts[@"face"] != nil) {
+            NSDictionary *pose = parts[@"pose"];
+            NSDictionary *hand = parts[@"hand"];
+            NSDictionary *face = parts[@"face"];
+            NSMutableDictionary *combined = [pose mutableCopy];
+            NSMutableArray *points = [combined[@"points"] mutableCopy] ?: [NSMutableArray array];
+            if (hand[@"points"] != nil) [points addObjectsFromArray:hand[@"points"]];
+            combined[@"points"] = points;
+            combined[@"tracking"] = @(points.count > 0);
+            combined[@"face_blendshapes"] = face[@"face_blendshapes"] ?: @[];
+            if (face[@"head_rotation"] != nil) combined[@"head_rotation"] = face[@"head_rotation"];
+            NSData *data = [NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];
+            json = data != nil ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil;
+            receiver = [s_unityObject copy];
+            [s_pendingFramePackets removeObjectForKey:key];
         }
-        NSMutableDictionary *combined = [packet mutableCopy];
-        NSMutableArray *points = [combined[@"points"] mutableCopy] ?: [NSMutableArray array];
-        NSInteger handAge = timestamp >= s_latestHandTimestamp
-            ? timestamp - s_latestHandTimestamp : s_latestHandTimestamp - timestamp;
-        NSInteger faceAge = timestamp >= s_latestFaceTimestamp
-            ? timestamp - s_latestFaceTimestamp : s_latestFaceTimestamp - timestamp;
-        NSDictionary *hand = s_latestHandPacket != nil && handAge <= 150 ? s_latestHandPacket : nil;
-        NSDictionary *face = s_latestFacePacket != nil && faceAge <= 150 ? s_latestFacePacket : nil;
-        if (hand[@"points"] != nil) [points addObjectsFromArray:hand[@"points"]];
-        if (face[@"points"] != nil) [points addObjectsFromArray:face[@"points"]];
-        combined[@"points"] = points;
-        combined[@"hand_count"] = hand[@"hand_count"] ?: @0;
-        combined[@"left_hand_points"] = hand[@"left_hand_points"] ?: @0;
-        combined[@"right_hand_points"] = hand[@"right_hand_points"] ?: @0;
-        combined[@"face_blendshapes"] = face[@"face_blendshapes"] ?: @[];
-        if (face[@"head_rotation"] != nil) combined[@"head_rotation"] = face[@"head_rotation"];
-        combined[@"frame"] = @(s_frame++);
-        NSData *data = [NSJSONSerialization dataWithJSONObject:combined options:0 error:nil];
-        NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        NSString *receiver = [s_unityObject copy];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (timestamp >= s_orientationReadyTimestamp.load() && receiver && [receiver isEqualToString:s_unityObject] && json)
-                UnitySendMessage(receiver.UTF8String, "OnNativePoseJson", json.UTF8String);
-        });
+
+        // Keep an upper bound if a detector fails to call back for some frames.
+        while (s_pendingFramePackets.count > 64) {
+            NSNumber *oldest = nil;
+            for (NSNumber *candidate in s_pendingFramePackets)
+                if (oldest == nil || candidate.longLongValue < oldest.longLongValue) oldest = candidate;
+            if (oldest == nil) break;
+            [s_pendingFramePackets removeObjectForKey:oldest];
+        }
     }
+    if (json == nil) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (timestamp >= s_orientationReadyTimestamp.load() && receiver && [receiver isEqualToString:s_unityObject])
+            UnitySendMessage(receiver.UTF8String, "OnNativePoseJson", json.UTF8String);
+    });
 }
+
+@interface NativePoseResultDelegate : NSObject
+- (void)poseLandmarker:(MPPPoseLandmarker *)landmarker didFinishDetectionWithResult:(MPPPoseLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error;
+@end
+@interface NativeHandResultDelegate : NSObject
+- (void)handLandmarker:(MPPHandLandmarker *)landmarker didFinishDetectionWithResult:(MPPHandLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error;
+@end
+@interface NativeFaceResultDelegate : NSObject
+- (void)faceLandmarker:(MPPFaceLandmarker *)landmarker didFinishDetectionWithResult:(MPPFaceLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error;
+@end
+static NativePoseResultDelegate *s_resultDelegate;
+static NativeHandResultDelegate *s_handDelegate;
+static NativeFaceResultDelegate *s_faceDelegate;
 
 @interface NativePoseCaptureDelegate : NSObject <AVCaptureVideoDataOutputSampleBufferDelegate>
 @end
@@ -282,144 +438,277 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 
     if (s_landmarker == nil || s_unityObject == nil) return;
     if (s_captureStopping.load()) return;
-    NSInteger timestamp = (NSInteger)(CACurrentMediaTime() * 1000.0);
+    long long timestamp = std::max((long long)(CACurrentMediaTime() * 1000.0), s_lastInferenceTimestamp + 1);
+    s_lastInferenceTimestamp = timestamp;
     if (timestamp < s_orientationReadyTimestamp.load()) return;
-    s_width = (int)CVPixelBufferGetWidth(pixelBuffer);
-    s_height = (int)CVPixelBufferGetHeight(pixelBuffer);
-    MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:pixelBuffer error:nil];
+    CVPixelBufferRef inferenceBuffer = nullptr;
+    LetterboxGeometry geometry;
+    if (!MakeSquareInferenceBuffer(pixelBuffer, &inferenceBuffer, &geometry)) return;
+    geometry.frameNumber = (int)++s_frame;
+    RememberFrameGeometry(timestamp, geometry);
+    MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:inferenceBuffer error:nil];
+    CVPixelBufferRelease(inferenceBuffer);
     if (image == nil) return;
     if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer:@NO}];
     CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
     CVPixelBufferRef colours = ColourFrame(source);
     DisplayLiveBackground(source, HeadPrivacyMask(source, AdaptiveSkinMask(colours), timestamp), timestamp);
     if (colours != nullptr) CVPixelBufferRelease(colours);
-    [s_landmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
-    [s_handLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
-    [s_faceLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
+    MPPPoseLandmarker *poseLandmarker = s_landmarker;
+    MPPHandLandmarker *handLandmarker = s_handLandmarker;
+    MPPFaceLandmarker *faceLandmarker = s_faceLandmarker;
+    __block MPPPoseLandmarkerResult *poseResult = nil;
+    __block MPPHandLandmarkerResult *handResult = nil;
+    __block MPPFaceLandmarkerResult *faceResult = nil;
+    dispatch_group_t group = dispatch_group_create();
+    dispatch_queue_t inferenceQueue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
+    dispatch_group_async(group, inferenceQueue, ^{
+        poseResult = [poseLandmarker detectVideoFrame:image timestampInMilliseconds:timestamp error:nil];
+    });
+    dispatch_group_async(group, inferenceQueue, ^{
+        handResult = [handLandmarker detectVideoFrame:image timestampInMilliseconds:timestamp error:nil];
+    });
+    dispatch_group_async(group, inferenceQueue, ^{
+        faceResult = [faceLandmarker detectVideoFrame:image timestampInMilliseconds:timestamp error:nil];
+    });
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+    if (s_captureStopping.load() || timestamp < s_orientationReadyTimestamp.load()) return;
+    [s_resultDelegate poseLandmarker:poseLandmarker didFinishDetectionWithResult:poseResult timestampInMilliseconds:timestamp error:nil];
+    [s_handDelegate handLandmarker:handLandmarker didFinishDetectionWithResult:handResult timestampInMilliseconds:timestamp error:nil];
+    [s_faceDelegate faceLandmarker:faceLandmarker didFinishDetectionWithResult:faceResult timestampInMilliseconds:timestamp error:nil];
 }
 @end
-
-@interface NativePoseResultDelegate : NSObject <MPPPoseLandmarkerLiveStreamDelegate>
-@end
-@interface NativeHandResultDelegate : NSObject <MPPHandLandmarkerLiveStreamDelegate>
-@end
-@interface NativeFaceResultDelegate : NSObject <MPPFaceLandmarkerLiveStreamDelegate>
-@end
+static void ProcessHandResult(MPPHandLandmarkerResult *result, NSInteger timestamp,
+                              const LetterboxGeometry &geometry, NSDictionary *poseWrists);
 @implementation NativePoseResultDelegate
 - (void)poseLandmarker:(MPPPoseLandmarker *)landmarker didFinishDetectionWithResult:(MPPPoseLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
     if (s_unityObject == nil || landmarker != s_landmarker || timestamp < s_orientationReadyTimestamp.load()) return;
     if (result == nil) return;
+    LetterboxGeometry geometry;
+    if (!GeometryForFrame(timestamp, &geometry)) return;
     NSArray *points = result.landmarks.firstObject;
     NSArray<MPPLandmark *> *world = result.worldLandmarks.firstObject;
-    NSArray *names = @[@"nose", @"left_eye_inner", @"left_eye", @"left_eye_outer", @"right_eye_inner", @"right_eye", @"right_eye_outer", @"left_ear", @"right_ear", @"mouth_left", @"mouth_right", @"left_shoulder", @"right_shoulder", @"left_elbow", @"right_elbow", @"left_wrist", @"right_wrist", @"left_pinky", @"right_pinky", @"left_index", @"right_index", @"left_thumb", @"right_thumb", @"left_hip", @"right_hip", @"left_knee", @"right_knee", @"left_ankle", @"right_ankle", @"left_heel", @"right_heel", @"left_foot_index", @"right_foot_index"];
+    NSArray *names = @[@"nose", @"left_eye", @"right_eye", @"left_ear", @"right_ear", @"left_shoulder", @"right_shoulder", @"left_elbow", @"right_elbow", @"left_wrist", @"right_wrist", @"left_pinky", @"right_pinky", @"left_index", @"right_index", @"left_thumb", @"right_thumb", @"left_hip", @"right_hip", @"left_knee", @"right_knee", @"left_ankle", @"right_ankle", @"left_heel", @"right_heel", @"left_foot_index", @"right_foot_index"];
+    NSArray<NSNumber *> *indices = @[@0, @2, @5, @7, @8, @11, @12, @13, @14, @15, @16, @17, @18, @19, @20, @21, @22, @23, @24, @25, @26, @27, @28, @29, @30, @31, @32];
     NSMutableArray *jsonPoints = [NSMutableArray array];
     NSMutableArray<NSValue *> *privacyPoints = [NSMutableArray array];
-    for (NSUInteger i = 0; i < points.count && i < world.count && i < names.count; ++i) {
-        MPPNormalizedLandmark *p = points[i];
-        MPPLandmark *w = world[i];
-        [privacyPoints addObject:[NSValue valueWithCGPoint:CGPointMake(p.x, p.y)]];
+    for (NSUInteger i = 0; i < names.count; ++i) {
+        NSUInteger landmarkIndex = indices[i].unsignedIntegerValue;
+        if (landmarkIndex >= points.count || landmarkIndex >= world.count) continue;
+        MPPNormalizedLandmark *p = points[landmarkIndex];
+        MPPLandmark *w = world[landmarkIndex];
+        CGPoint originalPoint = RestoreOriginalImagePoint(p.x, p.y, geometry);
+        [privacyPoints addObject:[NSValue valueWithCGPoint:originalPoint]];
         // Match the Windows protocol: raw MediaPipe world axes, image coordinates
         // separately, and visibility as confidence. Unity performs axis conversion.
-        [jsonPoints addObject:@{@"name": names[i], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": p.visibility ?: @0.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
+        [jsonPoints addObject:@{@"name": names[i], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": p.visibility ?: @0.0, @"image_x": @(originalPoint.x), @"image_y": @(originalPoint.y), @"image_z": @(p.z)}];
     }
     @synchronized(PrivacyGate()) {
         if (timestamp < s_posePrivacyTimestamp) return;
         s_posePrivacyPoints = [privacyPoints copy];
         s_posePrivacyTimestamp = timestamp;
-        s_hasLeftPoseWrist = points.count > 15;
-        s_hasRightPoseWrist = points.count > 16;
-        if (s_hasLeftPoseWrist) { MPPNormalizedLandmark *p = points[15]; s_leftPoseWrist = CGPointMake(p.x, p.y); }
-        if (s_hasRightPoseWrist) { MPPNormalizedLandmark *p = points[16]; s_rightPoseWrist = CGPointMake(p.x, p.y); }
     }
-    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @((long long)(NSDate.date.timeIntervalSince1970 * 1000)), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints};
+    NSMutableDictionary *poseWrists = [NSMutableDictionary dictionary];
+    poseWrists[@"has_world"] = @(world.count > 0);
+    if (points.count > 15) {
+        MPPNormalizedLandmark *wrist = points[15];
+        if (wrist.visibility.floatValue >= .2f) poseWrists[@"left"] = @{@"x": @(wrist.x), @"y": @(wrist.y)};
+    }
+    if (points.count > 16) {
+        MPPNormalizedLandmark *wrist = points[16];
+        if (wrist.visibility.floatValue >= .2f) poseWrists[@"right"] = @{@"x": @(wrist.x), @"y": @(wrist.y)};
+    }
+    MPPHandLandmarkerResult *pendingHand = nil;
+    @synchronized(PrivacyGate()) {
+        if (s_poseWristsByTimestamp == nil) s_poseWristsByTimestamp = [NSMutableDictionary dictionary];
+        if (s_pendingHandResults == nil) s_pendingHandResults = [NSMutableDictionary dictionary];
+        NSNumber *key = @(timestamp);
+        s_poseWristsByTimestamp[key] = poseWrists;
+        pendingHand = s_pendingHandResults[key];
+        [s_pendingHandResults removeObjectForKey:key];
+        while (s_poseWristsByTimestamp.count > 64) {
+            NSNumber *oldest = nil;
+            for (NSNumber *candidate in s_poseWristsByTimestamp)
+                if (oldest == nil || candidate.longLongValue < oldest.longLongValue) oldest = candidate;
+            if (oldest == nil) break;
+            [s_poseWristsByTimestamp removeObjectForKey:oldest];
+        }
+    }
+    NSDictionary *packet = @{@"version": @4, @"frame": @(geometry.frameNumber), @"timestamp_ms": @(timestamp), @"source_width": @(geometry.sourceWidth), @"source_height": @(geometry.sourceHeight), @"tracking": @(jsonPoints.count > 0), @"points": jsonPoints};
     SubmitResult(@"pose", packet, timestamp);
+    if (pendingHand != nil) ProcessHandResult(pendingHand, timestamp, geometry, poseWrists);
 }
 @end
 
 @implementation NativeHandResultDelegate
 - (void)handLandmarker:(MPPHandLandmarker *)landmarker didFinishDetectionWithResult:(MPPHandLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
     if (!result || !s_unityObject || timestamp < s_orientationReadyTimestamp.load()) return;
-    NSArray *names = @[@"wrist", @"thumb_cmc", @"thumb_mcp", @"thumb_ip", @"thumb", @"index_mcp", @"index_pip", @"index_dip", @"index", @"middle_mcp", @"middle_pip", @"middle_dip", @"middle", @"ring_mcp", @"ring_pip", @"ring_dip", @"ring", @"pinky_mcp", @"pinky_pip", @"pinky_dip", @"pinky"];
-    NSMutableArray *points = [NSMutableArray array];
-    NSMutableArray<NSValue *> *privacyPoints = [NSMutableArray array];
-    NSMutableArray<NSString *> *sides = [NSMutableArray array];
-    NSMutableArray<NSNumber *> *scores = [NSMutableArray array];
-    CGPoint leftWrist, rightWrist; BOOL hasLeft, hasRight;
-    @synchronized(PrivacyGate()) { leftWrist = s_leftPoseWrist; rightWrist = s_rightPoseWrist; hasLeft = s_hasLeftPoseWrist; hasRight = s_hasRightPoseWrist; }
-    for (NSUInteger h = 0; h < result.landmarks.count; ++h) {
-        NSArray *image = result.landmarks[h];
-        if (image.count == 0) { [sides addObject:@"right"]; [scores addObject:@0.0]; continue; }
-        MPPNormalizedLandmark *wrist = image[0];
-        MPPCategory *category = h < result.handedness.count ? [result.handedness[h] firstObject] : nil;
-        NSString *side = category.categoryName.lowercaseString ?: @"";
-        if (hasLeft || hasRight) {
-            CGFloat leftDistance = hasLeft ? hypot(wrist.x - leftWrist.x, wrist.y - leftWrist.y) : CGFLOAT_MAX;
-            CGFloat rightDistance = hasRight ? hypot(wrist.x - rightWrist.x, wrist.y - rightWrist.y) : CGFLOAT_MAX;
-            side = leftDistance <= rightDistance ? @"left" : @"right";
-        } else if (![side isEqualToString:@"left"] && ![side isEqualToString:@"right"]) {
-            side = wrist.x > .5 ? @"left" : @"right";
-        }
-        [sides addObject:side];
-        [scores addObject:@(category ? category.score : .5f)];
-    }
-    if (sides.count == 2 && [sides[0] isEqualToString:sides[1]]) {
-        MPPNormalizedLandmark *a = [result.landmarks[0] firstObject];
-        MPPNormalizedLandmark *b = [result.landmarks[1] firstObject];
-        sides[0] = a.x > b.x ? @"left" : @"right";
-        sides[1] = a.x > b.x ? @"right" : @"left";
-    }
-    int leftCount = 0, rightCount = 0;
-    for (NSUInteger h = 0; h < result.landmarks.count; h++) {
-        NSArray *image = result.landmarks[h]; NSArray *world = h < result.worldLandmarks.count ? result.worldLandmarks[h] : @[];
-        NSString *side = sides[h];
-        float score = scores[h].floatValue;
-        for (NSUInteger i = 0; i < image.count && i < world.count && i < names.count; i++) {
-            MPPNormalizedLandmark *p = image[i]; MPPLandmark *w = world[i];
-            [privacyPoints addObject:[NSValue valueWithCGPoint:CGPointMake(p.x, p.y)]];
-            [points addObject:@{@"name": [NSString stringWithFormat:@"%@_hand_%@", side, names[i]], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": @(score), @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
-        }
-        if (image.count > 17 && world.count > 17) {
-            NSArray<NSNumber *> *indices = @[@5, @9, @17];
-            float ix = 0, iy = 0, iz = 0, wx = 0, wy = 0, wz = 0;
-            for (NSNumber *number in indices) {
-                NSUInteger i = number.unsignedIntegerValue; MPPNormalizedLandmark *p = image[i]; MPPLandmark *w = world[i];
-                ix += p.x; iy += p.y; iz += p.z; wx += w.x; wy += w.y; wz += w.z;
+    LetterboxGeometry geometry;
+    if (!GeometryForFrame(timestamp, &geometry)) return;
+    NSDictionary *poseWrists = nil;
+    NSNumber *key = @(timestamp);
+    @synchronized(PrivacyGate()) {
+        poseWrists = s_poseWristsByTimestamp[key];
+        if (poseWrists == nil) {
+            if (s_pendingHandResults == nil) s_pendingHandResults = [NSMutableDictionary dictionary];
+            s_pendingHandResults[key] = result;
+            while (s_pendingHandResults.count > 64) {
+                NSNumber *oldest = nil;
+                for (NSNumber *candidate in s_pendingHandResults)
+                    if (oldest == nil || candidate.longLongValue < oldest.longLongValue) oldest = candidate;
+                if (oldest == nil) break;
+                [s_pendingHandResults removeObjectForKey:oldest];
             }
-            [points addObject:@{@"name": [NSString stringWithFormat:@"%@_hand_palm", side], @"x": @(wx / 3), @"y": @(wy / 3), @"z": @(wz / 3), @"confidence": @(score), @"image_x": @(ix / 3), @"image_y": @(iy / 3), @"image_z": @(iz / 3)}];
         }
-        if ([side isEqualToString:@"left"]) leftCount = (int)MIN(image.count + 1, 22); else rightCount = (int)MIN(image.count + 1, 22);
     }
-    @synchronized(PrivacyGate()) { s_handPrivacyPoints = [privacyPoints copy]; s_handPrivacyTimestamp = timestamp; }
-    NSDictionary *packet = @{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(points.count > 0), @"hand_count": @(result.landmarks.count), @"left_hand_points": @(leftCount), @"right_hand_points": @(rightCount), @"points": points};
-    SubmitResult(@"hand", packet, timestamp);
+    if (poseWrists != nil) ProcessHandResult(result, timestamp, geometry, poseWrists);
 }
 @end
+
+static void ProcessHandResult(MPPHandLandmarkerResult *result, NSInteger timestamp,
+                              const LetterboxGeometry &geometry, NSDictionary *poseWrists) {
+    static NSArray<NSString *> *names = nil;
+    static dispatch_once_t namesOnce;
+    dispatch_once(&namesOnce, ^{
+        names = @[@"wrist", @"thumb_cmc", @"thumb_mcp", @"thumb_ip", @"thumb", @"index_mcp", @"index_pip", @"index_dip", @"index", @"middle_mcp", @"middle_pip", @"middle_dip", @"middle", @"ring_mcp", @"ring_pip", @"ring_dip", @"ring", @"pinky_mcp", @"pinky_pip", @"pinky_dip", @"pinky"];
+    });
+    NSMutableArray<NSDictionary *> *candidates = [NSMutableArray array];
+    for (NSUInteger index = 0; index < result.landmarks.count; ++index) {
+        NSArray *image = result.landmarks[index];
+        if (image.count == 0) continue;
+        NSArray *world = index < result.worldLandmarks.count ? result.worldLandmarks[index] : @[];
+        MPPNormalizedLandmark *wrist = image[0];
+        MPPCategory *category = index < result.handedness.count ? [result.handedness[index] firstObject] : nil;
+        NSString *rawLabel = category.categoryName.length > 0 ? category.categoryName : category.displayName;
+        NSString *label = rawLabel.lowercaseString ?: @"";
+        if (![label isEqualToString:@"left"] && ![label isEqualToString:@"right"]) label = @"";
+        [candidates addObject:@{@"index": @(index), @"score": @(category ? category.score : .5f),
+                                @"label": label, @"wrist_x": @(wrist.x), @"wrist_y": @(wrist.y),
+                                @"image": image, @"world": world}];
+    }
+    [candidates sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+        double sa = [a[@"score"] doubleValue], sb = [b[@"score"] doubleValue];
+        if (sa != sb) return sa > sb ? NSOrderedAscending : NSOrderedDescending;
+        NSComparisonResult labelOrder = [a[@"label"] compare:b[@"label"] options:NSLiteralSearch];
+        if (labelOrder != NSOrderedSame) return labelOrder == NSOrderedAscending ? NSOrderedDescending : NSOrderedAscending;
+        for (NSString *key in @[@"index", @"wrist_x", @"wrist_y"]) {
+            double va = [a[key] doubleValue], vb = [b[key] doubleValue];
+            if (va != vb) return va > vb ? NSOrderedAscending : NSOrderedDescending;
+        }
+        return NSOrderedSame;
+    }];
+    if (candidates.count > 2) [candidates removeObjectsInRange:NSMakeRange(2, candidates.count - 2)];
+
+    NSArray<NSArray<NSString *> *> *permutations = candidates.count == 2
+        ? @[@[@"left", @"right"], @[@"right", @"left"]]
+        : candidates.count == 1 ? @[@[@"left"], @[@"right"]] : @[];
+    double bestCost = std::numeric_limits<double>::infinity();
+    NSArray<NSString *> *bestSides = @[];
+    NSDictionary<NSString *, NSDictionary *> *tracks = s_handTrackState;
+    @synchronized(PrivacyGate()) {
+        if (s_handTrackState == nil) s_handTrackState = [NSMutableDictionary dictionary];
+        tracks = s_handTrackState;
+        for (NSArray<NSString *> *sides in permutations) {
+            double cost = 0;
+            for (NSUInteger i = 0; i < candidates.count; ++i) {
+                NSDictionary *hand = candidates[i];
+                NSString *side = sides[i];
+                double x = [hand[@"wrist_x"] doubleValue], y = [hand[@"wrist_y"] doubleValue];
+                NSDictionary *track = tracks[side];
+                int lastFrame = track != nil ? [track[@"last_frame"] intValue] : geometry.frameNumber;
+                int age = geometry.frameNumber - lastFrame;
+                if (track != nil && age <= 10) {
+                    int predictionFrames = std::min(std::max(age, 1), 3);
+                    double predictedX = [track[@"x"] doubleValue] + [track[@"vx"] doubleValue] * predictionFrames;
+                    double predictedY = [track[@"y"] doubleValue] + [track[@"vy"] doubleValue] * predictionFrames;
+                    double dx = x - predictedX, dy = y - predictedY;
+                    cost += 5.0 * (dx * dx + dy * dy);
+                } else cost += .12;
+
+                NSString *label = hand[@"label"];
+                double score = [hand[@"score"] doubleValue];
+                if (score >= .7 && label.length > 0 && ![label isEqualToString:side]) cost += .10 * score;
+                NSDictionary *poseWrist = poseWrists[side];
+                if (poseWrist != nil) {
+                    double dx = x - [poseWrist[@"x"] doubleValue];
+                    double dy = y - [poseWrist[@"y"] doubleValue];
+                    cost += .35 * (dx * dx + dy * dy);
+                }
+                NSString *screenSide = x > .5 ? @"left" : @"right"; // tracking_mirror=false, matching Unity's Windows launch defaults
+                if (![screenSide isEqualToString:side]) cost += .015;
+            }
+            if (cost < bestCost) { bestCost = cost; bestSides = sides; }
+        }
+
+        for (NSUInteger i = 0; i < candidates.count; ++i) {
+            NSDictionary *hand = candidates[i];
+            NSString *side = bestSides[i];
+            NSDictionary *previous = tracks[side];
+            int age = previous != nil ? std::max(geometry.frameNumber - [previous[@"last_frame"] intValue], 1) : 1;
+            double x = [hand[@"wrist_x"] doubleValue], y = [hand[@"wrist_y"] doubleValue];
+            double vx = 0, vy = 0;
+            if (previous != nil && age <= 10) {
+                double measuredX = (x - [previous[@"x"] doubleValue]) / age;
+                double measuredY = (y - [previous[@"y"] doubleValue]) / age;
+                vx = [previous[@"vx"] doubleValue] * .45 + measuredX * .55;
+                vy = [previous[@"vy"] doubleValue] * .45 + measuredY * .55;
+            }
+            tracks[side] = @{@"x": @(x), @"y": @(y), @"vx": @(vx), @"vy": @(vy), @"last_frame": @(geometry.frameNumber)};
+        }
+    }
+
+    NSMutableArray<NSValue *> *privacyPoints = [NSMutableArray array];
+    int leftCount = 0, rightCount = 0;
+    if ([poseWrists[@"has_world"] boolValue]) {
+        for (NSUInteger h = 0; h < candidates.count; ++h) {
+            NSDictionary *candidate = candidates[h];
+            NSString *side = bestSides[h];
+            NSArray *image = candidate[@"image"], *world = candidate[@"world"];
+            float score = [candidate[@"score"] floatValue];
+            for (NSUInteger i = 0; i < image.count && i < world.count && i < names.count; ++i) {
+                MPPNormalizedLandmark *p = image[i]; MPPLandmark *w = world[i];
+                CGPoint originalPoint = RestoreOriginalImagePoint(p.x, p.y, geometry);
+                [privacyPoints addObject:[NSValue valueWithCGPoint:originalPoint]];
+                [points addObject:@{@"name": [NSString stringWithFormat:@"%@_hand_%@", side, names[i]], @"x": @(w.x), @"y": @(w.y), @"z": @(w.z), @"confidence": @(score), @"image_x": @(originalPoint.x), @"image_y": @(originalPoint.y), @"image_z": @(p.z)}];
+            }
+            if (image.count > 17 && world.count > 17) {
+                NSArray<NSNumber *> *indices = @[@5, @9, @17];
+                float ix = 0, iy = 0, iz = 0, wx = 0, wy = 0, wz = 0;
+                for (NSNumber *number in indices) {
+                    NSUInteger index = number.unsignedIntegerValue;
+                    MPPNormalizedLandmark *p = image[index]; MPPLandmark *w = world[index];
+                    ix += p.x; iy += p.y; iz += p.z; wx += w.x; wy += w.y; wz += w.z;
+                }
+                CGPoint originalPoint = RestoreOriginalImagePoint(ix / 3, iy / 3, geometry);
+                [points addObject:@{@"name": [NSString stringWithFormat:@"%@_hand_palm", side], @"x": @(wx / 3), @"y": @(wy / 3), @"z": @(wz / 3), @"confidence": @(score), @"image_x": @(originalPoint.x), @"image_y": @(originalPoint.y), @"image_z": @(iz / 3)}];
+            }
+            if ([side isEqualToString:@"left"]) leftCount = (int)MIN(image.count + 1, 22);
+            else rightCount = (int)MIN(image.count + 1, 22);
+        }
+    }
+    @synchronized(PrivacyGate()) { s_handPrivacyPoints = [privacyPoints copy]; s_handPrivacyTimestamp = timestamp; }
+    NSDictionary *packet = @{@"version": @4, @"frame": @(geometry.frameNumber), @"timestamp_ms": @(timestamp), @"source_width": @(geometry.sourceWidth), @"source_height": @(geometry.sourceHeight), @"tracking": @(points.count > 0), @"hand_count": @(candidates.count), @"left_hand_points": @(leftCount), @"right_hand_points": @(rightCount), @"points": points};
+    @synchronized(PrivacyGate()) { [s_poseWristsByTimestamp removeObjectForKey:@(timestamp)]; }
+    SubmitResult(@"hand", packet, timestamp);
+}
 
 @implementation NativeFaceResultDelegate
 - (void)faceLandmarker:(MPPFaceLandmarker *)landmarker didFinishDetectionWithResult:(MPPFaceLandmarkerResult *)result timestampInMilliseconds:(NSInteger)timestamp error:(NSError *)error {
     if (!result || !s_unityObject || landmarker != s_faceLandmarker || s_captureStopping.load() || timestamp < s_orientationReadyTimestamp.load()) return;
+    LetterboxGeometry geometry;
+    if (!GeometryForFrame(timestamp, &geometry)) return;
     NSMutableArray *blend = [NSMutableArray array];
     NSMutableArray *points = [NSMutableArray array];
+    NSSet<NSString *> *trackedShapes = [NSSet setWithArray:@[@"eyeBlinkLeft", @"eyeBlinkRight", @"jawOpen", @"mouthSmileLeft", @"mouthSmileRight"]];
     if (result.faceBlendshapes.count > 0) for (MPPCategory *c in result.faceBlendshapes.firstObject.categories)
-        [blend addObject:@{@"name": c.categoryName ?: @"", @"score": @(c.score)}];
-    // Match the Windows packet: these two image-space anchors drive continuous
-    // camera framing so the avatar face stays on top of the captured face.
-    NSArray<MPPNormalizedLandmark *> *face = result.faceLandmarks.firstObject;
-    if (face.count > 152) {
-        NSArray<NSString *> *names = @[@"face_top", @"face_chin"];
-        NSArray<NSNumber *> *indices = @[@10, @152];
-        for (NSUInteger i = 0; i < indices.count; ++i) {
-            MPPNormalizedLandmark *p = face[indices[i].unsignedIntegerValue];
-            [points addObject:@{@"name": names[i], @"x": @0.0, @"y": @0.0, @"z": @0.0,
-                                @"confidence": @1.0, @"image_x": @(p.x), @"image_y": @(p.y), @"image_z": @(p.z)}];
-        }
-    }
-    NSMutableDictionary *packet = [@{@"version": @4, @"frame": @(timestamp), @"timestamp_ms": @(timestamp), @"source_width": @(s_width.load()), @"source_height": @(s_height.load()), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": points} mutableCopy];
+        if ([trackedShapes containsObject:c.categoryName ?: @""])
+            [blend addObject:@{@"name": c.categoryName ?: @"", @"score": @(c.score)}];
+    NSMutableDictionary *packet = [@{@"version": @4, @"frame": @(geometry.frameNumber), @"timestamp_ms": @(timestamp), @"source_width": @(geometry.sourceWidth), @"source_height": @(geometry.sourceHeight), @"tracking": @(result.faceLandmarks.count > 0), @"face_blendshapes": blend, @"points": @[]} mutableCopy];
     NSDictionary *headRotation = HeadRotationFromFaceMatrix(result.facialTransformationMatrixes.firstObject);
     if (headRotation != nil) packet[@"head_rotation"] = headRotation;
     NSMutableArray<NSValue *> *privacy = [NSMutableArray array];
     for (MPPNormalizedLandmark *p in result.faceLandmarks.firstObject)
-        [privacy addObject:[NSValue valueWithCGPoint:CGPointMake(p.x,p.y)]];
+        [privacy addObject:[NSValue valueWithCGPoint:RestoreOriginalImagePoint(p.x, p.y, geometry)]];
     @synchronized(PrivacyGate()) {
         if (timestamp < s_facePrivacyTimestamp) return;
         s_facePrivacyPoints=[privacy copy]; s_facePrivacyTimestamp=timestamp;
@@ -429,9 +718,6 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
 @end
 
 static NativePoseCaptureDelegate *s_delegate;
-static NativePoseResultDelegate *s_resultDelegate;
-static NativeHandResultDelegate *s_handDelegate;
-static NativeFaceResultDelegate *s_faceDelegate;
 static BOOL s_paused;
 static BOOL s_stopping;
 
@@ -446,6 +732,10 @@ static void UpdateVideoOrientation() {
     @synchronized(PrivacyGate()) {
         s_facePrivacyPoints = nil; s_handPrivacyPoints = nil;
         s_facePrivacyTimestamp = 0; s_handPrivacyTimestamp = 0;
+        [s_poseWristsByTimestamp removeAllObjects];
+        [s_pendingHandResults removeAllObjects];
+        [s_handTrackState removeAllObjects];
+        [s_pendingFramePackets removeAllObjects];
     }
     if (s_unityObject != nil)
         UnitySendMessage(s_unityObject.UTF8String, "OnNativeCameraOrientationChanged", "");
@@ -482,8 +772,16 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     s_skinClassifier=PrivacyMosaic::SkinClassifier(107.f,157.f,6.f,7.f);
     s_unityObject = [NSString stringWithUTF8String:unityObjectName ?: ""];
     s_lastSafeBackgroundImage = nil;
-    s_latestHandPacket = nil; s_latestFacePacket = nil;
-    s_latestHandTimestamp = 0; s_latestFaceTimestamp = 0;
+    s_frame = 0;
+    @synchronized(PrivacyGate()) {
+        s_poseWristsByTimestamp = [NSMutableDictionary dictionary];
+        s_pendingHandResults = [NSMutableDictionary dictionary];
+        s_handTrackState = [NSMutableDictionary dictionary];
+        s_pendingFramePackets = [NSMutableDictionary dictionary];
+        s_posePrivacyPoints = nil; s_handPrivacyPoints = nil; s_facePrivacyPoints = nil;
+        s_posePrivacyTimestamp = s_handPrivacyTimestamp = s_facePrivacyTimestamp = 0;
+    }
+    { std::lock_guard<std::mutex> lock(s_geometryMutex); s_frameGeometry.clear(); }
     if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] == AVAuthorizationStatusNotDetermined) {
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -500,26 +798,25 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
     if (modelPath == nil) return -3;
     MPPPoseLandmarkerOptions *options = [MPPPoseLandmarkerOptions new];
     options.baseOptions.modelAssetPath = modelPath;
-    options.runningMode = MPPRunningModeLiveStream;
+    options.runningMode = MPPRunningModeVideo;
     options.numPoses = 1;
     options.shouldOutputSegmentationMasks = NO;
     s_resultDelegate = [NativePoseResultDelegate new];
-    options.poseLandmarkerLiveStreamDelegate = s_resultDelegate;
     s_landmarker = [[MPPPoseLandmarker alloc] initWithOptions:options error:nil];
     if (s_landmarker == nil) return -4;
     NSString *handPath = [[NSBundle mainBundle] pathForResource:@"hand_landmarker" ofType:@"task" inDirectory:@"Data/Raw"];
     NSString *facePath = [[NSBundle mainBundle] pathForResource:@"face_landmarker" ofType:@"task" inDirectory:@"Data/Raw"];
     if (!handPath || !facePath) return -7;
     MPPHandLandmarkerOptions *handOptions = [MPPHandLandmarkerOptions new];
-    handOptions.baseOptions.modelAssetPath = handPath; handOptions.runningMode = MPPRunningModeLiveStream; handOptions.numHands = 2;
+    handOptions.baseOptions.modelAssetPath = handPath; handOptions.runningMode = MPPRunningModeVideo; handOptions.numHands = 2;
     handOptions.minHandDetectionConfidence = .35f;
     handOptions.minHandPresenceConfidence = .35f;
     handOptions.minTrackingConfidence = .35f;
-    s_handDelegate = [NativeHandResultDelegate new]; handOptions.handLandmarkerLiveStreamDelegate = s_handDelegate;
+    s_handDelegate = [NativeHandResultDelegate new];
     s_handLandmarker = [[MPPHandLandmarker alloc] initWithOptions:handOptions error:nil];
     MPPFaceLandmarkerOptions *faceOptions = [MPPFaceLandmarkerOptions new];
-    faceOptions.baseOptions.modelAssetPath = facePath; faceOptions.runningMode = MPPRunningModeLiveStream; faceOptions.numFaces = 1; faceOptions.outputFaceBlendshapes = YES; faceOptions.outputFacialTransformationMatrixes = YES;
-    s_faceDelegate = [NativeFaceResultDelegate new]; faceOptions.faceLandmarkerLiveStreamDelegate = s_faceDelegate;
+    faceOptions.baseOptions.modelAssetPath = facePath; faceOptions.runningMode = MPPRunningModeVideo; faceOptions.numFaces = 1; faceOptions.outputFaceBlendshapes = YES; faceOptions.outputFacialTransformationMatrixes = YES;
+    s_faceDelegate = [NativeFaceResultDelegate new];
     s_faceLandmarker = [[MPPFaceLandmarker alloc] initWithOptions:faceOptions error:nil];
     if (!s_handLandmarker || !s_faceLandmarker) return -8;
 
@@ -604,8 +901,11 @@ extern "C" void NativePoseCaptureStop() {
     s_backgroundLayer = nil;
     s_ciContext = nil;
     s_lastSafeBackgroundImage = nil;
-    s_latestHandPacket = nil; s_latestFacePacket = nil;
-    s_latestHandTimestamp = 0; s_latestFaceTimestamp = 0;
+    @synchronized(PrivacyGate()) {
+        s_poseWristsByTimestamp = nil; s_pendingHandResults = nil; s_handTrackState = nil;
+        s_pendingFramePackets = nil;
+    }
+    { std::lock_guard<std::mutex> lock(s_geometryMutex); s_frameGeometry.clear(); }
     s_output = nil;
     s_delegate = nil;
     s_landmarker = nil;
@@ -618,8 +918,6 @@ extern "C" void NativePoseCaptureStop() {
         s_posePrivacyPoints = nil;
         s_handPrivacyPoints = nil; s_facePrivacyPoints=nil;
         s_handPrivacyTimestamp=0; s_facePrivacyTimestamp=0;
-        s_hasLeftPoseWrist = NO;
-        s_hasRightPoseWrist = NO;
     }
     s_unityObject = nil;
     s_queue = nil;

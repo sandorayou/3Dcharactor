@@ -285,6 +285,8 @@ namespace RealtimeBodyTracking
         private bool hipsInitialized;
         private Vector3 avatarRootOriginPosition;
         private Quaternion avatarRootOriginRotation;
+        private Vector3 cameraOriginPosition;
+        private Quaternion cameraOriginRotation;
         private Quaternion rootRotationDelta = Quaternion.identity;
         private Quaternion filteredHeadRotation = Quaternion.identity;
         private bool filteredHeadRotationInitialized;
@@ -417,6 +419,11 @@ namespace RealtimeBodyTracking
             if (trackingCamera != null) trackingCamera.nearClipPlane = Mathf.Min(trackingCamera.nearClipPlane, .03f);
             avatarRootOriginPosition = targetAnimator.transform.position;
             avatarRootOriginRotation = targetAnimator.transform.rotation;
+            if (trackingCamera != null)
+            {
+                cameraOriginPosition = trackingCamera.transform.position;
+                cameraOriginRotation = trackingCamera.transform.rotation;
+            }
             ConfigureAnimeInternalLines();
             CacheBones();
             solver.Initialize(targetAnimator);
@@ -2730,7 +2737,7 @@ namespace RealtimeBodyTracking
 
         private void CompleteBottomExitIfNeeded()
         {
-            if (!finishBottomExitOnTrackingLost || targetAnimator == null || trackingCamera == null ||
+            if (!finishBottomExitOnTrackingLost || lastTrackedPose == null || targetAnimator == null || trackingCamera == null ||
                 bottomExitCompleted || horizontalExitInProgress || horizontalExitCompleted ||
                 !TryGetAvatarViewportBounds(out _, out _, out var minimumY, out var maximumY, out var depth))
                 return;
@@ -3062,6 +3069,27 @@ namespace RealtimeBodyTracking
             predictiveCenterInitialized = false;
             filteredShoulderWidth = 0f;
             stableShoulderWidth = 0f;
+        }
+
+        public void ResetForCameraSource()
+        {
+            if (targetAnimator == null) return;
+            ResetTrackingCalibration(true);
+            ResetCameraOrientationTracking();
+            tracking = false;
+            latestFrame = -1;
+            lastTrackingTime = float.NegativeInfinity;
+            pendingHorizontalExitDirection = 0;
+            horizontalExitDirection = 0;
+            horizontalExitInProgress = horizontalExitCompleted = false;
+            pendingBottomExit = bottomExitInProgress = bottomExitCompleted = false;
+            previousFramingViewportTime = float.NegativeInfinity;
+            horizontalFramingVelocity = verticalFramingVelocity = 0f;
+            cameraCalibrationStarted = -1f;
+            shoulderZoomInitialized = faceZoomInitialized = false;
+            cameraDistanceVelocity = 0f;
+            if (trackingCamera != null)
+                trackingCamera.transform.SetPositionAndRotation(cameraOriginPosition, cameraOriginRotation);
         }
 
         public void ResetCameraOrientationTracking()

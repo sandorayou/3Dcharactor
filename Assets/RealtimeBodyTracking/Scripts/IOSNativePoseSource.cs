@@ -15,6 +15,7 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetMosaicScale(float scale);
 #endif
         private PosePacket latest;
+        private long latestTimestampMs = -1;
         private IOSAvatarGaze gaze;
         private void OnEnable()
         {
@@ -58,25 +59,14 @@ namespace RealtimeBodyTracking
             if (!isActiveAndEnabled) return;
             try
             {
-                latest = JsonUtility.FromJson<PosePacket>(json);
-                if (latest?.head_rotation != null)
+                var packet = JsonUtility.FromJson<PosePacket>(json);
+                if (packet != null && packet.timestamp_ms > latestTimestampMs)
                 {
-                    // Preserve the verified yaw/roll direction, correct native pitch,
-                    // then cancel the common driver's yaw/roll reflection.
-                    var corrected = CorrectNativeHeadRotation(latest.head_rotation.Rotation);
-                    latest.head_rotation.x = corrected.x;
-                    latest.head_rotation.y = corrected.y;
-                    latest.head_rotation.z = corrected.z;
-                    latest.head_rotation.w = corrected.w;
+                    latest = packet;
+                    latestTimestampMs = packet.timestamp_ms;
                 }
             }
             catch (System.ArgumentException exception) { Debug.LogWarning(exception.Message, this); }
-        }
-        public static Quaternion CorrectNativeHeadRotation(Quaternion rotation)
-        {
-            var angles = rotation.eulerAngles;
-            var displayed = Quaternion.Euler(-angles.x, angles.y, angles.z);
-            return new Quaternion(displayed.x, -displayed.y, -displayed.z, displayed.w).normalized;
         }
         public bool TryTakeLatest(out PosePacket packet)
         {
@@ -93,6 +83,7 @@ namespace RealtimeBodyTracking
         private void OnDisable()
         {
             latest = null;
+            latestTimestampMs = -1;
 #if UNITY_IOS && !UNITY_EDITOR
             NativePoseCaptureStop();
 #endif
