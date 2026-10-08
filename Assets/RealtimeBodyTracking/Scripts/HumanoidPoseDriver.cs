@@ -165,7 +165,7 @@ namespace RealtimeBodyTracking
         [SerializeField, Range(0f, 1f)] private float headMinConfidence = .1f;
         [SerializeField, Range(0f, 1f)] private float faceHoldTime = .25f;
         [SerializeField, Range(0f, 1f)] private float neckRotationWeight = .35f;
-        [SerializeField] private bool mirrorHeadRotation = true;
+        [SerializeField] private bool mirrorHeadRotation = false;
         [SerializeField] private Vector3 headRotationOffsetEuler;
         [SerializeField, Range(1f, 40f)] private float headRotationSmoothing = 14f;
         [SerializeField] private bool enableFaceExpressions = true;

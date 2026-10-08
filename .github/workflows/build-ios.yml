@@ -26,6 +26,7 @@ jobs:
             /Assets/Plugins/iOS/NativePoseBridge.mm
             /Assets/Plugins/iOS/IOSLiveStreaming.swift
             /Tools/LiveStreamingSmoke/
+            /Tools/IOSExportPatch/
           sparse-checkout-cone-mode: false
 
       - name: Ensure Git LFS objects are hydrated
@@ -39,6 +40,7 @@ jobs:
           ditto -x -k Builds/iOS-WindowsPort.zip Builds/iOS-WindowsPort
           cp Assets/Plugins/iOS/NativePoseBridge.mm Builds/iOS-WindowsPort/Libraries/Plugins/iOS/NativePoseBridge.mm
           cmp Assets/Plugins/iOS/NativePoseBridge.mm Builds/iOS-WindowsPort/Libraries/Plugins/iOS/NativePoseBridge.mm
+          python3 Tools/IOSExportPatch/patch_export.py Builds/iOS-WindowsPort
 
       - name: Locate Xcode Project
         id: find-project

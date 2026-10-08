@@ -22,12 +22,8 @@ namespace RealtimeBodyTracking
             var host = new GameObject("IOSLiveStreaming");
             DontDestroyOnLoad(host);
             host.AddComponent<IOSLiveStreaming>();
-            // Reserve the upper fifth for local controls; ReplayKit crops it.
-            foreach (var camera in Camera.allCameras)
-            {
-                var rect = camera.rect;
-                camera.rect = new Rect(rect.x, rect.y * .8f, rect.width, rect.height * .8f);
-            }
+            // Keep the local camera viewport full-screen. ReplayKit trims the
+            // toolbar area from the outgoing stream in IOSLiveStreaming.swift.
 #endif
         }
 
