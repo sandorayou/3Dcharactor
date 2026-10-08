@@ -31,6 +31,8 @@ def verify_patched(root: Path) -> None:
         raise SystemExit("Streaming toolbar installation was lost")
     if "Camera_set_rect_" in method or "Camera_get_allCameras_" in method:
         raise SystemExit("Camera viewport resize remains in IOSLiveStreaming.Install")
+    if method.count("{") != method.count("}"):
+        raise SystemExit("IOSLiveStreaming.Install has unbalanced C++ braces")
     if "bool L_11 = false;" not in driver:
         raise SystemExit("Head rotation mirror remains enabled")
     if "___mirrorHeadRotation = (bool)0;" not in driver:
@@ -75,7 +77,7 @@ def patch_export(root: Path, write: bool) -> None:
     component_call_end = method.find("\n", component_call)
     if component_call_end < 0 or component_call_end >= method.find("Camera_get_allCameras_"):
         raise SystemExit("Could not isolate camera viewport loop after component installation")
-    patched_method = method[:component_call_end] + "\n\treturn;\n}"
+    patched_method = method[:component_call_end] + "\n\t}\n\treturn;\n}"
     stream_text = stream_text[: match.start()] + patched_method + stream_text[match.end() :]
 
     if write:
