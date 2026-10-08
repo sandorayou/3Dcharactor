@@ -23,6 +23,7 @@ jobs:
             Builds/iOS-WindowsPort.zip
             /Tools/PrivacyAudit/
             /Assets/Plugins/iOS/PrivacyMosaicCore.h
+            /Assets/Plugins/iOS/NativePoseBridge.mm
             /Assets/Plugins/iOS/IOSLiveStreaming.swift
             /Tools/LiveStreamingSmoke/
           sparse-checkout-cone-mode: false
@@ -36,6 +37,8 @@ jobs:
           test -f Builds/iOS-WindowsPort.zip
           mkdir -p Builds/iOS-WindowsPort
           ditto -x -k Builds/iOS-WindowsPort.zip Builds/iOS-WindowsPort
+          cp Assets/Plugins/iOS/NativePoseBridge.mm Builds/iOS-WindowsPort/Libraries/Plugins/iOS/NativePoseBridge.mm
+          cmp Assets/Plugins/iOS/NativePoseBridge.mm Builds/iOS-WindowsPort/Libraries/Plugins/iOS/NativePoseBridge.mm
 
       - name: Locate Xcode Project
         id: find-project

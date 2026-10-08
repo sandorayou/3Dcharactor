@@ -567,6 +567,7 @@ static void ProcessHandResult(MPPHandLandmarkerResult *result, NSInteger timesta
 
 static void ProcessHandResult(MPPHandLandmarkerResult *result, NSInteger timestamp,
                               const LetterboxGeometry &geometry, NSDictionary *poseWrists) {
+    NSMutableArray<NSDictionary *> *points = [NSMutableArray array];
     static NSArray<NSString *> *names = nil;
     static dispatch_once_t namesOnce;
     dispatch_once(&namesOnce, ^{
@@ -604,7 +605,7 @@ static void ProcessHandResult(MPPHandLandmarkerResult *result, NSInteger timesta
         : candidates.count == 1 ? @[@[@"left"], @[@"right"]] : @[];
     double bestCost = std::numeric_limits<double>::infinity();
     NSArray<NSString *> *bestSides = @[];
-    NSDictionary<NSString *, NSDictionary *> *tracks = s_handTrackState;
+    NSMutableDictionary<NSString *, NSDictionary *> *tracks = s_handTrackState;
     @synchronized(PrivacyGate()) {
         if (s_handTrackState == nil) s_handTrackState = [NSMutableDictionary dictionary];
         tracks = s_handTrackState;
