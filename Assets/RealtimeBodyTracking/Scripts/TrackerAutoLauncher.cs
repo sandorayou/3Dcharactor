@@ -1,4 +1,4 @@
-#if !UNITY_IOS || UNITY_EDITOR
+#if (!UNITY_IOS && !UNITY_WEBGL) || UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -24,7 +24,7 @@ namespace RealtimeBodyTracking
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_WEBGL) && !UNITY_EDITOR
             return;
 #else
             var receiver = FindObjectOfType<UdpPoseReceiver>();
@@ -38,7 +38,7 @@ namespace RealtimeBodyTracking
 
         private IEnumerator Start()
         {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_WEBGL) && !UNITY_EDITOR
             yield break;
 #else
             receiver = GetComponent<UdpPoseReceiver>();

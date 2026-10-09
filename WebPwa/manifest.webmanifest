@@ -1,0 +1,14 @@
+{
+  "id": "./",
+  "name": "Realtime Body Tracker",
+  "short_name": "Body Tracker",
+  "description": "MediaPipeとUnityで全身の動きをVRMアバターに反映します。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090a10",
+  "theme_color": "#131521",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

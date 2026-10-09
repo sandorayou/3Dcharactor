@@ -1,4 +1,4 @@
-#if !UNITY_IOS || UNITY_EDITOR
+#if (!UNITY_IOS && !UNITY_WEBGL) || UNITY_EDITOR
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -52,7 +52,7 @@ namespace RealtimeBodyTracking
 
         private void OnEnable()
         {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_WEBGL) && !UNITY_EDITOR
             return;
 #else
 #if UNITY_EDITOR

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#131521" />
+    <meta name="description" content="MediaPipeとUnityで全身の動きをVRMアバターに反映するトラッカー" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <title>Realtime Body Tracker</title>
+  </head>
+  <body>
+    <video id="camera-preview" autoplay muted playsinline></video>
+    <canvas id="unity-canvas" aria-label="VRM avatar preview"></canvas>
+    <div id="loading" class="overlay">
+      <div class="card">
+        <div class="brand-mark">RT</div>
+        <h1>Realtime Body Tracker</h1>
+        <p id="status">Unityアバターを読み込んでいます…</p>
+        <progress id="progress" max="1" value="0"></progress>
+        <div class="settings-entry">
+          <button id="background-camera-button" class="secondary" type="button">背景とカメラ</button>
+          <section id="background-camera-menu" class="settings-menu" hidden>
+            <button id="details-button" class="secondary" type="button" aria-expanded="false">詳細設定</button>
+            <section id="details-panel" class="details-panel" hidden aria-label="詳細設定">
+              <label class="file-picker">
+                <span>VRMファイルを切り替え</span>
+                <input id="vrm-file" type="file" accept=".vrm,application/octet-stream" disabled />
+              </label>
+              <small id="avatar-status" role="status" aria-live="polite">Unityの読み込み後にVRMを選択できます。</small>
+              <label class="toggle-row" for="outline-toggle">
+                <input id="outline-toggle" type="checkbox" disabled />
+                <span>輪郭線を強調</span>
+              </label>
+              <small>設定画面はカメラ開始時に閉じ、アバター映像には重ねません。</small>
+            </section>
+          </section>
+        </div>
+        <button id="start-camera" hidden>カメラを開始</button>
+        <small>カメラ映像と推論はこの端末内で処理されます。</small>
+      </div>
+    </div>
+    <button id="camera-toggle" class="camera-toggle" hidden aria-label="カメラを停止">カメラ停止</button>
+    <div id="error" class="error" hidden></div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -382,6 +382,9 @@ namespace RealtimeBodyTracking
 
         private LocalPosePacketSource localPoseSource;
 
+        public Animator TargetAnimator => targetAnimator;
+        public bool AnimeInternalLinesEnabled => enableAnimeInternalLines;
+
         private bool TryTakeLatestPose(out PosePacket packet)
         {
             if (localPoseSource != null) return localPoseSource.TryTakeLatest(out packet);
@@ -399,6 +402,10 @@ namespace RealtimeBodyTracking
             var sourceObject = new GameObject("IOSWindowsPoseSource_" + GetInstanceID());
             sourceObject.transform.SetParent(transform, false);
             localPoseSource = sourceObject.AddComponent<IOSNativePoseSource>();
+#elif UNITY_WEBGL && !UNITY_EDITOR
+            var sourceObject = new GameObject("WebGLPoseSource_" + GetInstanceID());
+            sourceObject.transform.SetParent(transform, false);
+            localPoseSource = sourceObject.AddComponent<WebGLPosePacketSource>();
 #endif
         }
 
@@ -444,6 +451,38 @@ namespace RealtimeBodyTracking
             effect.enabled = true;
             effect.Configure(animeLineThickness, animeLineThreshold, animeLineSoftness,
                 animeLineStrength, animeLineColor);
+        }
+
+        public void SetAnimeInternalLinesEnabled(bool value)
+        {
+            enableAnimeInternalLines = value;
+            ConfigureAnimeInternalLines();
+        }
+
+        public bool SetTargetAnimator(Animator animator)
+        {
+            if (animator == null || !animator.isHuman) return false;
+
+            targetAnimator = animator;
+            avatarRootOriginPosition = animator.transform.position;
+            avatarRootOriginRotation = animator.transform.rotation;
+            avatarHipOrigin = animator.transform.position;
+            CacheBones();
+            solver.Initialize(animator);
+            faceBlendShapeProxy = animator.GetComponentInChildren<VRMBlendShapeProxy>(true);
+            manualController = animator.GetComponent<ManualAvatarController>();
+            if (manualController == null)
+                manualController = animator.gameObject.AddComponent<ManualAvatarController>();
+            manualController.Initialize(animator, this);
+            collisionGeometry.Initialize(animator);
+            leftRestHandBasisInitialized = false;
+            rightRestHandBasisInitialized = false;
+            CacheRestHandBasis(true);
+            CacheRestHandBasis(false);
+            ResetCameraOrientationTracking();
+            RebaseBodyTracking();
+            ConfigureAnimeInternalLines();
+            return true;
         }
 
         private void LateUpdate()

@@ -34,3 +34,14 @@ python-tracker/models/pose_landmarker_full.task
 
 .DS_Store
 Thumbs.db
+
+WebPwa/node_modules/
+WebPwa/dist/
+WebPwa/public/
+WebPwa/public-release-final/
+WebPwa/dist-release-final/
+WebPwa/public-webgl*/
+WebPwa/dist-webgl*/
+WebPwa/public-*/
+WebPwa/dist-*/
+WebPwa/Builds/

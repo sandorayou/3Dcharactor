@@ -1,4 +1,4 @@
-#if !UNITY_IOS || UNITY_EDITOR
+#if (!UNITY_IOS && !UNITY_WEBGL) || UNITY_EDITOR
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -18,15 +18,30 @@ namespace RealtimeBodyTracking
         private Transform background;
         private MeshRenderer backgroundRenderer;
         private Texture2D texture;
+        private WebVrmRuntimeLoader avatarLoader;
+        private HumanoidPoseDriver poseDriver;
+        private bool showBackgroundCameraSettings;
+        private bool showAdvancedSettings;
 
         private void Awake()
         {
-#if UNITY_IOS && !UNITY_EDITOR
-            // Native synchronized mosaic sits behind the transparent Unity view.
+#if UNITY_WEBGL && !UNITY_EDITOR
+            targetCamera = GetComponent<Camera>() ?? Camera.main;
+            if (targetCamera != null)
+            {
+                targetCamera.clearFlags = CameraClearFlags.SolidColor;
+                targetCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+            }
+            enabled = false;
+            return;
+#elif UNITY_IOS && !UNITY_EDITOR
+            // The native iOS or browser host owns the live camera background.
             enabled = false;
             return;
 #else
             targetCamera = GetComponent<Camera>() ?? Camera.main;
+            avatarLoader = GetComponent<WebVrmRuntimeLoader>() ?? gameObject.AddComponent<WebVrmRuntimeLoader>();
+            poseDriver = FindObjectOfType<HumanoidPoseDriver>();
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Tracker Video Background";
             quad.layer = 31;
@@ -40,6 +55,36 @@ namespace RealtimeBodyTracking
             backgroundRenderer.material = new Material(shader);
             backgroundRenderer.enabled = false;
             StartCoroutine(PollFrames());
+#endif
+        }
+
+        private void OnGUI()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            GUILayout.BeginArea(new Rect(14f, 14f, 290f, 360f), GUI.skin.box);
+            if (GUILayout.Button("背景とカメラ", GUILayout.Height(34f)))
+                showBackgroundCameraSettings = !showBackgroundCameraSettings;
+            if (showBackgroundCameraSettings && GUILayout.Button(
+                    showAdvancedSettings ? "詳細設定を閉じる" : "詳細設定", GUILayout.Height(30f)))
+                showAdvancedSettings = !showAdvancedSettings;
+            if (showBackgroundCameraSettings && showAdvancedSettings)
+            {
+                GUILayout.Space(8f);
+                GUILayout.Label("キャラクター");
+                GUILayout.Label(string.IsNullOrEmpty(avatarLoader != null ? avatarLoader.CurrentAvatarName : null)
+                    ? "現在のVRMを使用中"
+                    : avatarLoader.CurrentAvatarName);
+                if (GUILayout.Button("VRMファイルを選択", GUILayout.Height(30f))) avatarLoader?.OpenFilePicker();
+                if (!string.IsNullOrEmpty(avatarLoader != null ? avatarLoader.Status : null))
+                    GUILayout.Label(avatarLoader.Status, GUI.skin.box);
+                if (poseDriver != null)
+                {
+                    var outline = GUILayout.Toggle(poseDriver.AnimeInternalLinesEnabled, "輪郭線を強調");
+                    if (outline != poseDriver.AnimeInternalLinesEnabled)
+                        poseDriver.SetAnimeInternalLinesEnabled(outline);
+                }
+            }
+            GUILayout.EndArea();
 #endif
         }
 
@@ -110,6 +155,15 @@ namespace RealtimeBodyTracking
 {
     public sealed class TrackerVideoBackground : UnityEngine.MonoBehaviour
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        private void Awake()
+        {
+            var camera = GetComponent<UnityEngine.Camera>() ?? UnityEngine.Camera.main;
+            if (camera == null) return;
+            camera.clearFlags = UnityEngine.CameraClearFlags.SolidColor;
+            camera.backgroundColor = new UnityEngine.Color(0f, 0f, 0f, 0f);
+        }
+#endif
     }
 }
 #endif

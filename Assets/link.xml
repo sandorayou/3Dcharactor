@@ -1,0 +1,9 @@
+<linker>
+  <assembly fullname="VRM">
+    <type fullname="VRM.VrmUtility" preserve="all" />
+  </assembly>
+  <assembly fullname="UniGLTF.Utils">
+    <type fullname="UniGLTF.RuntimeOnlyAwaitCaller" preserve="all" />
+    <type fullname="UniGLTF.ImmediateCaller" preserve="all" />
+  </assembly>
+</linker>
