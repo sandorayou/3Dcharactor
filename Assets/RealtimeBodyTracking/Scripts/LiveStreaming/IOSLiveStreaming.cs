@@ -55,8 +55,11 @@ namespace RealtimeBodyTracking
             if (GUI.Button(new Rect(210, 12, 374, 48),
                     source != null && source.UsesFrontCamera ? "フロントカメラ → リアに切替" : "リアカメラ → フロントに切替"))
                 source.SetFrontCamera(!source.UsesFrontCamera);
+            if (GUI.Button(new Rect(16, 68, 180, 44),
+                    source != null && source.UsesRealBackground ? "背景：実写 → 水色" : "背景：水色 → 実写"))
+                source.SetRealBackground(!source.UsesRealBackground);
             GUI.enabled = true;
-            if (!string.IsNullOrEmpty(summary)) GUI.Label(new Rect(16, 68, 568, 44), summary);
+            if (!string.IsNullOrEmpty(summary)) GUI.Label(new Rect(210, 68, 374, 44), summary);
             GUI.matrix = previousMatrix;
 #endif
         }

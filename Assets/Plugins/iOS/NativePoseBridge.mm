@@ -17,6 +17,9 @@ static AVCaptureVideoDataOutput *s_output;
 static dispatch_queue_t s_queue;
 static PrivacyMosaic::SkinClassifier s_skinClassifier(107.f,157.f,6.f,7.f);
 static std::atomic<bool> s_captureStopping{false};
+static std::atomic<bool> s_realBackground{true};
+static std::atomic<unsigned long> s_backgroundGeneration{0};
+static std::atomic<long long> s_backgroundReadyTimestamp{0};
 static MPPPoseLandmarker *s_landmarker;
 static MPPHandLandmarker *s_handLandmarker;
 static MPPFaceLandmarker *s_faceLandmarker;
@@ -115,12 +118,12 @@ static CGColorSpaceRef PrivacySRGB() {
 static CIImage *WindowsStyleMosaic(CIImage *source, CGFloat scale) {
     int w=(int)source.extent.size.width,h=(int)source.extent.size.height;
     CVPixelBufferRef pixels=nullptr;
-    if(CVPixelBufferCreate(kCFAllocatorDefault,w,h,kCVPixelFormatType_32BGRA,nullptr,&pixels)!=kCVReturnSuccess) return source;
+    if(CVPixelBufferCreate(kCFAllocatorDefault,w,h,kCVPixelFormatType_32BGRA,nullptr,&pixels)!=kCVReturnSuccess) return nil;
     [s_ciContext render:source toCVPixelBuffer:pixels bounds:CGRectMake(0,0,w,h) colorSpace:PrivacySRGB()];
-    if(CVPixelBufferLockBaseAddress(pixels,kCVPixelBufferLock_ReadOnly)!=kCVReturnSuccess) {CVPixelBufferRelease(pixels);return source;}
+    if(CVPixelBufferLockBaseAddress(pixels,kCVPixelBufferLock_ReadOnly)!=kCVReturnSuccess) {CVPixelBufferRelease(pixels);return nil;}
     auto result=PrivacyMosaic::Pixelate(static_cast<const uint8_t *>(CVPixelBufferGetBaseAddress(pixels)),w,h,CVPixelBufferGetBytesPerRow(pixels),MAX(2,(int)scale));
     CVPixelBufferUnlockBaseAddress(pixels,kCVPixelBufferLock_ReadOnly);
-    if(CVPixelBufferLockBaseAddress(pixels,0)!=kCVReturnSuccess) {CVPixelBufferRelease(pixels);return source;}
+    if(CVPixelBufferLockBaseAddress(pixels,0)!=kCVReturnSuccess) {CVPixelBufferRelease(pixels);return nil;}
     auto *output=static_cast<uint8_t *>(CVPixelBufferGetBaseAddress(pixels));
     size_t outputStride=CVPixelBufferGetBytesPerRow(pixels);
     for(int y=0;y<h;++y) std::copy(result.begin()+y*w*4,result.begin()+(y+1)*w*4,output+y*outputStride);
@@ -202,13 +205,20 @@ static CIImage *HeadPrivacyMask(CIImage *source, CIImage *skin, NSInteger timest
 }
 
 static void DisplayLiveBackground(CIImage *source, CIImage *mask, NSInteger timestamp) {
-    if (source == nil || s_backgroundLayer == nil) return;
-    CIImage *processed = source;
+    if (!s_realBackground.load() || source == nil || s_backgroundLayer == nil) return;
+    unsigned long generation = s_backgroundGeneration.load();
+    CIImage *mosaic = WindowsStyleMosaic(source, s_mosaicScale);
+    if (mosaic == nil) return; // Keep the safe fallback instead of showing raw pixels.
+    CIImage *processed = mosaic;
+    @synchronized(PrivacyGate()) {
+        if (s_posePrivacyTimestamp < s_backgroundReadyTimestamp.load() ||
+            s_facePrivacyTimestamp < s_backgroundReadyTimestamp.load()) mask = nil;
+    }
     if (mask != nil) {
         mask = [[[mask imageBySamplingNearest] imageByApplyingTransform:CGAffineTransformMakeScale(
             source.extent.size.width / mask.extent.size.width,
             source.extent.size.height / mask.extent.size.height)] imageByCroppingToRect:source.extent];
-        processed = [WindowsStyleMosaic(source, s_mosaicScale) imageByApplyingFilter:@"CIBlendWithMask"
+        processed = [mosaic imageByApplyingFilter:@"CIBlendWithMask"
             withInputParameters:@{kCIInputBackgroundImageKey:source, kCIInputMaskImageKey:mask}];
     }
     CGImageRef frame = [s_ciContext createCGImage:processed fromRect:source.extent format:kCIFormatRGBA8 colorSpace:PrivacySRGB()];
@@ -216,7 +226,8 @@ static void DisplayLiveBackground(CIImage *source, CIImage *mask, NSInteger time
     UIImage *image = [UIImage imageWithCGImage:frame];
     CGImageRelease(frame);
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (!s_captureStopping.load() && timestamp >= s_orientationReadyTimestamp.load() && s_backgroundLayer != nil)
+        if (s_realBackground.load() && generation == s_backgroundGeneration.load() &&
+            !s_captureStopping.load() && timestamp >= s_orientationReadyTimestamp.load() && s_backgroundLayer != nil)
             s_backgroundLayer.contents = (__bridge id)image.CGImage;
     });
 }
@@ -288,11 +299,13 @@ static void SubmitResult(NSString *kind, NSDictionary *packet, NSInteger timesta
     s_height = (int)CVPixelBufferGetHeight(pixelBuffer);
     MPPImage *image = [[MPPImage alloc] initWithPixelBuffer:pixelBuffer error:nil];
     if (image == nil) return;
-    if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer:@NO}];
-    CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
-    CVPixelBufferRef colours = ColourFrame(source);
-    DisplayLiveBackground(source, HeadPrivacyMask(source, AdaptiveSkinMask(colours), timestamp), timestamp);
-    if (colours != nullptr) CVPixelBufferRelease(colours);
+    if (s_realBackground.load()) {
+        if (s_ciContext == nil) s_ciContext = [CIContext contextWithOptions:@{kCIContextUseSoftwareRenderer:@NO}];
+        CIImage *source = [CIImage imageWithCVPixelBuffer:pixelBuffer];
+        CVPixelBufferRef colours = ColourFrame(source);
+        DisplayLiveBackground(source, HeadPrivacyMask(source, AdaptiveSkinMask(colours), timestamp), timestamp);
+        if (colours != nullptr) CVPixelBufferRelease(colours);
+    }
     [s_landmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_handLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
     [s_faceLandmarker detectAsyncImage:image timestampInMilliseconds:timestamp error:nil];
@@ -559,6 +572,8 @@ extern "C" int NativePoseCaptureStart(const char *unityObjectName) {
         unityView.backgroundColor = UIColor.clearColor;
         unityView.layer.opaque = NO;
         s_backgroundLayer = [CALayer layer];
+        s_backgroundLayer.hidden = !s_realBackground.load();
+        s_backgroundLayer.backgroundColor = [UIColor colorWithRed:.55 green:.85 blue:1 alpha:1].CGColor;
         s_backgroundLayer.contentsGravity = kCAGravityResizeAspectFill;
         s_backgroundLayer.masksToBounds = YES;
         UIView *container = unityView.superview;
@@ -593,6 +608,18 @@ extern "C" void NativePoseCaptureSetFrontCamera(int front) {
 
 extern "C" void NativePoseCaptureSetMosaicScale(float scale) {
     s_mosaicScale = MAX(2.0, scale);
+}
+
+extern "C" void NativePoseCaptureSetRealBackground(int real) {
+    s_realBackground = real != 0;
+    ++s_backgroundGeneration;
+    s_backgroundReadyTimestamp = (long long)(CACurrentMediaTime() * 1000.0);
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    s_backgroundLayer.contents = nil;
+    s_backgroundLayer.hidden = !s_realBackground.load();
+    [CATransaction commit];
+    s_lastSafeBackgroundImage = nil;
 }
 
 extern "C" void NativePoseCaptureStop() {

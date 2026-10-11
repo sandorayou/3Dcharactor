@@ -13,9 +13,20 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetPaused(int paused);
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetFrontCamera(int front);
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetMosaicScale(float scale);
+        [DllImport("__Internal")] private static extern void NativePoseCaptureSetRealBackground(int real);
 #endif
         private PosePacket latest;
         public bool UsesFrontCamera { get; private set; } = true;
+        public bool UsesRealBackground { get; private set; } = true;
+        public void SetRealBackground(bool real)
+        {
+            UsesRealBackground = real;
+#if UNITY_IOS && !UNITY_EDITOR
+            NativePoseCaptureSetRealBackground(real ? 1 : 0);
+            var camera = Camera.main;
+            if (camera != null) camera.backgroundColor = real ? Color.clear : new Color(.55f, .85f, 1f, 1f);
+#endif
+        }
         public void SetFrontCamera(bool front)
         {
             if (UsesFrontCamera == front) return;
@@ -39,6 +50,7 @@ namespace RealtimeBodyTracking
             }
             NativePoseCaptureSetFrontCamera(UsesFrontCamera ? 1 : 0);
             NativePoseCaptureSetMosaicScale(48f);
+            SetRealBackground(UsesRealBackground);
             StartCapture();
 #endif
         }
