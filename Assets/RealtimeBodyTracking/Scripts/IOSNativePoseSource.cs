@@ -15,6 +15,16 @@ namespace RealtimeBodyTracking
         [DllImport("__Internal")] private static extern void NativePoseCaptureSetMosaicScale(float scale);
 #endif
         private PosePacket latest;
+        public bool UsesFrontCamera { get; private set; } = true;
+        public void SetFrontCamera(bool front)
+        {
+            if (UsesFrontCamera == front) return;
+            UsesFrontCamera = front;
+            OnNativeCameraOrientationChanged("");
+#if UNITY_IOS && !UNITY_EDITOR
+            NativePoseCaptureSetFrontCamera(front ? 1 : 0);
+#endif
+        }
         private IOSAvatarGaze gaze;
         private void OnEnable()
         {
@@ -27,7 +37,7 @@ namespace RealtimeBodyTracking
                 camera.backgroundColor = Color.clear;
                 camera.allowHDR = false;
             }
-            NativePoseCaptureSetFrontCamera(1);
+            NativePoseCaptureSetFrontCamera(UsesFrontCamera ? 1 : 0);
             NativePoseCaptureSetMosaicScale(48f);
             StartCapture();
 #endif

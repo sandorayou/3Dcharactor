@@ -50,7 +50,13 @@ namespace RealtimeBodyTracking
                 if (active) MyProjectStopLiveStreaming();
                 else MyProjectShowLiveStreaming(gameObject.name);
             }
-            if (!string.IsNullOrEmpty(summary)) GUI.Label(new Rect(210, 12, 374, 96), summary);
+            var source = FindObjectOfType<IOSNativePoseSource>();
+            GUI.enabled = source != null;
+            if (GUI.Button(new Rect(210, 12, 374, 48),
+                    source != null && source.UsesFrontCamera ? "フロントカメラ → リアに切替" : "リアカメラ → フロントに切替"))
+                source.SetFrontCamera(!source.UsesFrontCamera);
+            GUI.enabled = true;
+            if (!string.IsNullOrEmpty(summary)) GUI.Label(new Rect(16, 68, 568, 44), summary);
             GUI.matrix = previousMatrix;
 #endif
         }
